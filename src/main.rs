@@ -38,6 +38,9 @@ async fn run(cli: Cli) -> Result<()> {
                     println!("- {}", name);
                 }
             }
+            cli::ProviderAction::Remove { name } => {
+                config::remove_provider_token(&name)?;
+            }
         },
 
         Commands::Secret { action } => {
@@ -170,6 +173,55 @@ async fn run(cli: Cli) -> Result<()> {
                 }
             }
             println!("✓ Operations complete.");
+        }
+        Commands::Prune { provider, keys, scope, env, repo } => {
+            // A. Setup Provider & Auth
+            let provider_impl = match providers::get(&provider) {
+                Some(p) => p,
+                None => { eprintln!("Error: Unknown provider"); return Ok(()); }
+            };
+        
+            let global_config = config::load()?;
+            let token = global_config.providers.get(&provider)
+                .ok_or_else(|| anyhow::anyhow!("No token for {}", provider))?;
+        
+            // B. Determine Keys to Delete
+            let keys_to_delete: Vec<String> = if !keys.is_empty() {
+                keys // Manual keys
+            } else if !scope.is_empty() {
+                // Load project config to find keys in these scopes
+                let proj = project::Project::find()?;
+                let config = proj.load_config()?;
+                
+                let mut key_set = HashSet::new();
+                if let Some(defined_scopes) = config.scopes {
+                    for s in &scope {
+                        if let Some(scope_keys) = defined_scopes.get(s) {
+                            for k in scope_keys { key_set.insert(k.clone()); }
+                        } else {
+                            eprintln!("Warning: Scope '{}' not found", s);
+                        }
+                    }
+                }
+                key_set.into_iter().collect()
+            } else {
+                eprintln!("Error: For safety, you must specify --keys or --scope to prune.");
+                return Ok(());
+            };
+        
+            if keys_to_delete.is_empty() {
+                println!("No keys selected to prune.");
+                return Ok(());
+            }
+        
+            // C. Execute Delete
+            let options = providers::PushOptions {
+                repo: repo,
+                env: env, 
+            };
+        
+            provider_impl.prune(&keys_to_delete, token, &options).await?;
+            println!("✓ Prune complete.");
         }
     }
     Ok(())

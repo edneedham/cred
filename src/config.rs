@@ -52,3 +52,16 @@ pub fn set_provider_token(provider: &str, token: &str) -> Result<()> {
     fs::write(&config_path, toml_string)?;
     Ok(())
 }
+
+pub fn remove_provider_token(provider: &str) -> Result<()> {
+    let mut config = load()?;
+    if config.providers.remove(provider).is_some() {
+        let config_path = ensure_global_config_exists()?;
+        let toml_string = toml::to_string_pretty(&config)?;
+        fs::write(&config_path, toml_string)?;
+        println!("✓ Removed authentication for '{}'", provider);
+    } else {
+        println!("Provider '{}' was not configured.", provider);
+    }
+    Ok(())
+}

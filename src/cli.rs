@@ -48,6 +48,26 @@ pub enum Commands {
         #[arg(long)]
         repo: Option<String>,
     },
+    Prune {
+        /// The provider to prune from (github, vercel, etc.)
+        provider: String,
+
+        /// Specific keys to remove
+        #[arg(num_args = 0..)]
+        keys: Vec<String>,
+
+        /// Remove all keys belonging to a specific scope
+        #[arg(long, value_delimiter = ',')]
+        scope: Vec<String>,
+
+        /// Target environment
+        #[arg(long, short)]
+        env: Option<String>,
+
+        /// Repository (required for GitHub)
+        #[arg(long)]
+        repo: Option<String>,
+    }
 }
 
 #[derive(Subcommand)]
@@ -55,6 +75,8 @@ pub enum Commands {
 pub enum ProviderAction {
     Set { name: String, token: String },
     List,
+    // Remove a provider's auth token from global config
+    Remove { name: String }
 }
 
 #[derive(Subcommand)]

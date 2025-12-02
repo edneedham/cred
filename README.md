@@ -181,8 +181,6 @@ and saves it to your project vault.
 
 This is the core purpose of `cred`.
 
-
-
 ### Push to Vercel:
 
 ```bash
@@ -216,6 +214,21 @@ These commands:
 
 No more manually creating secrets via platform dashboards.
 
+## Removing secrets from providers
+
+Mistakes and changes happen.
+
+### Remove all secrets from a provider
+
+```bash
+cred remove <provider>
+```
+
+### Remove a single secret from a provider
+
+```bash
+cred remove <provider> <key>
+```
 ---
 
 ## Project structure

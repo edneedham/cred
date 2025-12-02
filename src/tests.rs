@@ -3,7 +3,7 @@ mod tests {
     use crate::{project, config, vault};
     use tempfile::tempdir;
     use std::fs;
-    use std::collections::HashMap;
+    use std::collections::HashSet;
 
     // --- PROJECT & INIT TESTS ---
 
@@ -71,19 +71,23 @@ mod tests {
         
         // 5. Verify missing keys
         assert_eq!(v2.get("development", "DB_PASS"), None); // Should not exist in dev
+        
+        // 6. Test Removal
+        v.remove("production", "DB_PASS");
+        assert_eq!(v.get("production", "DB_PASS"), None);
     }
 
     // --- SCOPE TESTS (PROJECT.TOML) ---
 
     #[test]
-    fn test_project_scopes() {
+    fn test_project_multi_scopes() {
         let dir = tempdir().unwrap();
         let root_path = dir.path();
         
         // 1. Init project
         project::init_at(root_path).unwrap();
 
-        // 2. Manual Project struct construction (since Project::find uses CWD)
+        // 2. Manual Project struct construction
         let cred_dir = root_path.join(".cred");
         let proj = project::Project {
             root: root_path.to_path_buf(),
@@ -91,25 +95,51 @@ mod tests {
             config_path: cred_dir.join("project.toml"),
         };
 
-        // 3. Add keys to scopes
-        // Add "DB_URL" to "backend" scope
-        proj.add_key_to_scopes(&["backend".to_string()], "DB_URL").unwrap();
-        
-        // Add "API_KEY" to "backend" AND "worker" scopes
+        // 3. Add keys to multiple scopes
+        // "API_KEY" -> backend, worker
         proj.add_key_to_scopes(&["backend".to_string(), "worker".to_string()], "API_KEY").unwrap();
+        
+        // "NEXT_PUBLIC_URL" -> frontend
+        proj.add_key_to_scopes(&["frontend".to_string()], "NEXT_PUBLIC_URL").unwrap();
 
         // 4. Load config and verify
         let config = proj.load_config().unwrap();
         let scopes = config.scopes.unwrap();
 
-        // Check Backend Scope
+        // Check Backend
         let backend = scopes.get("backend").expect("backend scope missing");
-        assert!(backend.contains(&"DB_URL".to_string()));
         assert!(backend.contains(&"API_KEY".to_string()));
 
-        // Check Worker Scope
+        // Check Worker
         let worker = scopes.get("worker").expect("worker scope missing");
         assert!(worker.contains(&"API_KEY".to_string()));
-        assert!(!worker.contains(&"DB_URL".to_string()));
+
+        // Check Frontend
+        let frontend = scopes.get("frontend").expect("frontend scope missing");
+        assert!(frontend.contains(&"NEXT_PUBLIC_URL".to_string()));
+        assert!(!frontend.contains(&"API_KEY".to_string()));
+    }
+
+    #[test]
+    fn test_scope_union_logic() {
+        // Simulate the logic used in `cred push --scope a --scope b`
+        let mut defined_scopes = std::collections::HashMap::new();
+        defined_scopes.insert("backend".to_string(), vec!["DB_URL".to_string(), "API_KEY".to_string()]);
+        defined_scopes.insert("worker".to_string(), vec!["API_KEY".to_string(), "REDIS_URL".to_string()]);
+
+        let requested_scopes = vec!["backend".to_string(), "worker".to_string()];
+        
+        let mut key_set = HashSet::new();
+        for s in &requested_scopes {
+            if let Some(keys) = defined_scopes.get(s) {
+                for k in keys { key_set.insert(k.clone()); }
+            }
+        }
+
+        // Should contain 3 unique keys: DB_URL, API_KEY, REDIS_URL
+        assert_eq!(key_set.len(), 3);
+        assert!(key_set.contains("DB_URL"));
+        assert!(key_set.contains("API_KEY"));
+        assert!(key_set.contains("REDIS_URL"));
     }
 }
