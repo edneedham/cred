@@ -14,7 +14,6 @@ pub struct ProjectConfig {
 }
 
 pub struct Project {
-    pub root: PathBuf,
     pub vault_path: PathBuf,
     pub config_path: PathBuf,
 }
@@ -27,7 +26,6 @@ impl Project {
             let cred_dir = ancestor.join(".cred");
             if cred_dir.exists() && cred_dir.is_dir() {
                 return Ok(Project {
-                    root: ancestor.to_path_buf(),
                     vault_path: cred_dir.join("vault.json"),
                     config_path: cred_dir.join("project.toml"),
                 });
