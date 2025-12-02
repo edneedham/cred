@@ -2,7 +2,7 @@
 name = "cred"
 version = "0.1.0"
 edition = "2024"
-about = "The easy way to manage your credentials, remotely and locally"
+description = "A command line tool to manage secrets and environment variables locally and remotely."
 
 [dependencies]
 anyhow = "1.0.100"
