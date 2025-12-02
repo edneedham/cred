@@ -9,6 +9,7 @@ pub struct PushOptions {
 }
 
 pub trait Provider {
+    #[allow(dead_code)]
     fn name(&self) -> &str;
     async fn push(
         &self, 

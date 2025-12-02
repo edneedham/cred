@@ -15,6 +15,7 @@ pub struct ProjectConfig {
 }
 
 pub struct Project {
+    #[allow(dead_code)]
     pub root: PathBuf,
     pub vault_path: PathBuf,
     pub config_path: PathBuf,
