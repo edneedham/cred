@@ -14,10 +14,17 @@ Every platform has different rules for how it parses `.env`, how it handles mult
 
 `cred` solves this by giving you:
 
-### **1. A local encrypted vault per project**
+### **1. A Matrix Vault per Project**
+Your secrets live inside `.cred/vault.json`. Unlike a flat `.env` file, `cred` stores secrets in a structured matrix:
+```json
+{
+  "development": { "DB_URL": "localhost:5432" },
+  "production":  { "DB_URL": "db.aws.com" }
+}
 
-Your secrets live inside a `.cred/` directory within your project.
-This guarantees consistent formatting and parsing locally.
+### **2. Scoped Grouping (Monorepo Ready)
+
+You can tag secrets into Scopes (e.g., backend, frontend, worker). This allows you to push only specific subsets of secrets to specific providers without splitting your project.
 
 ### **2. A global provider authentication vault**
 
@@ -92,6 +99,7 @@ This will:
 * Create `.cred/project.toml`
 * Create `.cred/vault.enc`
 * Verify your global vault at `~/.config/cred/global.toml`
+* Automatically add `.cred/` to `.gitignore`
 
 Example output:
 
@@ -114,28 +122,39 @@ cred provider set github GH_TOKEN=ghp_123...
 
 These live in your global.toml — never inside projects.
 
+And to remove unused providers:
+
+```bash
+cred provider remove github
+```
+
 ---
 
 ## Managing local project secrets
 
 Secrets are always associated with an *Environment* (defaults to development)
 
-### Add or update a secret for development:
+### Set a secret for development:
 
 ```bash
 cred secret set DATABASE_URL postgres://localhost:5432/db
 ```
-### Add or update a secret for production:
+### Set a secret for production:
 
 ```bash
 cred secret set DATABASE_URL postgres://prod-db.aws.com/db --env production
 ```
 
-### Add or update a secret and assign it to a Scope:
+### Set a secret and assign it to Scopes (Groups):
+
+You can assign a secret to multiple scopes at creation time.
 
 ```bash
-cred secret set STRIPE_KEY sk_live_123 --env production --scope backend
+cred secret set STRIPE_KEY sk_live_123 --env production --scope backend --scope worker
 ```
+
+* Adds secret to the `production` vault.
+* Updates `project.toml` to list `STRIPE_KEY` under `[scopes.backend]` and `[scopes.worker]`.
 
 ### List all secrets
 
@@ -161,10 +180,10 @@ cred secret list --scope backend
 cred secret remove DATABASE_URL
 ```
 
-### Generate a secret using a provider API
+### Generate a secret using a provider API (defaults to `development`)
 
 ```bash
-cred secret generate resend production
+cred secret generate resend --env production
 ```
 
 This creates:

@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use anyhow::{Context, Result};
 
 #[derive(Serialize, Deserialize, Debug, Default)]
@@ -9,9 +9,6 @@ pub struct GlobalConfig {
     pub providers: HashMap<String, String>,
 }
 
-/// Determines the configuration root based on the OS.
-/// - macOS: ~/.config/cred (Forced override)
-/// - Others: Standard OS paths (AppData or ~/.config)
 fn resolve_config_dir() -> Result<PathBuf> {
     if cfg!(target_os = "macos") {
         let home = dirs::home_dir().context("Could not determine home directory")?;
@@ -23,10 +20,13 @@ fn resolve_config_dir() -> Result<PathBuf> {
 
 pub fn ensure_global_config_exists() -> Result<PathBuf> {
     let config_dir = resolve_config_dir()?;
+    ensure_config_at(&config_dir)
+}
+
+pub fn ensure_config_at(config_dir: &Path) -> Result<PathBuf> {
     if !config_dir.exists() {
-        fs::create_dir_all(&config_dir).context("Failed to create config dir")?;
+        fs::create_dir_all(config_dir).context("Failed to create config dir")?;
     }
-    
     let file_path = config_dir.join("global.toml");
     if !file_path.exists() {
         let default_config = GlobalConfig::default();

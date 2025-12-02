@@ -25,22 +25,20 @@ pub enum Commands {
         action: SecretAction,
     },
 
-    /// Push secrets to a remote provider
+    /// Upload (Push) secrets to a remote hosting provider (e.g. GitHub)
     Push {
-        /// The provider to push to (github, vercel, etc.)
+        /// The provider to push to
         provider: String,
 
-        /// Optional: Specific keys to push. If empty, uses scope or pushes ALL secrets.
+        /// Specific keys to push. If empty, uses scope or pushes ALL secrets.
         #[arg(num_args = 0..)]
         keys: Vec<String>,
 
         /// Filter by specific scopes defined in project.toml.
-        /// Usage: --scope backend --scope frontend
         #[arg(long, value_delimiter = ',')]
         scope: Vec<String>,
 
-        /// Target environment (e.g., production, preview, development).
-        /// If omitted, cred pushes ALL environments found in the vault.
+        /// Target environment (e.g., production, preview).
         #[arg(long, short)]
         env: Option<String>,
 
@@ -48,8 +46,10 @@ pub enum Commands {
         #[arg(long)]
         repo: Option<String>,
     },
+
+    /// Atomic Delete: Removes secrets from the Remote Provider AND Local Vault.
     Prune {
-        /// The provider to prune from (github, vercel, etc.)
+        /// The provider to prune from
         provider: String,
 
         /// Specific keys to remove
@@ -75,8 +75,8 @@ pub enum Commands {
 pub enum ProviderAction {
     Set { name: String, token: String },
     List,
-    // Remove a provider's auth token from global config
-    Remove { name: String }
+    /// Revoke a provider's authentication token (Logout)
+    Revoke { name: String }, 
 }
 
 #[derive(Subcommand)]
@@ -85,11 +85,8 @@ pub enum SecretAction {
     Set { 
         key: String, 
         value: String,
-        /// The environment to store this secret in
         #[arg(long, short, default_value = "development")]
         env: String,
-        
-        /// Add this secret to specific scopes in project.toml automatically
         #[arg(long, value_delimiter = ',')]
         scope: Vec<String>,
     },
@@ -99,19 +96,35 @@ pub enum SecretAction {
         env: String,
     },
     List {
-        /// If provided, lists only secrets for this environment
         #[arg(long, short)]
         env: Option<String>,
     },
+    /// Remove from Local Vault ONLY (Use 'prune' for remote removal)
     Remove { 
         key: String,
         #[arg(long, short, default_value = "development")]
         env: String,
     },
+    /// Generate a new secret from a Source Provider (e.g. Resend)
     Generate { 
         provider: String, 
+        #[arg(long, short, default_value = "development")]
         env: String,
         #[arg(long, value_delimiter = ',')]
         scope: Vec<String>,
     },
+    /// Revoke a generated secret at the source AND locally
+    Revoke {
+        key: String,
+        #[arg(long)]
+        provider: String,
+        #[arg(long, short, default_value = "development")]
+        env: String,
+        
+        /// Optional: Also prune this secret from a downstream target (e.g. github)
+        #[arg(long)]
+        prune_target: Option<String>,
+        #[arg(long)]
+        repo: Option<String>,
+    }
 }

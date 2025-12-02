@@ -10,12 +10,10 @@ use anyhow::{bail, Context, Result};
 pub struct ProjectConfig {
     pub name: Option<String>,
     pub version: Option<String>,
-    // Scopes: Name -> List of Keys
     pub scopes: Option<HashMap<String, Vec<String>>>,
 }
 
 pub struct Project {
-    #[allow(dead_code)]
     pub root: PathBuf,
     pub vault_path: PathBuf,
     pub config_path: PathBuf,
@@ -49,7 +47,6 @@ impl Project {
 
     pub fn add_key_to_scopes(&self, scope_names: &[String], key: &str) -> Result<()> {
         if scope_names.is_empty() { return Ok(()); }
-
         let mut config = self.load_config().unwrap_or_default();
         let scopes = config.scopes.get_or_insert_with(HashMap::new);
         let mut updated = false;
@@ -81,7 +78,6 @@ pub(crate) fn init_at(root: &Path) -> Result<()> {
     if cred_dir.exists() {
         bail!("Cred is already initialized here: {}", cred_dir.display());
     }
-
     fs::create_dir(&cred_dir).context("Failed to create .cred directory")?;
 
     let project_toml = r#"# Cred Project Configuration
