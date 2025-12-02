@@ -39,7 +39,7 @@ You manage secrets locally, but `cred` can upload them to:
 * Supabase
 * Fly.io
 * Resend
-* (and more via providers you add)
+* (and more via providers)
 
 Use:
 
@@ -118,22 +118,41 @@ These live in your global.toml — never inside projects.
 
 ## Managing local project secrets
 
-### Add or update a secret
+Secrets are always associated with an *Environment* (defaults to development)
+
+### Add or update a secret for development:
 
 ```bash
-cred secret set DATABASE_URL postgres://user:pass@localhost/db
+cred secret set DATABASE_URL postgres://localhost:5432/db
+```
+### Add or update a secret for production:
+
+```bash
+cred secret set DATABASE_URL postgres://prod-db.aws.com/db --env production
 ```
 
-### List secrets
+### Add or update a secret and assign it to a Scope:
+
+```bash
+cred secret set STRIPE_KEY sk_live_123 --env production --scope backend
+```
+
+### List all secrets
 
 ```bash
 cred secret list
 ```
 
-### Retrieve a secret
+### List specific environment secrets
 
 ```bash
-cred secret get DATABASE_URL
+cred secret list --env production
+```
+
+### List specific scope secrets
+
+```bash
+cred secret list --scope backend
 ```
 
 ### Remove a secret
@@ -148,21 +167,23 @@ cred secret remove DATABASE_URL
 cred secret generate resend production
 ```
 
-This might create something like:
+This creates:
 
 ```
 RESEND_API_KEY=mynewresendkey
 ```
 
-and save it to your project vault.
+and saves it to your project vault.
 
 ---
 
-## Push secrets to providers (CI/CD ready)
+## Pushing secrets to providers (CI/CD ready)
 
 This is the core purpose of `cred`.
 
-Upload all project secrets to Vercel:
+
+
+### Push to Vercel:
 
 ```bash
 cred push vercel
