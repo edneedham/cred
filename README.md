@@ -2,7 +2,14 @@
 
 `cred` is a local-first credential manager that lets you create, store, and manage secrets on your machine — and then push them directly to the platforms that need them for deployment or CI/CD.
 
-I wanted something consistent for handling `.env` variables, API keys, PEM files, and provider-specific secrets. I think this is it.
+I wanted something consistent for handling `.env` variables, API keys, PEM files, and provider-specific secrets etc.. I think this is it.
+
+## Who is this for
+
+* Open-source maintainers
+* Small teams
+* Solo developers
+* People who don't *need* enterprise infrastructure yet
 
 ---
 
@@ -15,7 +22,7 @@ Every platform has different rules for how it parses `.env`, how it handles mult
 `cred` solves this by giving you:
 
 ### **1. A Matrix Vault per Project**
-Your secrets live inside `.cred/vault.json`. Unlike a flat `.env` file, `cred` stores secrets in a structured matrix:
+Your secrets live inside `.cred/vault.enc`. Unlike a flat `.env` file, `cred` stores secrets in a structured matrix:
 ```json
 {
   "development": { "DB_URL": "localhost:5432" },
@@ -133,7 +140,7 @@ cred provider remove github
 
 ## Managing local project secrets
 
-Secrets are always associated with an *Environment* (defaults to development)
+Secrets are always associated with an **Environment** (defaults to development)
 
 ### Set a secret for development:
 
@@ -204,11 +211,11 @@ All project secrets (API keys, environment variables, PEM files, tokens, certifi
 * Algorithm: ChaCha20-Poly1305 (authenticated encryption)
 * Key size: 256-bit
 * Nonce: Random per write
-* Plaintext secrets: Exist *only in memory*
+* Plaintext secrets: Exist **only in memory**
 * At-rest storage: Always encrypted
 * Integrity protected: Tampering with the vault is detected
 
-Therefore, even if someone steals your project folder, repository, backups, or filesystem snapshot, they *cannot read your secrets* without access to your local encryption key.
+Therefore, even if someone steals your project folder, repository, backups, or filesystem snapshot, they **cannot read your secrets** without access to your local encryption key.
 
 *** Where the encryption key is stored
 By default, the encryption key is stored in your operating system’s secure key store:

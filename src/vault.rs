@@ -46,7 +46,7 @@ impl Vault {
         let file_data: EncryptedVaultFile = serde_json::from_str(&content)
             .context("Failed to parse vault structure")?;
 
-        let entry = Entry::new("cred-cli", project_id)?;
+        let entry = Entry::new("cred", project_id)?;
         let key_b64 = entry.get_password().context("Could not find encryption key in OS Keychain. Did you init?")?;
         let key_bytes = BASE64.decode(key_b64).context("Invalid key format in keychain")?;
 
@@ -69,8 +69,23 @@ impl Vault {
     }
 
     pub fn save(&self) -> Result<()> {
-        let json = serde_json::to_string_pretty(&self.secrets)?;
-        fs::write(&self.path, json).context("Failed to write vault")?;
+        let entry = Entry::new("cred", &self.project_id)?;
+        let key_b64 = entry.get_password().context("Key missing from keychain")?;
+        let key_bytes = BASE64.decode(key_b64)?;
+
+        let plaintext = serde_json::to_vec(&self.secrets)?;
+        let cipher = ChaCha20Poly1305::new_from_slice(&key_bytes)
+            .map_err(|_| anyhow::anyhow!("Invalid key length"))?;
+        let nonce = ChaCha20Poly1305::generate_nonce(&mut OsRng);
+        let ciphertext = cipher.encrypt(&nonce, plaintext.as_ref())
+            .map_err(|e| anyhow::anyhow!("Encryption failed: {:?}", e))?;
+        let file_data = EncryptedVaultFile {
+            version: 1,
+            nonce: BASE64.encode(nonce),
+            ciphertext: BASE64.encode(ciphertext),
+        };
+        let json = serde_json::to_string_pretty(&file_data)?;
+        fs::write(&self.path, json).context("Failed to write to vault.enc")?;
         Ok(())
     }
 
