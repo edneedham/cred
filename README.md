@@ -2,7 +2,7 @@
 
 `cred` is a local-first credential manager that lets you create, store, and manage secrets on your machine — and then push them directly to the platforms that need them for deployment or CI/CD.
 
-It gives you one consistent workflow for handling `.env` variables, API keys, PEM files, and provider-specific secrets without relying on half-baked UI dashboards or inconsistent CLIs.
+I wanted something consistent for handling `.env` variables, API keys, PEM files, and provider-specific secrets. I think this is it.
 
 ---
 
@@ -21,6 +21,7 @@ Your secrets live inside `.cred/vault.json`. Unlike a flat `.env` file, `cred` s
   "development": { "DB_URL": "localhost:5432" },
   "production":  { "DB_URL": "db.aws.com" }
 }
+```
 
 ### **2. Scoped Grouping (Monorepo Ready)
 
@@ -186,13 +187,49 @@ cred secret remove DATABASE_URL
 cred secret generate resend --env production
 ```
 
-This creates:
+## Security Model
 
-```
-RESEND_API_KEY=mynewresendkey
+All sensitive project secrets are encrypted at rest, never stored in plaintext on disk, and only decrypted in memory when required. There is no central server, no accounts, and no remote storage owned by cred.
+
+### What is encrypted
+
+All project secrets (API keys, environment variables, PEM files, tokens, certificates, etc.) are stored in an encrypted local vault:
+
+```bash
+.cred/vault.enc
 ```
 
-and saves it to your project vault.
+### Encryption properties
+
+* Algorithm: ChaCha20-Poly1305 (authenticated encryption)
+* Key size: 256-bit
+* Nonce: Random per write
+* Plaintext secrets: Exist *only in memory*
+* At-rest storage: Always encrypted
+* Integrity protected: Tampering with the vault is detected
+
+Therefore, even if someone steals your project folder, repository, backups, or filesystem snapshot, they *cannot read your secrets* without access to your local encryption key.
+
+*** Where the encryption key is stored
+By default, the encryption key is stored in your operating system’s secure key store:
+
+* macOS: Keychain
+* Windows: Credential Manager
+* Linux: Secret Service (libsecret)
+
+This provides:
+
+* Hardware-backed protection on many systems
+* OS-level access control
+* No plaintext keys on disk
+* No passwords to remember
+
+This is the same security model used by:
+
+* Git credential helpers
+* VS Code secret storage
+* Docker credentials
+* Chrome / browser password managers
 
 ---
 

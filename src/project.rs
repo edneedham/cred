@@ -5,11 +5,16 @@ use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use anyhow::{bail, Context, Result};
+use keyring::Entry;
+use rand::{Rng, RngCore};
+use uuid::Uuid;
+use base64::Engine;
 
 #[derive(Serialize, Deserialize, Debug, Default)]
 pub struct ProjectConfig {
     pub name: Option<String>,
     pub version: Option<String>,
+    pub id: Option<Uuid>,
     pub scopes: Option<HashMap<String, Vec<String>>>,
 }
 
@@ -78,18 +83,34 @@ pub(crate) fn init_at(root: &Path) -> Result<()> {
     }
     fs::create_dir(&cred_dir).context("Failed to create .cred directory")?;
 
-    let project_toml = r#"# Cred Project Configuration
+    let project_id = Uuid::new_v4();
+
+    let project_toml = format!(r#"# Cred Project Configuration
 name = "my-project"
 version = "0.1.0"
+id = "{}"
 
 [scopes]
-# backend = ["DATABASE_URL"]
-"#;
+"#, project_id);
+    fs::create_dir(&cred_dir)?;
     fs::write(cred_dir.join("project.toml"), project_toml)?;
-    fs::write(cred_dir.join("vault.json"), "{}")?;
+
+    let mut key = [0u8; 32];
+    rand::rng().fill_bytes(&mut key);
+
+    // Service: "cred-cli", User: project_id
+    let entry = Entry::new("cred-cli", &project_id.to_string())?;
+    
+    // Keyring stores strings, so we base64 encode the raw key
+    let key_b64 = base64::engine::general_purpose::STANDARD.encode(key);
+    entry.set_password(&key_b64).context("Failed to save key to OS keychain")?;
+
+    key.fill(0);
+
     update_gitignore(root)?;
 
     println!("Initialized new cred project at {}", cred_dir.display());
+    println!("🔑 Encryption key generated and stored in System Keychain (ID: {})", project_id);
     Ok(())
 }
 
