@@ -3,29 +3,68 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use anyhow::{Context, Result};
+use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
+use chacha20poly1305::{
+    aead::{Aead, AeadCore, KeyInit, OsRng},
+    ChaCha20Poly1305, Nonce
+};
+use keyring::Entry;
+use zeroize::{Zeroize, ZeroizeOnDrop};
 
-#[derive(Serialize, Deserialize, Debug, Default)]
+#[derive(Serialize, Deserialize)]
+struct EncryptedVaultFile {
+    version: u8,
+    nonce: String,
+    ciphertext: String
+}
+
+#[derive(Serialize, Deserialize, Debug, Default, Zeroize, ZeroizeOnDrop)]
 pub struct Vault {
     #[serde(skip)]
+    #[zeroize(skip)]
     path: PathBuf,
+
+    #[serde(skip)]
+    #[zeroize(skip)]
+    project_id: String,
     // Matrix: Environment -> { Key -> Value }
     secrets: HashMap<String, HashMap<String, String>>,
 }
 
 impl Vault {
-    pub fn load(path: &Path) -> Result<Self> {
-        if !path.exists() {
-            return Ok(Self { path: path.to_path_buf(), secrets: HashMap::new() });
-        }
-        let content = fs::read_to_string(path).context("Failed to read vault")?;
-        let mut vault: Vault = if content.trim().is_empty() {
-             Vault::default()
-        } else {
-            let secrets: HashMap<String, HashMap<String, String>> = serde_json::from_str(&content)
-                .context("Failed to parse vault JSON")?;
-            Vault { path: path.to_path_buf(), secrets }
+    pub fn load(vault_path: &Path, project_id: &str) -> Result<Self> {
+        let mut vault = Vault {
+            path: vault_path.to_path_buf(),
+            project_id: project_id.to_string(),
+            secrets: HashMap::new(),
         };
-        vault.path = path.to_path_buf();
+
+        if !vault_path.exists() {
+            return Ok(vault);
+        }
+        let content = fs::read_to_string(vault_path).context("Failed to read vault.enc")?;
+        let file_data: EncryptedVaultFile = serde_json::from_str(&content)
+            .context("Failed to parse vault structure")?;
+
+        let entry = Entry::new("cred-cli", project_id)?;
+        let key_b64 = entry.get_password().context("Could not find encryption key in OS Keychain. Did you init?")?;
+        let key_bytes = BASE64.decode(key_b64).context("Invalid key format in keychain")?;
+
+        let cipher = ChaCha20Poly1305::new_from_slice(&key_bytes)
+            .map_err(|_| anyhow::anyhow!("Invalid key length"))?;
+
+        let nonce_bytes = BASE64.decode(&file_data.nonce).context("Invalid nonce base64")?;
+        let ciphertext = BASE64.decode(&file_data.ciphertext).context("Invalid ciphertext base64")?;
+
+        let nonce = Nonce::from_slice(&nonce_bytes);
+
+        let plaintext = cipher.decrypt(nonce, ciphertext.as_ref())
+            .map_err(|_| anyhow::anyhow!("Decryption failed. Data corrupted or wrong key."))?;
+
+        let secrets: HashMap<String, HashMap<String, String>> = serde_json::from_slice(&plaintext)
+            .context("Failed to parse decrypted secrets JSON")?;
+
+        vault.secrets = secrets;
         Ok(vault)
     }
 

@@ -8,7 +8,7 @@ use anyhow::{bail, Context, Result};
 use keyring::Entry;
 use rand::{Rng, RngCore};
 use uuid::Uuid;
-use base64::Engine;
+use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
 
 #[derive(Serialize, Deserialize, Debug, Default)]
 pub struct ProjectConfig {
@@ -92,7 +92,6 @@ id = "{}"
 
 [scopes]
 "#, project_id);
-    fs::create_dir(&cred_dir)?;
     fs::write(cred_dir.join("project.toml"), project_toml)?;
 
     let mut key = [0u8; 32];
@@ -102,7 +101,7 @@ id = "{}"
     let entry = Entry::new("cred-cli", &project_id.to_string())?;
     
     // Keyring stores strings, so we base64 encode the raw key
-    let key_b64 = base64::engine::general_purpose::STANDARD.encode(key);
+    let key_b64 = BASE64.encode(key);
     entry.set_password(&key_b64).context("Failed to save key to OS keychain")?;
 
     key.fill(0);
