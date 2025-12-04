@@ -48,6 +48,24 @@ impl Project {
         Ok(config)
     }
 
+    pub fn get_master_key(&self) -> Result<[u8; 32]> {
+        let config = self.load_config()?;
+        let project_id = config.id.ok_or_else(|| anyhow::anyhow!("Project ID missing in project.toml"))?;
+        let entry = Entry::new("cred-cli", &project_id.to_string())?;
+
+        let key_b64 = entry.get_password().context("Encryption key not found in System Credential Store.")?;
+
+        let key_vec = BASE64.decode(key_b64).context("Corrupted key in credential store")?;
+
+        let mut key = [0u8; 32];
+        if key_vec.len() != 32 {
+            anyhow::bail!("Invalid key length in credential store");
+        }
+        key.copy_from_slice(&key_vec);
+        
+        Ok(key)
+    }
+
     pub fn add_key_to_scopes(&self, scope_names: &[String], key: &str) -> Result<()> {
         if scope_names.is_empty() { return Ok(()); }
         let mut config = self.load_config().unwrap_or_default();
@@ -102,14 +120,14 @@ id = "{}"
     
     // Keyring stores strings, so we base64 encode the raw key
     let key_b64 = BASE64.encode(key);
-    entry.set_password(&key_b64).context("Failed to save key to OS keychain")?;
+    entry.set_password(&key_b64).context("Failed to save key to the System Credential Store")?;
 
     key.fill(0);
 
     update_gitignore(root)?;
 
     println!("Initialized new cred project at {}", cred_dir.display());
-    println!("🔑 Encryption key generated and stored in System Keychain (ID: {})", project_id);
+    println!("🔑 Encryption key generated and stored in the System Credential Store (ID: {})", project_id);
     Ok(())
 }
 

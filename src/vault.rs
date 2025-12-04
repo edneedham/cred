@@ -9,7 +9,7 @@ use chacha20poly1305::{
     ChaCha20Poly1305, Nonce
 };
 use keyring::Entry;
-use zeroize::{Zeroize, ZeroizeOnDrop};
+use zeroize::{Zeroize};
 
 #[derive(Serialize, Deserialize)]
 struct EncryptedVaultFile {
@@ -18,24 +18,41 @@ struct EncryptedVaultFile {
     ciphertext: String
 }
 
-#[derive(Serialize, Deserialize, Debug, Default, Zeroize, ZeroizeOnDrop)]
+#[derive(Serialize, Deserialize, Debug, Default)]
 pub struct Vault {
     #[serde(skip)]
-    #[zeroize(skip)]
     path: PathBuf,
 
     #[serde(skip)]
-    #[zeroize(skip)]
-    project_id: String,
+    key: [u8; 32],
     // Matrix: Environment -> { Key -> Value }
     secrets: HashMap<String, HashMap<String, String>>,
 }
 
+impl Zeroize for Vault {
+    fn zeroize(&mut self) {
+        // Recursively drain and zeroize the map contents
+        self.secrets.drain().for_each(|(mut k, mut v)| {
+            k.zeroize();
+            v.drain().for_each(|(mut inner_k, mut inner_v)| {
+                inner_k.zeroize();
+                inner_v.zeroize();
+            });
+        });
+    }
+}
+
+impl Drop for Vault {
+    fn drop(&mut self) {
+        self.zeroize();
+    }
+}
+
 impl Vault {
-    pub fn load(vault_path: &Path, project_id: &str) -> Result<Self> {
+    pub fn load(vault_path: &Path, key: [u8; 32]) -> Result<Self> {
         let mut vault = Vault {
             path: vault_path.to_path_buf(),
-            project_id: project_id.to_string(),
+            key,
             secrets: HashMap::new(),
         };
 
@@ -46,12 +63,7 @@ impl Vault {
         let file_data: EncryptedVaultFile = serde_json::from_str(&content)
             .context("Failed to parse vault structure")?;
 
-        let entry = Entry::new("cred", project_id)?;
-        let key_b64 = entry.get_password().context("Could not find encryption key in OS Keychain. Did you init?")?;
-        let key_bytes = BASE64.decode(key_b64).context("Invalid key format in keychain")?;
-
-        let cipher = ChaCha20Poly1305::new_from_slice(&key_bytes)
-            .map_err(|_| anyhow::anyhow!("Invalid key length"))?;
+        let cipher = ChaCha20Poly1305::new(&key.into());
 
         let nonce_bytes = BASE64.decode(&file_data.nonce).context("Invalid nonce base64")?;
         let ciphertext = BASE64.decode(&file_data.ciphertext).context("Invalid ciphertext base64")?;
@@ -69,13 +81,8 @@ impl Vault {
     }
 
     pub fn save(&self) -> Result<()> {
-        let entry = Entry::new("cred", &self.project_id)?;
-        let key_b64 = entry.get_password().context("Key missing from keychain")?;
-        let key_bytes = BASE64.decode(key_b64)?;
-
         let plaintext = serde_json::to_vec(&self.secrets)?;
-        let cipher = ChaCha20Poly1305::new_from_slice(&key_bytes)
-            .map_err(|_| anyhow::anyhow!("Invalid key length"))?;
+        let cipher = ChaCha20Poly1305::new(&self.key.into());
         let nonce = ChaCha20Poly1305::generate_nonce(&mut OsRng);
         let ciphertext = cipher.encrypt(&nonce, plaintext.as_ref())
             .map_err(|e| anyhow::anyhow!("Encryption failed: {:?}", e))?;

@@ -58,7 +58,8 @@ async fn run(cli: Cli) -> Result<()> {
 
         Commands::Secret { action } => {
             let proj = project::Project::find()?;
-            let mut vault = vault::Vault::load(&proj.vault_path)?;
+            let master_key = proj.get_master_key()?;
+            let mut vault = vault::Vault::load(&proj.vault_path, master_key)?;
 
             match action {
                 SecretAction::Set { key, value, env, scope } => {
@@ -168,7 +169,9 @@ async fn run(cli: Cli) -> Result<()> {
 
             let proj = project::Project::find()?;
             let project_config = proj.load_config()?;
-            let vault = vault::Vault::load(&proj.vault_path)?;
+
+            let master_key = proj.get_master_key()?;
+            let vault = vault::Vault::load(&proj.vault_path, master_key)?;
 
             let environments_to_push: Vec<String> = if let Some(e) = env {
                 vec![e]
@@ -255,7 +258,8 @@ async fn run(cli: Cli) -> Result<()> {
 
             println!("✓ Remote delete successful. Cleaning local vault...");
             let proj = project::Project::find()?;
-            let mut vault = vault::Vault::load(&proj.vault_path)?;
+            let master_key = proj.get_master_key()?;
+            let mut vault = vault::Vault::load(&proj.vault_path, master_key)?;
             let target_env = env.unwrap_or_else(|| "development".to_string());
 
             for key in keys_to_prune {
