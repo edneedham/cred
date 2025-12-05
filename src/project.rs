@@ -6,7 +6,7 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use anyhow::{bail, Context, Result};
 use keyring::Entry;
-use rand::{Rng, RngCore};
+use rand::{RngCore};
 use uuid::Uuid;
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
 

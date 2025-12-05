@@ -13,6 +13,8 @@ I wanted something consistent for handling `.env` variables, API keys, PEM files
 
 ---
 
+A Target consumes secrets; a Source produces secrets. They are never the same abstraction.
+
 ## Why cred exists
 
 Managing secrets across projects and providers is a mess.
@@ -36,7 +38,7 @@ Your secrets live inside `.cred/vault.enc`. Unlike a flat `.env` file, `cred` st
 
 You can tag secrets into Scopes (e.g., backend, frontend, worker). This allows you to push only specific subsets of secrets to specific providers without splitting your project.
 
-### **2. A global provider authentication vault**
+### **2. A global target authentication vault**
 
 Stored once at:
 
@@ -44,7 +46,7 @@ Stored once at:
 ~/.config/cred/global.toml
 ```
 
-This keeps your provider login tokens separate from project secrets.
+This keeps your target login tokens separate from project secrets.
 
 ### **3. Provider-agnostic secret pushing**
 
@@ -61,7 +63,7 @@ You manage secrets locally, but `cred` can upload them to:
 Use:
 
 ```bash
-cred push <provider>
+cred push <target>
 ```
 
 This makes your CI/CD pipelines simple because the secrets already exist exactly where the provider expects them.
@@ -120,22 +122,20 @@ Global vault located at ~/.config/cred/global.toml
 
 ---
 
-## Global provider authentication
+## Global target authentication
 
-Before you can push secrets, authenticate the providers you want to use:
+Before you can push secrets, authenticate the targets you want to use:
 
 ```bash
-cred provider set cloudflare CF_API_TOKEN=abcd1234
-cred provider set vercel VERCEL_TOKEN=xyz789
-cred provider set github GH_TOKEN=ghp_123...
+cred target set github --token GH_TOKEN=ghp_123...
 ```
 
-These live in your global.toml — never inside projects.
+Tokens live in your global.toml — never inside projects. If you omit `--token`, `cred` will securely prompt for it.
 
-And to remove unused providers:
+And to remove unused targets:
 
 ```bash
-cred provider remove github
+cred target revoke github
 ```
 
 ---

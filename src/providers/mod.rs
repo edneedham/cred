@@ -1,4 +1,8 @@
+#[cfg(feature = "github")]
 mod github;
+
+#[cfg(not(feature = "github"))]
+compile_error!("No targets enabled. Enable feature \"github\".");
 
 use std::collections::HashMap;
 use anyhow::Result;
@@ -7,14 +11,16 @@ use std::fmt;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, ValueEnum)]
 #[value(rename_all = "lowercase")]
-pub enum ProviderType {
+pub(crate) enum Target {
+    #[cfg(feature = "github")]
     Github,
 }
 
-impl fmt::Display for ProviderType {
+impl fmt::Display for Target {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let s = match self {
-            ProviderType::Github => "github",
+            #[cfg(feature = "github")]
+            Target::Github => "github",
         };
         write!(f, "{}", s)
     }
@@ -56,51 +62,58 @@ pub trait Provider {
 }
 
 pub enum ProviderWrapper {
+    #[cfg(feature = "github")]
     Github(github::Github),
 }
 
 impl Provider for ProviderWrapper {
     fn name(&self) -> &str {
         match self {
+            #[cfg(feature = "github")]
             Self::Github(p) => p.name(),
         }
     }
 
     async fn push(&self, secrets: &HashMap<String, String>, auth_token: &str, options: &PushOptions) -> Result<()> {
         match self {
+            #[cfg(feature = "github")]
             Self::Github(p) => p.push(secrets, auth_token, options).await,
         }
     }
 
     async fn delete(&self, keys: &[String], auth_token: &str, options: &PushOptions) -> Result<()> {
         match self {
+            #[cfg(feature = "github")]
             Self::Github(p) => p.delete(keys, auth_token, options).await,
         }
     }
 
     async fn generate(&self, env: &str, auth_token: &str) -> Result<(String, String)> {
         match self {
+            #[cfg(feature = "github")]
             Self::Github(p) => p.generate(env, auth_token).await,
         }
     }
 
     async fn revoke_secret(&self, key_name: &str, key_value: &str, auth_token: &str) -> Result<()> {
         match self {
+            #[cfg(feature = "github")]
             Self::Github(p) => p.revoke_secret(key_name, key_value, auth_token).await,
         }
     }
 
     async fn revoke_auth_token(&self, auth_token: &str) -> Result<()> {
         match self {
+            #[cfg(feature = "github")]
             Self::Github(p) => p.revoke_auth_token(auth_token).await,
         }
     }
 }
 
-pub fn get(name: ProviderType) -> Option<ProviderWrapper> {
+pub(crate) fn get(name: Target) -> Option<ProviderWrapper> {
     match name {
-        ProviderType::Github => Some(ProviderWrapper::Github(github::Github)),
-        _ => None,
+        #[cfg(feature = "github")]
+        Target::Github => Some(ProviderWrapper::Github(github::Github)),
     }
 }
 
@@ -121,7 +134,7 @@ mod tests {
 
     #[test]
     fn test_factory_returns_github() {
-        let p = get(ProviderType::Github);
+        let p = get(Target::Github);
         assert!(p.is_some());
         assert_eq!(p.unwrap().name(), "github");
     }
@@ -146,7 +159,7 @@ mod tests {
     #[tokio::test]
     async fn test_provider_wrapper_dispatch() {
         // This tests that the Enum Wrapper correctly routes calls
-        let p = get(ProviderType::Github).unwrap();
+        let p = get(Target::Github).unwrap();
         
         // GitHub supports Push
         let secrets = HashMap::new();

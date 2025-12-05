@@ -5,6 +5,10 @@ edition = "2024"
 description = "A command line tool to manage secrets and environment variables locally and remotely."
 readme = "README.md"
 
+[features]
+default = ["github"]
+github = []
+
 [dependencies]
 anyhow = "1.0.100"
 base64 = "0.22.1"

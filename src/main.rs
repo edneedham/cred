@@ -7,7 +7,7 @@ mod vault;
 mod tests;
 
 use clap::Parser;
-use cli::{Cli, Commands, SecretAction, SetProviderArgs};
+use cli::{Cli, Commands, SecretAction, SetTargetArgs};
 use anyhow::{Context, Result};
 use std::collections::HashSet;
 use providers::Provider;
@@ -30,17 +30,17 @@ async fn run(cli: Cli) -> Result<()> {
             project::init()?;
         }
         
-        Commands::Provider { action } => match action {
-             cli::ProviderAction::Set(args) => {
-                handle_provider_set(args)?;
+        Commands::Target { action } => match action {
+             cli::TargetAction::Set(args) => {
+                handle_target_set(args)?;
             }
-            cli::ProviderAction::List => {
+            cli::TargetAction::List => {
                 let cfg = config::load()?;
-                println!("Configured Providers:");
+                println!("Configured Targets:");
                 for (name, _) in cfg.providers { println!("- {}", name); }
             }
-            cli::ProviderAction::Revoke { name } => {
-                println!("🔌 Attempting to revoke token for '{}'...", name);
+            cli::TargetAction::Revoke { name } => {
+                println!("🔌 Attempting to revoke token for target '{}'...", name);
                 let global_config = config::load()?;
                 if let Some(token) = global_config.providers.get(&name.to_string()) {
                     if let Some(p) = providers::get(name) {
@@ -52,7 +52,7 @@ async fn run(cli: Cli) -> Result<()> {
                     }
                     config::remove_provider_token(&name.to_string())?;
                 } else {
-                    println!("Provider '{}' was not configured.", name);
+                    println!("Target '{}' was not configured.", name);
                 }
             }
         },
@@ -97,12 +97,12 @@ async fn run(cli: Cli) -> Result<()> {
                         }
                     }
                 }
-                SecretAction::Revoke { key, provider, env, prune_target } => {
+                SecretAction::Revoke { key, target, env, prune_target } => {
                      // 1. Get Source Token
                     let global_config = config::load()?;
-                    let source_token = match global_config.providers.get(&provider.to_string()) {
+                    let source_token = match global_config.providers.get(&target.to_string()) {
                         Some(t) => t,
-                        None => { eprintln!("No token for source {}", provider); return Ok(()); }
+                        None => { eprintln!("No token for source {}", target); return Ok(()); }
                     };
 
                     // 2. Get Value for Revocation
@@ -112,13 +112,13 @@ async fn run(cli: Cli) -> Result<()> {
                     };
 
                     // 3. Remote Revoke
-                    let source_impl = match providers::get(provider) {
+                    let source_impl = match providers::get(target) {
                         Some(p) => p,
-                        None => { eprintln!("Unknown provider {}", provider); return Ok(()); }
+                        None => { eprintln!("Unknown target {}", target); return Ok(()); }
                     };
                     
-                    println!("🔌 Contacting {} to revoke '{}'...", provider, key);
-                    // Note: This will fail if provider doesn't support revoke (like GitHub)
+                    println!("🔌 Contacting {} to revoke '{}'...", target, key);
+                    // Note: This will fail if target doesn't support revoke (like GitHub)
                     if let Err(e) = source_impl.revoke_secret(&key, &secret_value, source_token).await {
                          eprintln!("x Failed to revoke at source: {}", e);
                          return Ok(());
@@ -148,14 +148,14 @@ async fn run(cli: Cli) -> Result<()> {
         }
         
         Commands::Push(args) => {
-            let provider_impl = match providers::get(args.provider) {
+            let target_impl = match providers::get(args.target) {
                 Some(p) => p,
-                None => { eprintln!("Error: Provider '{}' not supported.", args.provider); return Ok(()); }
+                None => { eprintln!("Error: Target '{}' not supported.", args.target); return Ok(()); }
             };
 
             let global_config = config::load()?;
-            let token = global_config.providers.get(&args.provider.to_string())
-                .ok_or_else(|| anyhow::anyhow!("No token found for {}.", args.provider))?;
+            let token = global_config.providers.get(&args.target.to_string())
+                .ok_or_else(|| anyhow::anyhow!("No token found for {}.", args.target))?;
 
             let proj = project::Project::find()?;
             let project_config = proj.load_config()?;
@@ -202,7 +202,7 @@ async fn run(cli: Cli) -> Result<()> {
 
                 println!("📦 Pushing [{}] ({} secrets)...", current_env, filtered.len());
                 let options = providers::PushOptions { env: Some(current_env.clone()) };
-                if let Err(e) = provider_impl.push(&filtered, token, &options).await {
+                if let Err(e) = target_impl.push(&filtered, token, &options).await {
                     eprintln!("x Failed to push [{}]: {}", current_env, e);
                 }
             }
@@ -210,14 +210,14 @@ async fn run(cli: Cli) -> Result<()> {
         }
 
         Commands::Prune(args) => {
-            let provider_impl = match providers::get(args.provider) {
+            let target_impl = match providers::get(args.target) {
                 Some(p) => p,
-                None => { eprintln!("Error: Unknown provider"); return Ok(()); }
+                None => { eprintln!("Error: Unknown target"); return Ok(()); }
             };
 
             let global_config = config::load()?;
-            let token = global_config.providers.get(&args.provider.to_string())
-                .ok_or_else(|| anyhow::anyhow!("No token for {}", args.provider))?;
+            let token = global_config.providers.get(&args.target.to_string())
+                .ok_or_else(|| anyhow::anyhow!("No token for {}", args.target))?;
 
             let keys_to_prune: Vec<String> = if !args.keys.is_empty() {
                 args.keys
@@ -240,11 +240,11 @@ async fn run(cli: Cli) -> Result<()> {
 
             if keys_to_prune.is_empty() { return Ok(()); }
 
-            println!("🔌 Deleting from Remote ({}) first...", args.provider);
+            println!("🔌 Deleting from Remote ({}) first...", args.target);
             let options = providers::PushOptions { env: args.env.clone() };
             
             // ATOMIC: Remote fail stops local delete
-            provider_impl.delete(&keys_to_prune, token, &options).await?;
+            target_impl.delete(&keys_to_prune, token, &options).await?;
 
             println!("✓ Remote delete successful. Cleaning local vault...");
             let proj = project::Project::find()?;
@@ -274,7 +274,7 @@ fn read_token_securely(maybe_token: Option<String>) -> Result<String> {
     match maybe_token {
         Some(token) => Ok(token),
         None => {
-            let token = prompt_password("Enter provider token: ")
+            let token = prompt_password("Enter target token: ")
                 .context("Failed to read token securely")?;
 
             if token.trim().is_empty() {
@@ -286,11 +286,11 @@ fn read_token_securely(maybe_token: Option<String>) -> Result<String> {
     }
 }
 
-fn handle_provider_set(args: SetProviderArgs) -> Result<()> {
+fn handle_target_set(args: SetTargetArgs) -> Result<()> {
     let mut token = read_token_securely(args.token)?;
 
     config::set_provider_token(&args.name.to_string(), &token)?;
-    println!("Provider '{}' authenticated successfully.", args.name);
+    println!("Target '{}' authenticated successfully.", args.name);
 
     token.zeroize();
     Ok(())

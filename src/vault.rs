@@ -8,7 +8,6 @@ use chacha20poly1305::{
     aead::{Aead, AeadCore, KeyInit, OsRng},
     ChaCha20Poly1305, Nonce
 };
-use keyring::Entry;
 use zeroize::{Zeroize};
 
 #[derive(Serialize, Deserialize)]

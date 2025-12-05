@@ -1,5 +1,5 @@
 use clap::{Args, Parser, Subcommand};
-use crate::providers::ProviderType;
+use crate::providers::Target;
 
 #[derive(Parser)]
 #[command(name = "cred")]
@@ -14,10 +14,10 @@ pub enum Commands {
     /// Initialize a new cred project in the current directory
     Init,
 
-    /// Manage global provider authentication
-    Provider {
+    /// Manage global target authentication
+    Target {
         #[command(subcommand)]
-        action: ProviderAction,
+        action: TargetAction,
     },
 
     /// Manage local secrets
@@ -26,17 +26,17 @@ pub enum Commands {
         action: SecretAction,
     },
 
-    /// Upload (Push) secrets to a remote hosting provider (e.g. GitHub)
+    /// Upload (Push) secrets to a remote hosting target (e.g. GitHub)
     Push(PushArgs),
 
-    /// Atomic Delete: Removes secrets from the Remote Provider AND Local Vault.
+    /// Atomic Delete: Removes secrets from the Remote Target AND Local Vault.
     Prune(PruneArgs),
 }
 
 #[derive(Args, Debug)]
 pub struct PushArgs {
-    /// The provider to push to
-    pub provider: ProviderType,
+    /// The target to push to
+    pub target: Target,
 
     /// Specific keys to push. If empty, uses scope or pushes ALL secrets.
     #[arg(num_args = 0..)]
@@ -53,8 +53,8 @@ pub struct PushArgs {
 
 #[derive(Args, Debug)]
 pub struct PruneArgs {
-    /// The provider to prune from
-    pub provider: ProviderType,
+    /// The target to prune from
+    pub target: Target,
 
     /// Specific keys to remove
     #[arg(num_args = 0..)]
@@ -71,16 +71,16 @@ pub struct PruneArgs {
 
 #[derive(Subcommand)]
 #[derive(Debug)]
-pub enum ProviderAction {
-    Set(SetProviderArgs),
+pub enum TargetAction {
+    Set(SetTargetArgs),
     List,
-    /// Revoke a provider's authentication token (Logout)
-    Revoke { name: ProviderType }, 
+    /// Revoke a target's authentication token (Logout)
+    Revoke { name: Target }, 
 }
 
 #[derive(Args, Debug)]
-pub struct SetProviderArgs {
-    pub name: ProviderType,
+pub struct SetTargetArgs {
+    pub name: Target,
 
     /// Auth token (will prompt if omitted)
     #[arg(long)]
@@ -117,12 +117,12 @@ pub enum SecretAction {
     Revoke {
         key: String,
         #[arg(long)]
-        provider: ProviderType,
+        target: Target,
         #[arg(long, short)]
         env: String,
         
         /// Optional: Also prune this secret from a downstream target (e.g. github)
         #[arg(long)]
-        prune_target: Option<ProviderType>,
+        prune_target: Option<Target>,
     }
 }
