@@ -30,28 +30,29 @@ pub struct PushOptions {
     pub env: Option<String>,
 }
 
-pub trait Provider {
+/// TargetAdapter drives interactions with a destination (where secrets are pushed).
+pub trait TargetAdapter {
     fn name(&self) -> &str;
     
     // --- DESTINATION CAPABILITIES ---
     
     async fn push(&self, _secrets: &HashMap<String, String>, _auth_token: &str, _options: &PushOptions) -> Result<()> {
-        anyhow::bail!("Provider '{}' is not a hosting platform; you cannot push secrets to it.", self.name());
+        anyhow::bail!("Target '{}' is not a hosting platform; you cannot push secrets to it.", self.name());
     }
 
     async fn delete(&self, _keys: &[String], _auth_token: &str, _options: &PushOptions) -> Result<()> {
-        anyhow::bail!("Provider '{}' is not a hosting platform; you cannot prune secrets from it.", self.name());
+        anyhow::bail!("Target '{}' is not a hosting platform; you cannot prune secrets from it.", self.name());
     }
     
     // --- SOURCE CAPABILITIES ---
 
     #[allow(dead_code)]
     async fn generate(&self, _env: &str, _auth_token: &str) -> Result<(String, String)> {
-        anyhow::bail!("Provider '{}' does not support API key generation.", self.name());
+        anyhow::bail!("Target '{}' does not support API key generation.", self.name());
     }
 
     async fn revoke_secret(&self, _key_name: &str, _key_value: &str, _auth_token: &str) -> Result<()> {
-        anyhow::bail!("Provider '{}' does not support API key revocation.", self.name());
+        anyhow::bail!("Target '{}' does not support API key revocation.", self.name());
     }
 
     // --- AUTHENTICATION ---
@@ -61,12 +62,12 @@ pub trait Provider {
     }
 }
 
-pub enum ProviderWrapper {
+pub enum TargetWrapper {
     #[cfg(feature = "github")]
     Github(github::Github),
 }
 
-impl Provider for ProviderWrapper {
+impl TargetAdapter for TargetWrapper {
     fn name(&self) -> &str {
         match self {
             #[cfg(feature = "github")]
@@ -110,10 +111,10 @@ impl Provider for ProviderWrapper {
     }
 }
 
-pub(crate) fn get(name: Target) -> Option<ProviderWrapper> {
+pub(crate) fn get(name: Target) -> Option<TargetWrapper> {
     match name {
         #[cfg(feature = "github")]
-        Target::Github => Some(ProviderWrapper::Github(github::Github)),
+        Target::Github => Some(TargetWrapper::Github(github::Github)),
     }
 }
 
@@ -121,10 +122,10 @@ pub(crate) fn get(name: Target) -> Option<ProviderWrapper> {
 mod tests {
     use super::*;
 
-    // Mock Provider to test Trait Defaults
-    struct MockSourceProvider;
-    impl Provider for MockSourceProvider {
-        fn name(&self) -> &str { "mock_source" }
+    // Mock Target to test Trait Defaults
+    struct MockTarget;
+    impl TargetAdapter for MockTarget {
+        fn name(&self) -> &str { "mock_target" }
         // We do NOT implement push/delete (relying on defaults)
         // We only implement generate
         async fn generate(&self, _env: &str, _token: &str) -> Result<(String, String)> {
@@ -141,7 +142,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_trait_defaults_prevent_invalid_usage() {
-        let p = MockSourceProvider;
+        let p = MockTarget;
         let secrets = HashMap::new();
         let options = PushOptions { env: None };
 
@@ -157,7 +158,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_provider_wrapper_dispatch() {
+    async fn test_target_wrapper_dispatch() {
         // This tests that the Enum Wrapper correctly routes calls
         let p = get(Target::Github).unwrap();
         

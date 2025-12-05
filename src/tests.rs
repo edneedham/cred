@@ -72,7 +72,7 @@ mod tests {
         assert!(path.exists());
         
         let content = fs::read_to_string(&path).unwrap();
-        assert!(content.contains("[providers]"));
+        assert!(content.contains("[targets]"));
     }
 
     // ========================================================================

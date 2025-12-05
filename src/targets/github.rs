@@ -1,4 +1,4 @@
-use super::{Provider, PushOptions};
+use super::{TargetAdapter, PushOptions};
 use std::collections::HashMap;
 use anyhow::{Context, Result};
 use reqwest::Client;
@@ -103,7 +103,7 @@ impl Github {
     }
 }
 
-impl Provider for Github {
+impl TargetAdapter for Github {
     fn name(&self) -> &str { "github" }
 
     async fn push(&self, secrets: &HashMap<String, String>, auth_token: &str, options: &PushOptions) -> Result<()> {

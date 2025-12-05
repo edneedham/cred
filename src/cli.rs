@@ -1,5 +1,5 @@
 use clap::{Args, Parser, Subcommand};
-use crate::providers::Target;
+use crate::targets::Target;
 
 #[derive(Parser)]
 #[command(name = "cred")]

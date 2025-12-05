@@ -1,7 +1,7 @@
 mod cli;
 mod config;
 mod project;
-mod providers;
+mod targets;
 mod vault;
 #[cfg(test)]
 mod tests;
@@ -10,7 +10,7 @@ use clap::Parser;
 use cli::{Cli, Commands, SecretAction, SetTargetArgs};
 use anyhow::{Context, Result};
 use std::collections::HashSet;
-use providers::Provider;
+use targets::TargetAdapter;
 use rpassword::prompt_password;
 use zeroize::Zeroize;
 
@@ -37,20 +37,20 @@ async fn run(cli: Cli) -> Result<()> {
             cli::TargetAction::List => {
                 let cfg = config::load()?;
                 println!("Configured Targets:");
-                for (name, _) in cfg.providers { println!("- {}", name); }
+                for (name, _) in cfg.targets { println!("- {}", name); }
             }
             cli::TargetAction::Revoke { name } => {
                 println!("🔌 Attempting to revoke token for target '{}'...", name);
                 let global_config = config::load()?;
-                if let Some(token) = global_config.providers.get(&name.to_string()) {
-                    if let Some(p) = providers::get(name) {
+                if let Some(token) = global_config.targets.get(&name.to_string()) {
+                    if let Some(p) = targets::get(name) {
                         // Atomic Revoke
                         if let Err(e) = p.revoke_auth_token(token).await {
                             eprintln!("x Remote revocation failed: {}", e);
                             return Ok(());
                         }
                     }
-                    config::remove_provider_token(&name.to_string())?;
+                    config::remove_target_token(&name.to_string())?;
                 } else {
                     println!("Target '{}' was not configured.", name);
                 }
@@ -100,7 +100,7 @@ async fn run(cli: Cli) -> Result<()> {
                 SecretAction::Revoke { key, target, env, prune_target } => {
                      // 1. Get Source Token
                     let global_config = config::load()?;
-                    let source_token = match global_config.providers.get(&target.to_string()) {
+                    let source_token = match global_config.targets.get(&target.to_string()) {
                         Some(t) => t,
                         None => { eprintln!("No token for source {}", target); return Ok(()); }
                     };
@@ -112,7 +112,7 @@ async fn run(cli: Cli) -> Result<()> {
                     };
 
                     // 3. Remote Revoke
-                    let source_impl = match providers::get(target) {
+                    let source_impl = match targets::get(target) {
                         Some(p) => p,
                         None => { eprintln!("Unknown target {}", target); return Ok(()); }
                     };
@@ -132,9 +132,9 @@ async fn run(cli: Cli) -> Result<()> {
 
                     // 5. Prune Downstream
                     if let Some(target) = prune_target {
-                        if let Some(target_token) = global_config.providers.get(&target.to_string()) {
-                             if let Some(target_impl) = providers::get(target) {
-                                let options = providers::PushOptions { env: Some(env.clone()) };
+                        if let Some(target_token) = global_config.targets.get(&target.to_string()) {
+                             if let Some(target_impl) = targets::get(target) {
+                                let options = targets::PushOptions { env: Some(env.clone()) };
                                 if let Err(e) = target_impl.delete(&[key.clone()], target_token, &options).await {
                                     eprintln!("x Failed to prune from {}: {}", target, e);
                                 } else {
@@ -148,13 +148,13 @@ async fn run(cli: Cli) -> Result<()> {
         }
         
         Commands::Push(args) => {
-            let target_impl = match providers::get(args.target) {
+            let target_impl = match targets::get(args.target) {
                 Some(p) => p,
                 None => { eprintln!("Error: Target '{}' not supported.", args.target); return Ok(()); }
             };
 
             let global_config = config::load()?;
-            let token = global_config.providers.get(&args.target.to_string())
+            let token = global_config.targets.get(&args.target.to_string())
                 .ok_or_else(|| anyhow::anyhow!("No token found for {}.", args.target))?;
 
             let proj = project::Project::find()?;
@@ -201,7 +201,7 @@ async fn run(cli: Cli) -> Result<()> {
                 if filtered.is_empty() { continue; }
 
                 println!("📦 Pushing [{}] ({} secrets)...", current_env, filtered.len());
-                let options = providers::PushOptions { env: Some(current_env.clone()) };
+                let options = targets::PushOptions { env: Some(current_env.clone()) };
                 if let Err(e) = target_impl.push(&filtered, token, &options).await {
                     eprintln!("x Failed to push [{}]: {}", current_env, e);
                 }
@@ -210,13 +210,13 @@ async fn run(cli: Cli) -> Result<()> {
         }
 
         Commands::Prune(args) => {
-            let target_impl = match providers::get(args.target) {
+            let target_impl = match targets::get(args.target) {
                 Some(p) => p,
                 None => { eprintln!("Error: Unknown target"); return Ok(()); }
             };
 
             let global_config = config::load()?;
-            let token = global_config.providers.get(&args.target.to_string())
+            let token = global_config.targets.get(&args.target.to_string())
                 .ok_or_else(|| anyhow::anyhow!("No token for {}", args.target))?;
 
             let keys_to_prune: Vec<String> = if !args.keys.is_empty() {
@@ -241,7 +241,7 @@ async fn run(cli: Cli) -> Result<()> {
             if keys_to_prune.is_empty() { return Ok(()); }
 
             println!("🔌 Deleting from Remote ({}) first...", args.target);
-            let options = providers::PushOptions { env: args.env.clone() };
+            let options = targets::PushOptions { env: args.env.clone() };
             
             // ATOMIC: Remote fail stops local delete
             target_impl.delete(&keys_to_prune, token, &options).await?;
@@ -289,7 +289,7 @@ fn read_token_securely(maybe_token: Option<String>) -> Result<String> {
 fn handle_target_set(args: SetTargetArgs) -> Result<()> {
     let mut token = read_token_securely(args.token)?;
 
-    config::set_provider_token(&args.name.to_string(), &token)?;
+    config::set_target_token(&args.name.to_string(), &token)?;
     println!("Target '{}' authenticated successfully.", args.name);
 
     token.zeroize();

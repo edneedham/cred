@@ -6,7 +6,7 @@ use anyhow::{Context, Result};
 
 #[derive(Serialize, Deserialize, Debug, Default)]
 pub struct GlobalConfig {
-    pub providers: HashMap<String, String>,
+    pub targets: HashMap<String, String>,
 }
 
 fn resolve_config_dir() -> Result<PathBuf> {
@@ -43,9 +43,9 @@ pub fn load() -> Result<GlobalConfig> {
     Ok(config)
 }
 
-pub fn set_provider_token(provider: &str, token: &str) -> Result<()> {
+pub fn set_target_token(target: &str, token: &str) -> Result<()> {
     let mut config = load()?;
-    config.providers.insert(provider.to_string(), token.to_string());
+    config.targets.insert(target.to_string(), token.to_string());
     
     let config_path = ensure_global_config_exists()?;
     let toml_string = toml::to_string_pretty(&config)?;
@@ -53,15 +53,15 @@ pub fn set_provider_token(provider: &str, token: &str) -> Result<()> {
     Ok(())
 }
 
-pub fn remove_provider_token(provider: &str) -> Result<()> {
+pub fn remove_target_token(target: &str) -> Result<()> {
     let mut config = load()?;
-    if config.providers.remove(provider).is_some() {
+    if config.targets.remove(target).is_some() {
         let config_path = ensure_global_config_exists()?;
         let toml_string = toml::to_string_pretty(&config)?;
         fs::write(&config_path, toml_string)?;
-        println!("✓ Removed authentication for '{}'", provider);
+        println!("✓ Removed authentication for '{}'", target);
     } else {
-        println!("Provider '{}' was not configured.", provider);
+        println!("Target '{}' was not configured.", target);
     }
     Ok(())
 }

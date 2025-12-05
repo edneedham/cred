@@ -2,7 +2,7 @@
 
 `cred` is a local-first credential manager that lets you create, store, and manage secrets on your machine — and then push them directly to the platforms that need them for deployment or CI/CD.
 
-I wanted something consistent for handling `.env` variables, API keys, PEM files, and provider-specific secrets etc.. I think this is it.
+I wanted something consistent for handling `.env` variables, API keys, PEM files, and target-specific secrets etc.. I think this is it.
 
 ## Who is this for
 
@@ -17,7 +17,7 @@ A Target consumes secrets; a Source produces secrets. They are never the same ab
 
 ## Why cred exists
 
-Managing secrets across projects and providers is a mess.
+Managing secrets across projects, targets, and sources is a mess.
 
 Every platform has different rules for how it parses `.env`, how it handles multiline secrets, and how you upload them. Debugging why something worked locally but broke in CI/CD is tedious and error-prone.
 
@@ -36,7 +36,7 @@ Your secrets live inside `.cred/vault.enc`. Unlike a flat `.env` file, `cred` st
 
 ### \*\*2. Scoped Grouping (Monorepo Ready)
 
-You can tag secrets into Scopes (e.g., backend, frontend, worker). This allows you to push only specific subsets of secrets to specific providers without splitting your project.
+You can tag secrets into Scopes (e.g., backend, frontend, worker). This allows you to push only specific subsets of secrets to specific targets without splitting your project.
 
 ### **2. A global target authentication vault**
 
@@ -48,7 +48,7 @@ Stored once at:
 
 This keeps your target login tokens separate from project secrets.
 
-### **3. Provider-agnostic secret pushing**
+### **3. Target-agnostic secret pushing**
 
 You manage secrets locally, but `cred` can upload them to:
 
@@ -58,7 +58,7 @@ You manage secrets locally, but `cred` can upload them to:
 -   Supabase
 -   Fly.io
 -   Resend
--   (and more via providers)
+-   (future additional targets/sources)
 
 Use:
 
@@ -66,12 +66,11 @@ Use:
 cred push <target>
 ```
 
-This makes your CI/CD pipelines simple because the secrets already exist exactly where the provider expects them.
+This makes your CI/CD pipelines simple because the secrets already exist exactly where the target expects them.
 
 ### **4. Automatic secret generation**
 
-Some providers (like Resend, Cloudflare, Supabase) allow API-driven key creation.
-`cred` can request and store these keys for you.
+Some sources (planned) allow API-driven key creation. Future `cred` releases can request and store these keys for you.
 
 ### **5. One workflow instead of five**
 
@@ -237,7 +236,7 @@ This is the same security model used by:
 
 ---
 
-## Pushing secrets to providers (CI/CD ready)
+## Pushing secrets to targets (CI/CD ready)
 
 This is the core purpose of `cred`.
 
@@ -268,26 +267,26 @@ cred push supabase
 These commands:
 
 1. Read your local `.cred/vault.json`
-2. Transform formats required by provider
-3. Upload secrets using the provider API
+2. Transform formats required by the target
+3. Upload secrets using the target API
 4. Validate the result
 
 No more manually creating secrets via platform dashboards.
 
-## Removing secrets from providers
+## Removing secrets from targets
 
 Mistakes and changes happen.
 
-### Remove all secrets from a provider
+### Remove all secrets from a target
 
 ```bash
-cred remove <provider>
+cred remove <target>
 ```
 
-### Remove a single secret from a provider
+### Remove a single secret from a target
 
 ```bash
-cred remove <provider> <key>
+cred remove <target> <key>
 ```
 
 ---
@@ -315,6 +314,6 @@ Global configuration lives at:
 `cred` is under active development. The `1.0` milestone focuses on:
 
 -   A stable vault format
--   Reliable provider authentication
+-   Reliable target authentication
 -   Universal secret push flows
 -   Consistent `.env` and PEM handling across platforms
