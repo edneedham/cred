@@ -72,10 +72,19 @@ pub struct PruneArgs {
 #[derive(Subcommand)]
 #[derive(Debug)]
 pub enum ProviderAction {
-    Set { name: ProviderType, token: String },
+    Set(SetProviderArgs),
     List,
     /// Revoke a provider's authentication token (Logout)
     Revoke { name: ProviderType }, 
+}
+
+#[derive(Args, Debug)]
+pub struct SetProviderArgs {
+    pub name: ProviderType,
+
+    /// Auth token (will prompt if omitted)
+    #[arg(long)]
+    pub token: Option<String>,
 }
 
 #[derive(Subcommand)]

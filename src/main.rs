@@ -7,10 +7,12 @@ mod vault;
 mod tests;
 
 use clap::Parser;
-use cli::{Cli, Commands, SecretAction};
-use anyhow::Result;
+use cli::{Cli, Commands, SecretAction, SetProviderArgs};
+use anyhow::{Context, Result};
 use std::collections::HashSet;
 use providers::Provider;
+use rpassword::prompt_password;
+use zeroize::Zeroize;
 
 #[tokio::main]
 async fn main() {
@@ -29,9 +31,8 @@ async fn run(cli: Cli) -> Result<()> {
         }
         
         Commands::Provider { action } => match action {
-             cli::ProviderAction::Set { name, token } => {
-                config::set_provider_token(&name.to_string(), &token)?;
-                println!("✓ Auth token set for provider '{}'", name);
+             cli::ProviderAction::Set(args) => {
+                handle_provider_set(args)?;
             }
             cli::ProviderAction::List => {
                 let cfg = config::load()?;
@@ -266,5 +267,31 @@ async fn run(cli: Cli) -> Result<()> {
             println!("✓ Prune complete (Atomic).");
         }
     }
+    Ok(())
+}
+
+fn read_token_securely(maybe_token: Option<String>) -> Result<String> {
+    match maybe_token {
+        Some(token) => Ok(token),
+        None => {
+            let token = prompt_password("Enter provider token: ")
+                .context("Failed to read token securely")?;
+
+            if token.trim().is_empty() {
+                anyhow::bail!("Token cannot be empty");
+            }
+
+            Ok(token)
+        }
+    }
+}
+
+fn handle_provider_set(args: SetProviderArgs) -> Result<()> {
+    let mut token = read_token_securely(args.token)?;
+
+    config::set_provider_token(&args.name.to_string(), &token)?;
+    println!("Provider '{}' authenticated successfully.", args.name);
+
+    token.zeroize();
     Ok(())
 }
