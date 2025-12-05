@@ -96,17 +96,6 @@ async fn run(cli: Cli) -> Result<()> {
                         }
                     }
                 }
-                SecretAction::Generate { provider, env, scope } => {
-                    // Logic to Simulate Generation (Since Resend not implemented yet)
-                    println!("Requesting new secret from provider: '{}'...", provider);
-                    // In real impl: providers::get(provider).unwrap().generate(&env, token).await?
-                    let (key, value) = (format!("{}_KEY", provider.to_string().to_uppercase()), "simulated_key".to_string());
-                    
-                    vault.set(&env, &key, &value);
-                    vault.save()?;
-                    println!("✓ Generated {} = ***** in [{}]", key, env);
-                    if !scope.is_empty() { proj.add_key_to_scopes(&scope, &key)?; }
-                }
                 SecretAction::Revoke { key, provider, env, prune_target } => {
                      // 1. Get Source Token
                     let global_config = config::load()?;

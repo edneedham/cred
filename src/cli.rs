@@ -98,14 +98,6 @@ pub enum SecretAction {
         #[arg(long, short)]
         env: String,
     },
-    /// Generate a new secret from a Source Provider (e.g. Resend)
-    Generate { 
-        provider: ProviderType, 
-        #[arg(long, short)]
-        env: String,
-        #[arg(long, value_delimiter = ',')]
-        scope: Vec<String>,
-    },
     /// Revoke a generated secret at the source AND locally
     Revoke {
         key: String,

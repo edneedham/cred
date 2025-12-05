@@ -191,12 +191,6 @@ cred secret list --scope backend
 cred secret remove DATABASE_URL
 ```
 
-### Generate a secret using a provider API (environment required)
-
-```bash
-cred secret generate resend --env production
-```
-
 ## Security Model
 
 All sensitive project secrets are encrypted at rest, never stored in plaintext on disk, and only decrypted in memory when required. There is no central server, no accounts, and no remote storage owned by cred.
