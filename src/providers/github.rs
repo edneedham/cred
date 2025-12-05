@@ -3,99 +3,173 @@ use std::collections::HashMap;
 use anyhow::{Context, Result};
 use reqwest::Client;
 use serde::Deserialize;
+use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
+
+// NEW IMPORTS for sodiumoxide
+use sodiumoxide::crypto::box_::curve25519xsalsa20poly1305::PublicKey;
+use sodiumoxide::crypto::sealedbox;
 
 pub struct Github;
 
 #[derive(Deserialize)]
-struct PublicKeyResponse { key_id: String }
+struct RepoDetails {
+    id: u64,
+}
+
+#[derive(Deserialize)]
+struct PublicKeyResponse {
+    key_id: String,
+    key: String,
+}
+
+enum GitHubTarget {
+    Repository(String),
+    Environment(u64, String),
+}
+
+impl Github {
+    fn encrypt_secret(&self, public_key_b64: &str, value: &str) -> Result<String> {
+        // 1. Initialize Sodium (Important!)
+        // It returns Ok(()) if successful or if already initialized.
+        sodiumoxide::init().map_err(|_| anyhow::anyhow!("Failed to initialize sodiumoxide"))?;
+
+        // 2. Decode the Base64 Public Key
+        let public_key_bytes = BASE64.decode(public_key_b64)
+            .context("Failed to decode GitHub public key")?;
+
+        // 3. Create a PublicKey object
+        // PublicKey::from_slice returns Option<PublicKey> if length is correct (32 bytes)
+        let pk = PublicKey::from_slice(&public_key_bytes)
+            .ok_or_else(|| anyhow::anyhow!("Invalid public key length from GitHub"))?;
+
+        // 4. Encrypt using SealedBox
+        // This handles ephemeral key generation and nonce management internally
+        let encrypted_bytes = sealedbox::seal(value.as_bytes(), &pk);
+
+        // 5. Encode result to Base64
+        Ok(BASE64.encode(encrypted_bytes))
+    }
+
+    // ... resolve_target remains the same ...
+    async fn resolve_target(&self, client: &Client, token: &str, repo: &str, env: Option<&String>) -> Result<GitHubTarget> {
+        if let Some(env_name) = env {
+            let url = format!("https://api.github.com/repos/{}", repo);
+            let resp = client.get(&url)
+                .header("User-Agent", "cred-cli")
+                .header("Authorization", format!("Bearer {}", token))
+                .header("X-GitHub-Api-Version", "2022-11-28")
+                .send().await?
+                .error_for_status()
+                .context("Failed to fetch repository details")?;
+            
+            let details: RepoDetails = resp.json().await?;
+            Ok(GitHubTarget::Environment(details.id, env_name.clone()))
+        } else {
+            Ok(GitHubTarget::Repository(repo.to_string()))
+        }
+    }
+}
 
 impl Provider for Github {
     fn name(&self) -> &str { "github" }
 
     async fn push(&self, secrets: &HashMap<String, String>, auth_token: &str, options: &PushOptions) -> Result<()> {
-        let repo = options.repo.as_ref()
-            .ok_or_else(|| anyhow::anyhow!("GitHub provider requires '--repo <owner/name>' argument"))?;
+        let repo_name = options.repo.as_ref()
+            .ok_or_else(|| anyhow::anyhow!("GitHub provider requires '--repo <owner/name>'"))?;
 
-        let target_env = options.env.as_deref().unwrap_or("production");
-        
-        println!("🚀 Pushing to GitHub (Repo: {}, Env: {})", repo, target_env);
-        
         let client = Client::new();
+        let target = self.resolve_target(&client, auth_token, repo_name, options.env.as_ref()).await?;
 
-        let pub_key_url = format!("https://api.github.com/repos/{}/actions/secrets/public-key", repo);
-        
-        let key_resp: PublicKeyResponse = client
-            .get(&pub_key_url)
+        let (api_base, human_name) = match &target {
+            GitHubTarget::Repository(name) => (
+                format!("https://api.github.com/repos/{}/actions/secrets", name),
+                format!("Repository: {}", name)
+            ),
+            GitHubTarget::Environment(id, env) => (
+                format!("https://api.github.com/repositories/{}/environments/{}/secrets", id, env),
+                format!("Environment: {}", env)
+            )
+        };
+
+        println!("🚀 Pushing to GitHub [{}]", human_name);
+
+        let pub_key_url = format!("{}/public-key", api_base);
+        let key_resp: PublicKeyResponse = client.get(&pub_key_url)
             .header("User-Agent", "cred-cli")
             .header("Authorization", format!("Bearer {}", auth_token))
             .header("X-GitHub-Api-Version", "2022-11-28")
-            .send()
-            .await?
+            .send().await?
             .error_for_status()
-            .context("Failed to connect to GitHub.")?
-            .json()
-            .await?;
+            .context("Failed to get GitHub public key")?
+            .json().await?;
 
-        println!("✓ Authenticated with GitHub.");
-
-        for (key, _value) in secrets {
-            let url = format!("https://api.github.com/repos/{}/actions/secrets/{}", repo, key);
-            let encrypted_value = "DUMMY_ENCRYPTED_VALUE_REQUIRES_LIBSODIUM"; 
-
+        for (key, value) in secrets {
+            let encrypted_val = self.encrypt_secret(&key_resp.key, value)?;
+            
+            let put_url = format!("{}/{}", api_base, key);
             let body = serde_json::json!({
-                "encrypted_value": encrypted_value,
+                "encrypted_value": encrypted_val,
                 "key_id": key_resp.key_id
             });
 
-            let response = client
-                .put(&url)
+            let resp = client.put(&put_url)
                 .header("User-Agent", "cred-cli")
                 .header("Authorization", format!("Bearer {}", auth_token))
                 .header("X-GitHub-Api-Version", "2022-11-28")
                 .json(&body)
-                .send()
-                .await?;
-                
-            if response.status().is_success() {
-                println!("  ✓ Set secret: {}", key);
+                .send().await?;
+
+            if resp.status().is_success() {
+                println!("  ✓ Set: {}", key);
             } else {
-                eprintln!("  x Failed to set: {} (Status: {})", key, response.status());
+                eprintln!("  x Failed: {} (Status: {})", key, resp.status());
             }
         }
         Ok(())
     }
 
     async fn delete(&self, keys: &[String], auth_token: &str, options: &PushOptions) -> Result<()> {
-        let repo = options.repo.as_ref()
-            .ok_or_else(|| anyhow::anyhow!("GitHub provider requires '--repo'"))?;
+        let repo_name = options.repo.as_ref()
+            .ok_or_else(|| anyhow::anyhow!("GitHub provider requires '--repo <owner/name>'"))?;
 
-        println!("🗑️  Pruning {} secrets from GitHub Repo: {}", keys.len(), repo);
         let client = Client::new();
+        let target = self.resolve_target(&client, auth_token, repo_name, options.env.as_ref()).await?;
+
+        let (api_base, human_name) = match &target {
+            GitHubTarget::Repository(name) => (
+                format!("https://api.github.com/repos/{}/actions/secrets", name),
+                format!("Repository: {}", name)
+            ),
+            GitHubTarget::Environment(id, env) => (
+                format!("https://api.github.com/repositories/{}/environments/{}/secrets", id, env),
+                format!("Environment: {}", env)
+            )
+        };
+
+        println!("🗑️  Pruning {} secrets from GitHub [{}]", keys.len(), human_name);
 
         for key in keys {
-            let url = format!("https://api.github.com/repos/{}/actions/secrets/{}", repo, key);
-            let response = client
-                .delete(&url)
+            let url = format!("{}/{}", api_base, key);
+            let resp = client.delete(&url)
                 .header("User-Agent", "cred-cli")
                 .header("Authorization", format!("Bearer {}", auth_token))
                 .header("X-GitHub-Api-Version", "2022-11-28")
-                .send()
-                .await?;
+                .send().await?;
 
-            let status = response.status();
+            let status = resp.status();
             if status.is_success() {
-                println!("  ✓ Remote Deleted: {}", key);
+                println!("  ✓ Deleted: {}", key);
             } else if status.as_u16() == 404 {
-                println!("  ~ Remote skipped: {} (Already gone)", key);
+                println!("  ~ Skipped: {} (Not found)", key);
             } else {
-                anyhow::bail!("Failed to delete {} from remote. Status: {}", key, status);
+                anyhow::bail!("Failed to delete {}. Status: {}", key, status);
             }
         }
         Ok(())
     }
 
     async fn revoke_auth_token(&self, _auth_token: &str) -> Result<()> {
-        println!("ℹ️  Note: GitHub Personal Access Tokens cannot be revoked via API.");
+        println!("ℹ️  GitHub PATs cannot be revoked via API.");
         Ok(())
     }
 }
