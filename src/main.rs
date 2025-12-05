@@ -146,15 +146,15 @@ async fn run(cli: Cli) -> Result<()> {
             }
         }
         
-        Commands::Push { provider, env, keys, scope } => {
-            let provider_impl = match providers::get(provider) {
+        Commands::Push(args) => {
+            let provider_impl = match providers::get(args.provider) {
                 Some(p) => p,
-                None => { eprintln!("Error: Provider '{}' not supported.", provider); return Ok(()); }
+                None => { eprintln!("Error: Provider '{}' not supported.", args.provider); return Ok(()); }
             };
 
             let global_config = config::load()?;
-            let token = global_config.providers.get(&provider.to_string())
-                .ok_or_else(|| anyhow::anyhow!("No token found for {}.", provider))?;
+            let token = global_config.providers.get(&args.provider.to_string())
+                .ok_or_else(|| anyhow::anyhow!("No token found for {}.", args.provider))?;
 
             let proj = project::Project::find()?;
             let project_config = proj.load_config()?;
@@ -162,7 +162,7 @@ async fn run(cli: Cli) -> Result<()> {
             let master_key = proj.get_master_key()?;
             let vault = vault::Vault::load(&proj.vault_path, master_key)?;
 
-            let environments_to_push: Vec<String> = if let Some(e) = env {
+            let environments_to_push: Vec<String> = if let Some(e) = args.env {
                 vec![e]
             } else {
                 vault.list_all().keys().cloned().collect()
@@ -174,12 +174,12 @@ async fn run(cli: Cli) -> Result<()> {
                     _ => continue,
                 };
 
-                let keys_to_push: Vec<String> = if !keys.is_empty() {
-                    keys.clone()
-                } else if !scope.is_empty() {
+                let keys_to_push: Vec<String> = if !args.keys.is_empty() {
+                    args.keys.clone()
+                } else if !args.scope.is_empty() {
                     let mut key_set = HashSet::new();
                     if let Some(defined_scopes) = &project_config.scopes {
-                        for s in &scope {
+                        for s in &args.scope {
                             if let Some(scope_keys) = defined_scopes.get(s) {
                                 for k in scope_keys { key_set.insert(k.clone()); }
                             }
@@ -208,24 +208,24 @@ async fn run(cli: Cli) -> Result<()> {
             println!("✓ Operations complete.");
         }
 
-        Commands::Prune { provider, keys, scope, env } => {
-            let provider_impl = match providers::get(provider) {
+        Commands::Prune(args) => {
+            let provider_impl = match providers::get(args.provider) {
                 Some(p) => p,
                 None => { eprintln!("Error: Unknown provider"); return Ok(()); }
             };
 
             let global_config = config::load()?;
-            let token = global_config.providers.get(&provider.to_string())
-                .ok_or_else(|| anyhow::anyhow!("No token for {}", provider))?;
+            let token = global_config.providers.get(&args.provider.to_string())
+                .ok_or_else(|| anyhow::anyhow!("No token for {}", args.provider))?;
 
-            let keys_to_prune: Vec<String> = if !keys.is_empty() {
-                keys
-            } else if !scope.is_empty() {
+            let keys_to_prune: Vec<String> = if !args.keys.is_empty() {
+                args.keys
+            } else if !args.scope.is_empty() {
                 let proj = project::Project::find()?;
                 let config = proj.load_config()?;
                 let mut key_set = HashSet::new();
                 if let Some(defined_scopes) = config.scopes {
-                    for s in &scope {
+                    for s in &args.scope {
                         if let Some(scope_keys) = defined_scopes.get(s) {
                             for k in scope_keys { key_set.insert(k.clone()); }
                         }
@@ -239,8 +239,8 @@ async fn run(cli: Cli) -> Result<()> {
 
             if keys_to_prune.is_empty() { return Ok(()); }
 
-            println!("🔌 Deleting from Remote ({}) first...", provider);
-            let options = providers::PushOptions { env: env.clone() };
+            println!("🔌 Deleting from Remote ({}) first...", args.provider);
+            let options = providers::PushOptions { env: args.env.clone() };
             
             // ATOMIC: Remote fail stops local delete
             provider_impl.delete(&keys_to_prune, token, &options).await?;
@@ -249,7 +249,7 @@ async fn run(cli: Cli) -> Result<()> {
             let proj = project::Project::find()?;
             let master_key = proj.get_master_key()?;
             let mut vault = vault::Vault::load(&proj.vault_path, master_key)?;
-            let target_env = match env {
+            let target_env = match args.env {
                 Some(e) => e,
                 None => {
                     eprintln!("Error: --env is required to prune local secrets.");

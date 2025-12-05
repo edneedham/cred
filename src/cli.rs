@@ -1,4 +1,4 @@
-use clap::{Parser, Subcommand};
+use clap::{Args, Parser, Subcommand};
 use crate::providers::ProviderType;
 
 #[derive(Parser)]
@@ -27,40 +27,46 @@ pub enum Commands {
     },
 
     /// Upload (Push) secrets to a remote hosting provider (e.g. GitHub)
-    Push {
-        /// The provider to push to
-        provider: ProviderType,
-
-        /// Specific keys to push. If empty, uses scope or pushes ALL secrets.
-        #[arg(num_args = 0..)]
-        keys: Vec<String>,
-
-        /// Filter by specific scopes defined in project.toml.
-        #[arg(long, value_delimiter = ',')]
-        scope: Vec<String>,
-
-        /// Target environment (e.g., production, preview).
-        #[arg(long, short)]
-        env: Option<String>,
-    },
+    Push(PushArgs),
 
     /// Atomic Delete: Removes secrets from the Remote Provider AND Local Vault.
-    Prune {
-        /// The provider to prune from
-        provider: ProviderType,
+    Prune(PruneArgs),
+}
 
-        /// Specific keys to remove
-        #[arg(num_args = 0..)]
-        keys: Vec<String>,
+#[derive(Args, Debug)]
+pub struct PushArgs {
+    /// The provider to push to
+    pub provider: ProviderType,
 
-        /// Remove all keys belonging to a specific scope
-        #[arg(long, value_delimiter = ',')]
-        scope: Vec<String>,
+    /// Specific keys to push. If empty, uses scope or pushes ALL secrets.
+    #[arg(num_args = 0..)]
+    pub keys: Vec<String>,
 
-        /// Target environment
-        #[arg(long, short)]
-        env: Option<String>,
-    }
+    /// Filter by specific scopes defined in project.toml.
+    #[arg(long, value_delimiter = ',')]
+    pub scope: Vec<String>,
+
+    /// Target environment (e.g., production, preview).
+    #[arg(long, short)]
+    pub env: Option<String>,
+}
+
+#[derive(Args, Debug)]
+pub struct PruneArgs {
+    /// The provider to prune from
+    pub provider: ProviderType,
+
+    /// Specific keys to remove
+    #[arg(num_args = 0..)]
+    pub keys: Vec<String>,
+
+    /// Remove all keys belonging to a specific scope
+    #[arg(long, value_delimiter = ',')]
+    pub scope: Vec<String>,
+
+    /// Target environment
+    #[arg(long, short)]
+    pub env: Option<String>,
 }
 
 #[derive(Subcommand)]
