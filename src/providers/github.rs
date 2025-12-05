@@ -50,6 +50,39 @@ impl Github {
         Ok(BASE64.encode(encrypted_bytes))
     }
 
+    fn get_repo_from_git(&self) -> Result<String> {
+        use std::process::Command;
+        
+        let output = Command::new("git")
+            .args(["remote", "get-url", "origin"])
+            .output()
+            .context("Failed to run git command")?;
+            
+        if !output.status.success() {
+            anyhow::bail!("Could not detect git remote 'origin'. Please ensure you are in a git repository.");
+        }
+        
+        let remote = String::from_utf8(output.stdout)?.trim().to_string();
+        
+        // Naive parsing
+        // remove .git suffix
+        let clean = remote.trim_end_matches(".git");
+        
+        // Split by / or :
+        // https://github.com/OWNER/REPO
+        // git@github.com:OWNER/REPO
+        
+        let parts: Vec<&str> = clean.split(|c| c == '/' || c == ':').collect();
+        if parts.len() < 2 {
+             anyhow::bail!("Invalid git remote format: {}", remote);
+        }
+        
+        let repo = parts.last().unwrap();
+        let owner = parts[parts.len() - 2];
+        
+        Ok(format!("{}/{}", owner, repo))
+    }
+
     // ... resolve_target remains the same ...
     async fn resolve_target(&self, client: &Client, token: &str, repo: &str, env: Option<&String>) -> Result<GitHubTarget> {
         if let Some(env_name) = env {
@@ -74,11 +107,10 @@ impl Provider for Github {
     fn name(&self) -> &str { "github" }
 
     async fn push(&self, secrets: &HashMap<String, String>, auth_token: &str, options: &PushOptions) -> Result<()> {
-        let repo_name = options.repo.as_ref()
-            .ok_or_else(|| anyhow::anyhow!("GitHub provider requires '--repo <owner/name>'"))?;
+        let repo_name = self.get_repo_from_git()?;
 
         let client = Client::new();
-        let target = self.resolve_target(&client, auth_token, repo_name, options.env.as_ref()).await?;
+        let target = self.resolve_target(&client, auth_token, &repo_name, options.env.as_ref()).await?;
 
         let (api_base, human_name) = match &target {
             GitHubTarget::Repository(name) => (
@@ -129,11 +161,10 @@ impl Provider for Github {
     }
 
     async fn delete(&self, keys: &[String], auth_token: &str, options: &PushOptions) -> Result<()> {
-        let repo_name = options.repo.as_ref()
-            .ok_or_else(|| anyhow::anyhow!("GitHub provider requires '--repo <owner/name>'"))?;
+        let repo_name = self.get_repo_from_git()?;
 
         let client = Client::new();
-        let target = self.resolve_target(&client, auth_token, repo_name, options.env.as_ref()).await?;
+        let target = self.resolve_target(&client, auth_token, &repo_name, options.env.as_ref()).await?;
 
         let (api_base, human_name) = match &target {
             GitHubTarget::Repository(name) => (

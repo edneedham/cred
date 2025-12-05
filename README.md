@@ -6,10 +6,10 @@ I wanted something consistent for handling `.env` variables, API keys, PEM files
 
 ## Who is this for
 
-* Open-source maintainers
-* Small teams
-* Solo developers
-* People who don't *need* enterprise infrastructure yet
+-   Open-source maintainers
+-   Small teams
+-   Solo developers
+-   People who don't _need_ enterprise infrastructure yet
 
 ---
 
@@ -22,15 +22,17 @@ Every platform has different rules for how it parses `.env`, how it handles mult
 `cred` solves this by giving you:
 
 ### **1. A Matrix Vault per Project**
+
 Your secrets live inside `.cred/vault.enc`. Unlike a flat `.env` file, `cred` stores secrets in a structured matrix:
+
 ```json
 {
-  "development": { "DB_URL": "localhost:5432" },
-  "production":  { "DB_URL": "db.aws.com" }
+    "development": { "DB_URL": "localhost:5432" },
+    "production": { "DB_URL": "db.aws.com" }
 }
 ```
 
-### **2. Scoped Grouping (Monorepo Ready)
+### \*\*2. Scoped Grouping (Monorepo Ready)
 
 You can tag secrets into Scopes (e.g., backend, frontend, worker). This allows you to push only specific subsets of secrets to specific providers without splitting your project.
 
@@ -48,13 +50,13 @@ This keeps your provider login tokens separate from project secrets.
 
 You manage secrets locally, but `cred` can upload them to:
 
-* GitHub (Actions secrets)
-* Vercel
-* Cloudflare
-* Supabase
-* Fly.io
-* Resend
-* (and more via providers)
+-   GitHub (Actions secrets)
+-   Vercel
+-   Cloudflare
+-   Supabase
+-   Fly.io
+-   Resend
+-   (and more via providers)
 
 Use:
 
@@ -103,11 +105,11 @@ cred init
 
 This will:
 
-* Create `.cred/` in the current directory (if none found in parent directories)
-* Create `.cred/project.toml`
-* Create `.cred/vault.enc`
-* Verify your global vault at `~/.config/cred/global.toml`
-* Automatically add `.cred/` to `.gitignore`
+-   Create `.cred/` in the current directory (if none found in parent directories)
+-   Create `.cred/project.toml`
+-   Create `.cred/vault.enc`
+-   Verify your global vault at `~/.config/cred/global.toml`
+-   Automatically add `.cred/` to `.gitignore`
 
 Example output:
 
@@ -147,6 +149,7 @@ Secrets are always associated with an **Environment** (defaults to development)
 ```bash
 cred secret set DATABASE_URL postgres://localhost:5432/db
 ```
+
 ### Set a secret for production:
 
 ```bash
@@ -161,8 +164,8 @@ You can assign a secret to multiple scopes at creation time.
 cred secret set STRIPE_KEY sk_live_123 --env production --scope backend --scope worker
 ```
 
-* Adds secret to the `production` vault.
-* Updates `project.toml` to list `STRIPE_KEY` under `[scopes.backend]` and `[scopes.worker]`.
+-   Adds secret to the `production` vault.
+-   Updates `project.toml` to list `STRIPE_KEY` under `[scopes.backend]` and `[scopes.worker]`.
 
 ### List all secrets
 
@@ -208,35 +211,35 @@ All project secrets (API keys, environment variables, PEM files, tokens, certifi
 
 ### Encryption properties
 
-* Algorithm: ChaCha20-Poly1305 (authenticated encryption)
-* Key size: 256-bit
-* Nonce: Random per write
-* Plaintext secrets: Exist **only in memory**
-* At-rest storage: Always encrypted
-* Integrity protected: Tampering with the vault is detected
+-   Algorithm: ChaCha20-Poly1305 (authenticated encryption)
+-   Key size: 256-bit
+-   Nonce: Random per write
+-   Plaintext secrets: Exist **only in memory**
+-   At-rest storage: Always encrypted
+-   Integrity protected: Tampering with the vault is detected
 
 Therefore, even if someone steals your project folder, repository, backups, or filesystem snapshot, they **cannot read your secrets** without access to your local encryption key.
 
-*** Where the encryption key is stored
+\*\*\* Where the encryption key is stored
 By default, the encryption key is stored in your operating system’s secure key store:
 
-* macOS: Keychain
-* Windows: Credential Manager
-* Linux: Secret Service (libsecret)
+-   macOS: Keychain
+-   Windows: Credential Manager
+-   Linux: Secret Service (libsecret)
 
 This provides:
 
-* Hardware-backed protection on many systems
-* OS-level access control
-* No plaintext keys on disk
-* No passwords to remember
+-   Hardware-backed protection on many systems
+-   OS-level access control
+-   No plaintext keys on disk
+-   No passwords to remember
 
 This is the same security model used by:
 
-* Git credential helpers
-* VS Code secret storage
-* Docker credentials
-* Chrome / browser password managers
+-   Git credential helpers
+-   VS Code secret storage
+-   Docker credentials
+-   Chrome / browser password managers
 
 ---
 
@@ -253,7 +256,7 @@ cred push vercel
 Push to GitHub (for Actions):
 
 ```bash
-cred push github --repo myuser/myrepo
+cred push github
 ```
 
 Push to Cloudflare:
@@ -292,6 +295,7 @@ cred remove <provider>
 ```bash
 cred remove <provider> <key>
 ```
+
 ---
 
 ## Project structure
@@ -316,8 +320,7 @@ Global configuration lives at:
 
 `cred` is under active development. The `1.0` milestone focuses on:
 
-* A stable vault format
-* Reliable provider authentication
-* Universal secret push flows
-* Consistent `.env` and PEM handling across platforms
-
+-   A stable vault format
+-   Reliable provider authentication
+-   Universal secret push flows
+-   Consistent `.env` and PEM handling across platforms

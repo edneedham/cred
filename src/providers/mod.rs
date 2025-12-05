@@ -4,7 +4,6 @@ use std::collections::HashMap;
 use anyhow::Result;
 
 pub struct PushOptions {
-    pub repo: Option<String>,
     pub env: Option<String>,
 }
 
@@ -114,7 +113,7 @@ mod tests {
     async fn test_trait_defaults_prevent_invalid_usage() {
         let p = MockSourceProvider;
         let secrets = HashMap::new();
-        let options = PushOptions { repo: None, env: None };
+        let options = PushOptions { env: None };
 
         // 1. Should fail to Push (Defaults to error)
         let push_result = p.push(&secrets, "token", &options).await;
@@ -134,7 +133,7 @@ mod tests {
         
         // GitHub supports Push
         let secrets = HashMap::new();
-        let options = PushOptions { repo: Some("user/repo".into()), env: None };
+        let options = PushOptions { env: None };
         
         // We expect an error here (network fail), but NOT "Method not supported"
         let result = p.push(&secrets, "token", &options).await;

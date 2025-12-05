@@ -107,7 +107,7 @@ async fn run(cli: Cli) -> Result<()> {
                     println!("✓ Generated {} = ***** in [{}]", key, env);
                     if !scope.is_empty() { proj.add_key_to_scopes(&scope, &key)?; }
                 }
-                SecretAction::Revoke { key, provider, env, prune_target, repo } => {
+                SecretAction::Revoke { key, provider, env, prune_target } => {
                      // 1. Get Source Token
                     let global_config = config::load()?;
                     let source_token = match global_config.providers.get(&provider) {
@@ -144,7 +144,7 @@ async fn run(cli: Cli) -> Result<()> {
                     if let Some(target) = prune_target {
                         if let Some(target_token) = global_config.providers.get(&target) {
                              if let Some(target_impl) = providers::get(&target) {
-                                let options = providers::PushOptions { repo, env: Some(env.clone()) };
+                                let options = providers::PushOptions { env: Some(env.clone()) };
                                 if let Err(e) = target_impl.delete(&[key.clone()], target_token, &options).await {
                                     eprintln!("x Failed to prune from {}: {}", target, e);
                                 } else {
@@ -157,7 +157,7 @@ async fn run(cli: Cli) -> Result<()> {
             }
         }
         
-        Commands::Push { provider, repo, env, keys, scope } => {
+        Commands::Push { provider, env, keys, scope } => {
             let provider_impl = match providers::get(&provider) {
                 Some(p) => p,
                 None => { eprintln!("Error: Provider '{}' not supported.", provider); return Ok(()); }
@@ -211,7 +211,7 @@ async fn run(cli: Cli) -> Result<()> {
                 if filtered.is_empty() { continue; }
 
                 println!("📦 Pushing [{}] ({} secrets)...", current_env, filtered.len());
-                let options = providers::PushOptions { repo: repo.clone(), env: Some(current_env.clone()) };
+                let options = providers::PushOptions { env: Some(current_env.clone()) };
                 if let Err(e) = provider_impl.push(&filtered, token, &options).await {
                     eprintln!("x Failed to push [{}]: {}", current_env, e);
                 }
@@ -219,7 +219,7 @@ async fn run(cli: Cli) -> Result<()> {
             println!("✓ Operations complete.");
         }
 
-        Commands::Prune { provider, keys, scope, env, repo } => {
+        Commands::Prune { provider, keys, scope, env } => {
             let provider_impl = match providers::get(&provider) {
                 Some(p) => p,
                 None => { eprintln!("Error: Unknown provider"); return Ok(()); }
@@ -251,7 +251,7 @@ async fn run(cli: Cli) -> Result<()> {
             if keys_to_prune.is_empty() { return Ok(()); }
 
             println!("🔌 Deleting from Remote ({}) first...", provider);
-            let options = providers::PushOptions { repo, env: env.clone() };
+            let options = providers::PushOptions { env: env.clone() };
             
             // ATOMIC: Remote fail stops local delete
             provider_impl.delete(&keys_to_prune, token, &options).await?;

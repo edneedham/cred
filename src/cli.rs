@@ -41,10 +41,6 @@ pub enum Commands {
         /// Target environment (e.g., production, preview).
         #[arg(long, short)]
         env: Option<String>,
-
-        /// Repository (required for GitHub)
-        #[arg(long)]
-        repo: Option<String>,
     },
 
     /// Atomic Delete: Removes secrets from the Remote Provider AND Local Vault.
@@ -63,10 +59,6 @@ pub enum Commands {
         /// Target environment
         #[arg(long, short)]
         env: Option<String>,
-
-        /// Repository (required for GitHub)
-        #[arg(long)]
-        repo: Option<String>,
     }
 }
 
@@ -124,7 +116,5 @@ pub enum SecretAction {
         /// Optional: Also prune this secret from a downstream target (e.g. github)
         #[arg(long)]
         prune_target: Option<String>,
-        #[arg(long)]
-        repo: Option<String>,
     }
 }
