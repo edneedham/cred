@@ -30,7 +30,7 @@ async fn run(cli: Cli) -> Result<()> {
         
         Commands::Provider { action } => match action {
              cli::ProviderAction::Set { name, token } => {
-                config::set_provider_token(&name, &token)?;
+                config::set_provider_token(&name.to_string(), &token)?;
                 println!("✓ Auth token set for provider '{}'", name);
             }
             cli::ProviderAction::List => {
@@ -41,15 +41,15 @@ async fn run(cli: Cli) -> Result<()> {
             cli::ProviderAction::Revoke { name } => {
                 println!("🔌 Attempting to revoke token for '{}'...", name);
                 let global_config = config::load()?;
-                if let Some(token) = global_config.providers.get(&name) {
-                    if let Some(p) = providers::get(&name) {
+                if let Some(token) = global_config.providers.get(&name.to_string()) {
+                    if let Some(p) = providers::get(name) {
                         // Atomic Revoke
                         if let Err(e) = p.revoke_auth_token(token).await {
                             eprintln!("x Remote revocation failed: {}", e);
                             return Ok(());
                         }
                     }
-                    config::remove_provider_token(&name)?;
+                    config::remove_provider_token(&name.to_string())?;
                 } else {
                     println!("Provider '{}' was not configured.", name);
                 }
@@ -99,8 +99,8 @@ async fn run(cli: Cli) -> Result<()> {
                 SecretAction::Generate { provider, env, scope } => {
                     // Logic to Simulate Generation (Since Resend not implemented yet)
                     println!("Requesting new secret from provider: '{}'...", provider);
-                    // In real impl: providers::get(&provider).unwrap().generate(&env, token).await?
-                    let (key, value) = (format!("{}_KEY", provider.to_uppercase()), "simulated_key".to_string());
+                    // In real impl: providers::get(provider).unwrap().generate(&env, token).await?
+                    let (key, value) = (format!("{}_KEY", provider.to_string().to_uppercase()), "simulated_key".to_string());
                     
                     vault.set(&env, &key, &value);
                     vault.save()?;
@@ -110,7 +110,7 @@ async fn run(cli: Cli) -> Result<()> {
                 SecretAction::Revoke { key, provider, env, prune_target } => {
                      // 1. Get Source Token
                     let global_config = config::load()?;
-                    let source_token = match global_config.providers.get(&provider) {
+                    let source_token = match global_config.providers.get(&provider.to_string()) {
                         Some(t) => t,
                         None => { eprintln!("No token for source {}", provider); return Ok(()); }
                     };
@@ -122,7 +122,7 @@ async fn run(cli: Cli) -> Result<()> {
                     };
 
                     // 3. Remote Revoke
-                    let source_impl = match providers::get(&provider) {
+                    let source_impl = match providers::get(provider) {
                         Some(p) => p,
                         None => { eprintln!("Unknown provider {}", provider); return Ok(()); }
                     };
@@ -142,8 +142,8 @@ async fn run(cli: Cli) -> Result<()> {
 
                     // 5. Prune Downstream
                     if let Some(target) = prune_target {
-                        if let Some(target_token) = global_config.providers.get(&target) {
-                             if let Some(target_impl) = providers::get(&target) {
+                        if let Some(target_token) = global_config.providers.get(&target.to_string()) {
+                             if let Some(target_impl) = providers::get(target) {
                                 let options = providers::PushOptions { env: Some(env.clone()) };
                                 if let Err(e) = target_impl.delete(&[key.clone()], target_token, &options).await {
                                     eprintln!("x Failed to prune from {}: {}", target, e);
@@ -158,13 +158,13 @@ async fn run(cli: Cli) -> Result<()> {
         }
         
         Commands::Push { provider, env, keys, scope } => {
-            let provider_impl = match providers::get(&provider) {
+            let provider_impl = match providers::get(provider) {
                 Some(p) => p,
                 None => { eprintln!("Error: Provider '{}' not supported.", provider); return Ok(()); }
             };
 
             let global_config = config::load()?;
-            let token = global_config.providers.get(&provider)
+            let token = global_config.providers.get(&provider.to_string())
                 .ok_or_else(|| anyhow::anyhow!("No token found for {}.", provider))?;
 
             let proj = project::Project::find()?;
@@ -220,13 +220,13 @@ async fn run(cli: Cli) -> Result<()> {
         }
 
         Commands::Prune { provider, keys, scope, env } => {
-            let provider_impl = match providers::get(&provider) {
+            let provider_impl = match providers::get(provider) {
                 Some(p) => p,
                 None => { eprintln!("Error: Unknown provider"); return Ok(()); }
             };
 
             let global_config = config::load()?;
-            let token = global_config.providers.get(&provider)
+            let token = global_config.providers.get(&provider.to_string())
                 .ok_or_else(|| anyhow::anyhow!("No token for {}", provider))?;
 
             let keys_to_prune: Vec<String> = if !keys.is_empty() {
@@ -260,7 +260,13 @@ async fn run(cli: Cli) -> Result<()> {
             let proj = project::Project::find()?;
             let master_key = proj.get_master_key()?;
             let mut vault = vault::Vault::load(&proj.vault_path, master_key)?;
-            let target_env = env.unwrap_or_else(|| "development".to_string());
+            let target_env = match env {
+                Some(e) => e,
+                None => {
+                    eprintln!("Error: --env is required to prune local secrets.");
+                    return Ok(());
+                }
+            };
 
             for key in keys_to_prune {
                 if vault.remove(&target_env, &key).is_some() {

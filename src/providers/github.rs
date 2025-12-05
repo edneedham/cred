@@ -126,6 +126,7 @@ impl Provider for Github {
         println!("🚀 Pushing to GitHub [{}]", human_name);
 
         let pub_key_url = format!("{}/public-key", api_base);
+
         let key_resp: PublicKeyResponse = client.get(&pub_key_url)
             .header("User-Agent", "cred-cli")
             .header("Authorization", format!("Bearer {}", auth_token))

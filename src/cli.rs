@@ -1,4 +1,5 @@
 use clap::{Parser, Subcommand};
+use crate::providers::ProviderType;
 
 #[derive(Parser)]
 #[command(name = "cred")]
@@ -28,7 +29,7 @@ pub enum Commands {
     /// Upload (Push) secrets to a remote hosting provider (e.g. GitHub)
     Push {
         /// The provider to push to
-        provider: String,
+        provider: ProviderType,
 
         /// Specific keys to push. If empty, uses scope or pushes ALL secrets.
         #[arg(num_args = 0..)]
@@ -46,7 +47,7 @@ pub enum Commands {
     /// Atomic Delete: Removes secrets from the Remote Provider AND Local Vault.
     Prune {
         /// The provider to prune from
-        provider: String,
+        provider: ProviderType,
 
         /// Specific keys to remove
         #[arg(num_args = 0..)]
@@ -65,10 +66,10 @@ pub enum Commands {
 #[derive(Subcommand)]
 #[derive(Debug)]
 pub enum ProviderAction {
-    Set { name: String, token: String },
+    Set { name: ProviderType, token: String },
     List,
     /// Revoke a provider's authentication token (Logout)
-    Revoke { name: String }, 
+    Revoke { name: ProviderType }, 
 }
 
 #[derive(Subcommand)]
@@ -77,14 +78,14 @@ pub enum SecretAction {
     Set { 
         key: String, 
         value: String,
-        #[arg(long, short, default_value = "development")]
+        #[arg(long, short)]
         env: String,
         #[arg(long, value_delimiter = ',')]
         scope: Vec<String>,
     },
     Get { 
         key: String,
-        #[arg(long, short, default_value = "development")]
+        #[arg(long, short)]
         env: String,
     },
     List {
@@ -94,13 +95,13 @@ pub enum SecretAction {
     /// Remove from Local Vault ONLY (Use 'prune' for remote removal)
     Remove { 
         key: String,
-        #[arg(long, short, default_value = "development")]
+        #[arg(long, short)]
         env: String,
     },
     /// Generate a new secret from a Source Provider (e.g. Resend)
     Generate { 
-        provider: String, 
-        #[arg(long, short, default_value = "development")]
+        provider: ProviderType, 
+        #[arg(long, short)]
         env: String,
         #[arg(long, value_delimiter = ',')]
         scope: Vec<String>,
@@ -109,12 +110,12 @@ pub enum SecretAction {
     Revoke {
         key: String,
         #[arg(long)]
-        provider: String,
-        #[arg(long, short, default_value = "development")]
+        provider: ProviderType,
+        #[arg(long, short)]
         env: String,
         
         /// Optional: Also prune this secret from a downstream target (e.g. github)
         #[arg(long)]
-        prune_target: Option<String>,
+        prune_target: Option<ProviderType>,
     }
 }

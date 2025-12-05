@@ -142,12 +142,12 @@ cred provider remove github
 
 ## Managing local project secrets
 
-Secrets are always associated with an **Environment** (defaults to development)
+Secrets are always associated with an **Environment** (you must specify one)
 
 ### Set a secret for development:
 
 ```bash
-cred secret set DATABASE_URL postgres://localhost:5432/db
+cred secret set DATABASE_URL postgres://localhost:5432/db --env development
 ```
 
 ### Set a secret for production:
@@ -191,7 +191,7 @@ cred secret list --scope backend
 cred secret remove DATABASE_URL
 ```
 
-### Generate a secret using a provider API (defaults to `development`)
+### Generate a secret using a provider API (environment required)
 
 ```bash
 cred secret generate resend --env production

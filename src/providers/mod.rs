@@ -2,6 +2,23 @@ mod github;
 
 use std::collections::HashMap;
 use anyhow::Result;
+use clap::ValueEnum;
+use std::fmt;
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq, ValueEnum)]
+#[value(rename_all = "lowercase")]
+pub enum ProviderType {
+    Github,
+}
+
+impl fmt::Display for ProviderType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let s = match self {
+            ProviderType::Github => "github",
+        };
+        write!(f, "{}", s)
+    }
+}
 
 pub struct PushOptions {
     pub env: Option<String>,
@@ -80,9 +97,9 @@ impl Provider for ProviderWrapper {
     }
 }
 
-pub fn get(name: &str) -> Option<ProviderWrapper> {
+pub fn get(name: ProviderType) -> Option<ProviderWrapper> {
     match name {
-        "github" => Some(ProviderWrapper::Github(github::Github)),
+        ProviderType::Github => Some(ProviderWrapper::Github(github::Github)),
         _ => None,
     }
 }
@@ -104,7 +121,7 @@ mod tests {
 
     #[test]
     fn test_factory_returns_github() {
-        let p = get("github");
+        let p = get(ProviderType::Github);
         assert!(p.is_some());
         assert_eq!(p.unwrap().name(), "github");
     }
@@ -129,7 +146,7 @@ mod tests {
     #[tokio::test]
     async fn test_provider_wrapper_dispatch() {
         // This tests that the Enum Wrapper correctly routes calls
-        let p = get("github").unwrap();
+        let p = get(ProviderType::Github).unwrap();
         
         // GitHub supports Push
         let secrets = HashMap::new();
