@@ -1,21 +1,24 @@
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use std::env;
 use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use anyhow::{bail, Context, Result};
 use keyring::Entry;
-use rand::{RngCore};
+use rand::RngCore;
 use uuid::Uuid;
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
+use std::process::Command;
+
+use crate::vault;
 
 #[derive(Serialize, Deserialize, Debug, Default)]
 pub struct ProjectConfig {
     pub name: Option<String>,
     pub version: Option<String>,
     pub id: Option<Uuid>,
-    pub scopes: Option<HashMap<String, Vec<String>>>,
+    pub git_root: Option<String>,
+    pub git_repo: Option<String>,
 }
 
 pub struct Project {
@@ -31,7 +34,7 @@ impl Project {
             let cred_dir = ancestor.join(".cred");
             if cred_dir.exists() && cred_dir.is_dir() {
                 return Ok(Project {
-                    vault_path: cred_dir.join("vault.json"),
+                    vault_path: cred_dir.join("vault.enc"),
                     config_path: cred_dir.join("project.toml"),
                 });
             }
@@ -66,25 +69,9 @@ impl Project {
         Ok(key)
     }
 
-    pub fn add_key_to_scopes(&self, scope_names: &[String], key: &str) -> Result<()> {
-        if scope_names.is_empty() { return Ok(()); }
-        let mut config = self.load_config().unwrap_or_default();
-        let scopes = config.scopes.get_or_insert_with(HashMap::new);
-        let mut updated = false;
-
-        for scope in scope_names {
-            let list = scopes.entry(scope.to_string()).or_default();
-            if !list.contains(&key.to_string()) {
-                list.push(key.to_string());
-                updated = true;
-                println!("+ Added '{}' to scope '{}'", key, scope);
-            }
-        }
-
-        if updated {
-            let toml_string = toml::to_string_pretty(&config)?;
-            fs::write(&self.config_path, toml_string).context("Failed to update project.toml")?;
-        }
+    #[allow(dead_code)]
+    pub fn add_key_to_scopes(&self, _scope_names: &[String], _key: &str) -> Result<()> {
+        // Scopes removed in v1; keep signature to minimize churn
         Ok(())
     }
 }
@@ -103,13 +90,54 @@ pub(crate) fn init_at(root: &Path) -> Result<()> {
 
     let project_id = Uuid::new_v4();
 
+    // Detect git root (best effort)
+    let git_root = match Command::new("git")
+        .args(["rev-parse", "--show-toplevel"])
+        .current_dir(root)
+        .output()
+    {
+        Ok(out) if out.status.success() => {
+            let path = String::from_utf8_lossy(&out.stdout).trim().to_string();
+            if !path.is_empty() { Some(path) } else { None }
+        }
+        _ => {
+            println!("⚠️  This directory is not part of a git repository.");
+            println!("   Remote safety checks will be disabled.");
+            None
+        }
+    };
+
+    let git_repo = match git_root.as_ref() {
+        Some(root_path) => {
+            match Command::new("git")
+                .args(["config", "--get", "remote.origin.url"])
+                .current_dir(root_path)
+                .output()
+            {
+                Ok(out) if out.status.success() => {
+                    let remote = String::from_utf8_lossy(&out.stdout).trim().to_string();
+                    normalize_github_remote(&remote)
+                }
+                _ => None,
+            }
+        }
+        None => None,
+    };
+
+    let git_root_line = git_root
+        .as_ref()
+        .map(|p| format!("git_root = \"{}\"\n", p))
+        .unwrap_or_default();
+    let git_repo_line = git_repo
+        .as_ref()
+        .map(|p| format!("git_repo = \"{}\"\n", p))
+        .unwrap_or_default();
+
     let project_toml = format!(r#"# Cred Project Configuration
 name = "my-project"
 version = "0.1.0"
 id = "{}"
-
-[scopes]
-"#, project_id);
+{}{}"#, project_id, git_root_line, git_repo_line);
     fs::write(cred_dir.join("project.toml"), project_toml)?;
 
     let mut key = [0u8; 32];
@@ -124,11 +152,40 @@ id = "{}"
 
     key.fill(0);
 
+    // Create an empty encrypted vault to ensure presence
+    {
+        let vault_path = cred_dir.join("vault.enc");
+        let v = vault::Vault::load(&vault_path, key)?;
+        v.save()?;
+    }
+
     update_gitignore(root)?;
 
     println!("Initialized new cred project at {}", cred_dir.display());
     println!("🔑 Encryption key generated and stored in the System Credential Store (ID: {})", project_id);
     Ok(())
+}
+
+fn normalize_github_remote(remote: &str) -> Option<String> {
+    let trimmed = remote.trim().trim_end_matches(".git");
+
+    let remainder = if let Some(stripped) = trimmed.strip_prefix("git@github.com:") {
+        stripped
+    } else if let Some(stripped) = trimmed.strip_prefix("ssh://git@github.com/") {
+        stripped
+    } else if let Some(stripped) = trimmed.strip_prefix("https://github.com/") {
+        stripped
+    } else {
+        return None;
+    };
+
+    let mut parts = remainder.split('/');
+    let owner = parts.next()?;
+    let repo = parts.next()?;
+    if owner.is_empty() || repo.is_empty() {
+        return None;
+    }
+    Some(format!("{}/{}", owner, repo))
 }
 
 fn update_gitignore(root: &Path) -> Result<()> {

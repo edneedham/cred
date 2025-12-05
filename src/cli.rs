@@ -38,17 +38,13 @@ pub struct PushArgs {
     /// The target to push to
     pub target: Target,
 
-    /// Specific keys to push. If empty, uses scope or pushes ALL secrets.
+    /// Specific keys to push. If empty, pushes all secrets.
     #[arg(num_args = 0..)]
     pub keys: Vec<String>,
 
-    /// Filter by specific scopes defined in project.toml.
-    #[arg(long, value_delimiter = ',')]
-    pub scope: Vec<String>,
-
-    /// Target environment (e.g., production, preview).
-    #[arg(long, short)]
-    pub env: Option<String>,
+    /// Explicit repository (required if not in git for GitHub)
+    #[arg(long)]
+    pub repo: Option<String>,
 }
 
 #[derive(Args, Debug)]
@@ -60,13 +56,9 @@ pub struct PruneArgs {
     #[arg(num_args = 0..)]
     pub keys: Vec<String>,
 
-    /// Remove all keys belonging to a specific scope
-    #[arg(long, value_delimiter = ',')]
-    pub scope: Vec<String>,
-
-    /// Target environment
-    #[arg(long, short)]
-    pub env: Option<String>,
+    /// Explicit repository (required if not in git for GitHub)
+    #[arg(long)]
+    pub repo: Option<String>,
 }
 
 #[derive(Subcommand)]
@@ -93,36 +85,20 @@ pub enum SecretAction {
     Set { 
         key: String, 
         value: String,
-        #[arg(long, short)]
-        env: String,
-        #[arg(long, value_delimiter = ',')]
-        scope: Vec<String>,
     },
     Get { 
         key: String,
-        #[arg(long, short)]
-        env: String,
     },
     List {
-        #[arg(long, short)]
-        env: Option<String>,
     },
     /// Remove from Local Vault ONLY (Use 'prune' for remote removal)
     Remove { 
         key: String,
-        #[arg(long, short)]
-        env: String,
     },
     /// Revoke a generated secret at the source AND locally
     Revoke {
         key: String,
         #[arg(long)]
         target: Target,
-        #[arg(long, short)]
-        env: String,
-        
-        /// Optional: Also prune this secret from a downstream target (e.g. github)
-        #[arg(long)]
-        prune_target: Option<Target>,
     }
 }

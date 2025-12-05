@@ -24,8 +24,8 @@ pub struct Vault {
 
     #[serde(skip)]
     key: [u8; 32],
-    // Matrix: Environment -> { Key -> Value }
-    secrets: HashMap<String, HashMap<String, String>>,
+    // Flat key-value store
+    secrets: HashMap<String, String>,
 }
 
 impl Zeroize for Vault {
@@ -33,10 +33,7 @@ impl Zeroize for Vault {
         // Recursively drain and zeroize the map contents
         self.secrets.drain().for_each(|(mut k, mut v)| {
             k.zeroize();
-            v.drain().for_each(|(mut inner_k, mut inner_v)| {
-                inner_k.zeroize();
-                inner_v.zeroize();
-            });
+            v.zeroize();
         });
     }
 }
@@ -72,7 +69,7 @@ impl Vault {
         let plaintext = cipher.decrypt(nonce, ciphertext.as_ref())
             .map_err(|_| anyhow::anyhow!("Decryption failed. Data corrupted or wrong key."))?;
 
-        let secrets: HashMap<String, HashMap<String, String>> = serde_json::from_slice(&plaintext)
+        let secrets: HashMap<String, String> = serde_json::from_slice(&plaintext)
             .context("Failed to parse decrypted secrets JSON")?;
 
         vault.secrets = secrets;
@@ -95,26 +92,20 @@ impl Vault {
         Ok(())
     }
 
-    pub fn set(&mut self, env: &str, key: &str, value: &str) {
-        let env_map = self.secrets.entry(env.to_string()).or_default();
-        env_map.insert(key.to_string(), value.to_string());
+    pub fn set(&mut self, key: &str, value: &str) {
+        self.secrets.insert(key.to_string(), value.to_string());
     }
 
-    pub fn get(&self, env: &str, key: &str) -> Option<&String> {
-        self.secrets.get(env).and_then(|map| map.get(key))
+    pub fn get(&self, key: &str) -> Option<&String> {
+        self.secrets.get(key)
     }
 
-    pub fn remove(&mut self, env: &str, key: &str) -> Option<String> {
-        if let Some(env_map) = self.secrets.get_mut(env) {
-            env_map.remove(key)
-        } else { None }
+    pub fn remove(&mut self, key: &str) -> Option<String> {
+        self.secrets.remove(key)
     }
 
-    pub fn list(&self, env: &str) -> Option<&HashMap<String, String>> {
-        self.secrets.get(env)
-    }
-    
-    pub fn list_all(&self) -> &HashMap<String, HashMap<String, String>> {
+    pub fn list(&self) -> &HashMap<String, String> {
         &self.secrets
     }
+    
 }

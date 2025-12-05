@@ -27,7 +27,7 @@ impl fmt::Display for Target {
 }
 
 pub struct PushOptions {
-    pub env: Option<String>,
+    pub repo: Option<String>,
 }
 
 /// TargetAdapter drives interactions with a destination (where secrets are pushed).
@@ -144,7 +144,7 @@ mod tests {
     async fn test_trait_defaults_prevent_invalid_usage() {
         let p = MockTarget;
         let secrets = HashMap::new();
-        let options = PushOptions { env: None };
+        let options = PushOptions { repo: None };
 
         // 1. Should fail to Push (Defaults to error)
         let push_result = p.push(&secrets, "token", &options).await;
@@ -164,7 +164,7 @@ mod tests {
         
         // GitHub supports Push
         let secrets = HashMap::new();
-        let options = PushOptions { env: None };
+        let options = PushOptions { repo: None };
         
         // We expect an error here (network fail), but NOT "Method not supported"
         let result = p.push(&secrets, "token", &options).await;

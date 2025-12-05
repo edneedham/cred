@@ -25,18 +25,7 @@ Every platform has different rules for how it parses `.env`, how it handles mult
 
 ### **1. A Matrix Vault per Project**
 
-Your secrets live inside `.cred/vault.enc`. Unlike a flat `.env` file, `cred` stores secrets in a structured matrix:
-
-```json
-{
-    "development": { "DB_URL": "localhost:5432" },
-    "production": { "DB_URL": "db.aws.com" }
-}
-```
-
-### \*\*2. Scoped Grouping (Monorepo Ready)
-
-You can tag secrets into Scopes (e.g., backend, frontend, worker). This allows you to push only specific subsets of secrets to specific targets without splitting your project.
+Your secrets live inside `.cred/vault.enc` as an encrypted flat key/value store.
 
 ### **2. A global target authentication vault**
 
@@ -53,12 +42,8 @@ This keeps your target login tokens separate from project secrets.
 You manage secrets locally, but `cred` can upload them to:
 
 -   GitHub (Actions secrets)
--   Vercel
--   Cloudflare
--   Supabase
--   Fly.io
--   Resend
--   (future additional targets/sources)
+
+With new targets to be added.
 
 Use:
 
@@ -141,47 +126,18 @@ cred target revoke github
 
 ## Managing local project secrets
 
-Secrets are always associated with an **Environment** (you must specify one)
+All secrets live in a single encrypted key/value store.
 
-### Set a secret for development:
-
-```bash
-cred secret set DATABASE_URL postgres://localhost:5432/db --env development
-```
-
-### Set a secret for production:
+### Set a secret
 
 ```bash
-cred secret set DATABASE_URL postgres://prod-db.aws.com/db --env production
+cred secret set DATABASE_URL postgres://localhost:5432/db
 ```
-
-### Set a secret and assign it to Scopes (Groups):
-
-You can assign a secret to multiple scopes at creation time.
-
-```bash
-cred secret set STRIPE_KEY sk_live_123 --env production --scope backend --scope worker
-```
-
--   Adds secret to the `production` vault.
--   Updates `project.toml` to list `STRIPE_KEY` under `[scopes.backend]` and `[scopes.worker]`.
 
 ### List all secrets
 
 ```bash
 cred secret list
-```
-
-### List specific environment secrets
-
-```bash
-cred secret list --env production
-```
-
-### List specific scope secrets
-
-```bash
-cred secret list --scope backend
 ```
 
 ### Remove a secret
@@ -240,38 +196,19 @@ This is the same security model used by:
 
 This is the core purpose of `cred`.
 
-### Push to Vercel:
-
-```bash
-cred push vercel
-```
-
 Push to GitHub (for Actions):
 
 ```bash
 cred push github
 ```
 
-Push to Cloudflare:
+Push specific keys only:
 
 ```bash
-cred push cloudflare
+cred push github API_URL API_KEY
 ```
 
-Push to Supabase:
-
-```bash
-cred push supabase
-```
-
-These commands:
-
-1. Read your local `.cred/vault.json`
-2. Transform formats required by the target
-3. Upload secrets using the target API
-4. Validate the result
-
-No more manually creating secrets via platform dashboards.
+These commands read your local `.cred/vault.enc`, transform formats required by the target, upload secrets using the target API, and validate the result. No more manually creating secrets via platform dashboards.
 
 ## Removing secrets from targets
 
@@ -280,13 +217,13 @@ Mistakes and changes happen.
 ### Remove all secrets from a target
 
 ```bash
-cred remove <target>
+cred prune <target> KEY1 KEY2
 ```
 
 ### Remove a single secret from a target
 
 ```bash
-cred remove <target> <key>
+cred prune <target> <key>
 ```
 
 ---
@@ -316,4 +253,4 @@ Global configuration lives at:
 -   A stable vault format
 -   Reliable target authentication
 -   Universal secret push flows
--   Consistent `.env` and PEM handling across platforms
+-   Consistent secret handling across platforms

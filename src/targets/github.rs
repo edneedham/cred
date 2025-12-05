@@ -12,20 +12,12 @@ use sodiumoxide::crypto::sealedbox;
 pub struct Github;
 
 #[derive(Deserialize)]
-struct RepoDetails {
-    id: u64,
-}
-
-#[derive(Deserialize)]
 struct PublicKeyResponse {
     key_id: String,
     key: String,
 }
 
-enum GitHubTarget {
-    Repository(String),
-    Environment(u64, String),
-}
+struct GitHubTarget(String);
 
 impl Github {
     fn encrypt_secret(&self, public_key_b64: &str, value: &str) -> Result<String> {
@@ -84,44 +76,25 @@ impl Github {
     }
 
     // ... resolve_target remains the same ...
-    async fn resolve_target(&self, client: &Client, token: &str, repo: &str, env: Option<&String>) -> Result<GitHubTarget> {
-        if let Some(env_name) = env {
-            let url = format!("https://api.github.com/repos/{}", repo);
-            let resp = client.get(&url)
-                .header("User-Agent", "cred-cli")
-                .header("Authorization", format!("Bearer {}", token))
-                .header("X-GitHub-Api-Version", "2022-11-28")
-                .send().await?
-                .error_for_status()
-                .context("Failed to fetch repository details")?;
-            
-            let details: RepoDetails = resp.json().await?;
-            Ok(GitHubTarget::Environment(details.id, env_name.clone()))
-        } else {
-            Ok(GitHubTarget::Repository(repo.to_string()))
-        }
+    async fn resolve_target(&self, _client: &Client, _token: &str, repo: &str) -> Result<GitHubTarget> {
+        Ok(GitHubTarget(repo.to_string()))
     }
 }
 
 impl TargetAdapter for Github {
     fn name(&self) -> &str { "github" }
 
-    async fn push(&self, secrets: &HashMap<String, String>, auth_token: &str, options: &PushOptions) -> Result<()> {
-        let repo_name = self.get_repo_from_git()?;
+    async fn push(&self, secrets: &HashMap<String, String>, auth_token: &str, _options: &PushOptions) -> Result<()> {
+        let repo_name = match &_options.repo {
+            Some(r) => r.clone(),
+            None => self.get_repo_from_git()?,
+        };
 
         let client = Client::new();
-        let target = self.resolve_target(&client, auth_token, &repo_name, options.env.as_ref()).await?;
+        let target = self.resolve_target(&client, auth_token, &repo_name).await?;
 
-        let (api_base, human_name) = match &target {
-            GitHubTarget::Repository(name) => (
-                format!("https://api.github.com/repos/{}/actions/secrets", name),
-                format!("Repository: {}", name)
-            ),
-            GitHubTarget::Environment(id, env) => (
-                format!("https://api.github.com/repositories/{}/environments/{}/secrets", id, env),
-                format!("Environment: {}", env)
-            )
-        };
+        let api_base = format!("https://api.github.com/repos/{}/actions/secrets", target.0);
+        let human_name = format!("Repository: {}", target.0);
 
         println!("🚀 Pushing to GitHub [{}]", human_name);
 
@@ -161,22 +134,17 @@ impl TargetAdapter for Github {
         Ok(())
     }
 
-    async fn delete(&self, keys: &[String], auth_token: &str, options: &PushOptions) -> Result<()> {
-        let repo_name = self.get_repo_from_git()?;
+    async fn delete(&self, keys: &[String], auth_token: &str, _options: &PushOptions) -> Result<()> {
+        let repo_name = match &_options.repo {
+            Some(r) => r.clone(),
+            None => self.get_repo_from_git()?,
+        };
 
         let client = Client::new();
-        let target = self.resolve_target(&client, auth_token, &repo_name, options.env.as_ref()).await?;
+        let target = self.resolve_target(&client, auth_token, &repo_name).await?;
 
-        let (api_base, human_name) = match &target {
-            GitHubTarget::Repository(name) => (
-                format!("https://api.github.com/repos/{}/actions/secrets", name),
-                format!("Repository: {}", name)
-            ),
-            GitHubTarget::Environment(id, env) => (
-                format!("https://api.github.com/repositories/{}/environments/{}/secrets", id, env),
-                format!("Environment: {}", env)
-            )
-        };
+        let api_base = format!("https://api.github.com/repos/{}/actions/secrets", target.0);
+        let human_name = format!("Repository: {}", target.0);
 
         println!("🗑️  Pruning {} secrets from GitHub [{}]", keys.len(), human_name);
 
