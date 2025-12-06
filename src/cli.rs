@@ -27,6 +27,9 @@ pub enum Commands {
     /// Initialize a new cred project in the current directory
     Init,
 
+    /// Run health checks (use --json for machine output)
+    Doctor,
+
     /// Manage global target authentication
     Target {
         #[command(subcommand)]

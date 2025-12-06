@@ -13,6 +13,7 @@ use targets::TargetAdapter;
 use rpassword::prompt_password;
 use zeroize::Zeroize;
 use std::process;
+use keyring::Entry;
 
 #[tokio::main]
 async fn main() {
@@ -617,6 +618,67 @@ async fn run(cli: Cli, flags: &CliFlags) -> Result<(), AppError> {
                         println!("  ready_for_push: {}", ready_for_push);
                     }
                 }
+            }
+        }
+
+        Commands::Doctor => {
+            let version = env!("CARGO_PKG_VERSION").to_string();
+
+            let global_config = config::ensure_global_config_exists().is_ok() && config::load().is_ok();
+
+            let keychain_access = {
+                if let Ok(entry) = Entry::new("cred-doctor", "probe") {
+                    let set = entry.set_password("ok").is_ok();
+                    // Some keyring backends may not support delete; treat missing delete as ok after set
+                    let _ = entry.set_password("");
+                    set
+                } else {
+                    false
+                }
+            };
+
+            let (project_detected, vault_accessible) = match project::Project::find() {
+                Ok(p) => {
+                    let vault_ok = if p.vault_path.exists() {
+                        p.get_master_key()
+                            .ok()
+                            .and_then(|k| vault::Vault::load(&p.vault_path, k).ok())
+                            .is_some()
+                    } else {
+                        false
+                    };
+                    (true, vault_ok)
+                }
+                Err(_) => (false, false),
+            };
+
+            let mut targets: Vec<String> = match config::load() {
+                Ok(c) => c.targets.keys().cloned().collect(),
+                Err(_) => Vec::new(),
+            };
+            targets.sort();
+
+            let ready_for_push = project_detected && vault_accessible && !targets.is_empty();
+
+            let payload = serde_json::json!({
+                "api_version": "1",
+                "status": "ok",
+                "data": {
+                    "cred_installed": true,
+                    "version": version,
+                    "global_config": global_config,
+                    "keychain_access": keychain_access,
+                    "project_detected": project_detected,
+                    "vault_accessible": vault_accessible,
+                    "targets": targets,
+                    "ready_for_push": ready_for_push
+                }
+            });
+
+            if flags.json {
+                print_json(&payload);
+            } else {
+                println!("{}", serde_json::to_string_pretty(&payload).unwrap_or_default());
             }
         }
     }
