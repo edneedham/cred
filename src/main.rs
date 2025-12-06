@@ -26,6 +26,16 @@ async fn main() {
     }
 }
 
+fn require_yes(flags: &CliFlags, action: &str) -> Result<(), AppError> {
+    if !flags.yes {
+        return Err(AppError::user(anyhow::anyhow!(
+            "{} is destructive; rerun with --yes",
+            action
+        )));
+    }
+    Ok(())
+}
+
 #[allow(dead_code)]
 #[derive(Debug, Copy, Clone)]
 #[repr(i32)]
@@ -43,6 +53,14 @@ enum ExitCode {
 struct AppError {
     code: ExitCode,
     error: anyhow::Error,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct CliFlags {
+    json: bool,
+    non_interactive: bool,
+    dry_run: bool,
+    yes: bool,
 }
 
 impl AppError {
@@ -64,6 +82,20 @@ impl From<anyhow::Error> for AppError {
 }
 
 async fn run(cli: Cli) -> Result<(), AppError> {
+    let flags = CliFlags {
+        json: cli.json,
+        non_interactive: cli.non_interactive,
+        dry_run: cli.dry_run,
+        yes: cli.yes,
+    };
+
+    if flags.json {
+        // Not implemented yet; avoid mixing prose
+        return Err(AppError::user(anyhow::anyhow!(
+            "--json output is not yet implemented"
+        )));
+    }
+
     match cli.command {
         Commands::Init => {
             config::ensure_global_config_exists()?;
@@ -72,7 +104,11 @@ async fn run(cli: Cli) -> Result<(), AppError> {
         
         Commands::Target { action } => match action {
              cli::TargetAction::Set(args) => {
-                handle_target_set(args)?;
+                if flags.dry_run {
+                    println!("(dry-run) Target set skipped");
+                    return Ok(());
+                }
+                handle_target_set(args, &flags)?;
             }
             cli::TargetAction::List => {
                 let cfg = config::load()?;
@@ -80,6 +116,11 @@ async fn run(cli: Cli) -> Result<(), AppError> {
                 for (name, _) in cfg.targets { println!("- {}", name); }
             }
             cli::TargetAction::Revoke { name } => {
+                require_yes(&flags, "target revoke")?;
+                if flags.dry_run {
+                    println!("(dry-run) Target revoke skipped");
+                    return Ok(());
+                }
                 println!("🔌 Attempting to revoke token for target '{}'...", name);
                 if let Some(token) = config::get_target_token(&name.to_string())? {
                     if let Some(p) = targets::get(name) {
@@ -103,6 +144,10 @@ async fn run(cli: Cli) -> Result<(), AppError> {
 
             match action {
                 SecretAction::Set { key, value } => {
+                    if flags.dry_run {
+                        println!("(dry-run) Would set {}", key);
+                        return Ok(());
+                    }
                     vault.set(&key, &value);
                     vault.save()?;
                     println!("✓ Set {} = *****", key);
@@ -114,6 +159,11 @@ async fn run(cli: Cli) -> Result<(), AppError> {
                     }
                 }
                 SecretAction::Remove { key } => {
+                    require_yes(&flags, "secret remove")?;
+                    if flags.dry_run {
+                        println!("(dry-run) Would remove {}", key);
+                        return Ok(());
+                    }
                     if vault.remove(&key).is_some() {
                         vault.save()?;
                         println!("✓ Removed '{}' from local vault.", key);
@@ -126,6 +176,11 @@ async fn run(cli: Cli) -> Result<(), AppError> {
                     for (k, _) in vault.list() { println!("  {} = *****", k); }
                 }
                 SecretAction::Revoke { key, target } => {
+                    require_yes(&flags, "secret revoke")?;
+                    if flags.dry_run {
+                        println!("(dry-run) Would revoke '{}' from {}", key, target);
+                        return Ok(());
+                    }
                      // 1. Get Source Token
                     let source_token = match config::get_target_token(&target.to_string())? {
                         Some(t) => t,
@@ -161,6 +216,10 @@ async fn run(cli: Cli) -> Result<(), AppError> {
         }
         
         Commands::Push(args) => {
+            if flags.dry_run {
+                println!("(dry-run) Push skipped (no remote mutation).");
+                return Ok(());
+            }
             let target_impl = match targets::get(args.target) {
                 Some(p) => p,
                 None => { eprintln!("Error: Target '{}' not supported.", args.target); return Ok(()); }
@@ -224,6 +283,11 @@ async fn run(cli: Cli) -> Result<(), AppError> {
         }
 
         Commands::Prune(args) => {
+            require_yes(&flags, "prune")?;
+            if flags.dry_run {
+                println!("(dry-run) Prune skipped (no remote mutation).");
+                return Ok(());
+            }
             let target_impl = match targets::get(args.target) {
                 Some(p) => p,
                 None => { eprintln!("Error: Unknown target"); return Ok(()); }
@@ -281,10 +345,19 @@ async fn run(cli: Cli) -> Result<(), AppError> {
                     }
                 }
                 cli::ConfigAction::Set { key, value } => {
+                    if flags.dry_run {
+                        println!("(dry-run) Would set {}", key);
+                        return Ok(());
+                    }
                     config::config_set(&key, &value)?;
                     println!("Set {}.", key);
                 }
                 cli::ConfigAction::Unset { key } => {
+                    require_yes(&flags, "config unset")?;
+                    if flags.dry_run {
+                        println!("(dry-run) Would unset {}", key);
+                        return Ok(());
+                    }
                     config::config_unset(&key)?;
                     println!("Unset {}.", key);
                 }
@@ -298,10 +371,15 @@ async fn run(cli: Cli) -> Result<(), AppError> {
     Ok(())
 }
 
-fn read_token_securely(maybe_token: Option<String>) -> Result<String, AppError> {
+fn read_token_securely(maybe_token: Option<String>, flags: &CliFlags) -> Result<String, AppError> {
     match maybe_token {
         Some(token) => Ok(token),
         None => {
+            if flags.non_interactive {
+                return Err(AppError::user(anyhow::anyhow!(
+                    "--non-interactive set; token must be provided via --token"
+                )));
+            }
             let token = prompt_password("Enter target token: ")
                 .context("Failed to read token securely")
                 .map_err(AppError::user)?;
@@ -315,8 +393,8 @@ fn read_token_securely(maybe_token: Option<String>) -> Result<String, AppError> 
     }
 }
 
-fn handle_target_set(args: SetTargetArgs) -> Result<(), AppError> {
-    let mut token = read_token_securely(args.token)?;
+fn handle_target_set(args: SetTargetArgs, flags: &CliFlags) -> Result<(), AppError> {
+    let mut token = read_token_securely(args.token, flags)?;
 
     config::set_target_token(&args.name.to_string(), &token).map_err(AppError::auth)?;
     println!("Target '{}' authenticated successfully.", args.name);

@@ -5,6 +5,19 @@ use crate::targets::Target;
 #[command(name = "cred")]
 #[command(about = "Local-first credential manager", long_about = None)]
 pub struct Cli {
+    /// Output JSON (machine-readable); no prose/tables
+    #[arg(long, global = true)]
+    pub json: bool,
+    /// Run without prompts; fail if input required
+    #[arg(long, global = true)]
+    pub non_interactive: bool,
+    /// Do not mutate anything; show planned changes
+    #[arg(long, global = true)]
+    pub dry_run: bool,
+    /// Confirm destructive actions (required for deletes)
+    #[arg(long, short = 'y', global = true)]
+    pub yes: bool,
+
     #[command(subcommand)]
     pub command: Commands,
 }
