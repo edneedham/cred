@@ -31,6 +31,12 @@ pub enum Commands {
 
     /// Atomic Delete: Removes secrets from the Remote Target AND Local Vault.
     Prune(PruneArgs),
+
+    /// Inspect and modify cred global configuration (non-secret)
+    Config {
+        #[command(subcommand)]
+        action: ConfigAction,
+    },
 }
 
 #[derive(Args, Debug)]
@@ -59,6 +65,18 @@ pub struct PruneArgs {
     /// Explicit repository (required if not in git for GitHub)
     #[arg(long)]
     pub repo: Option<String>,
+}
+
+#[derive(Subcommand, Debug)]
+pub enum ConfigAction {
+    /// Get a config value by key path (e.g. preferences.default_target)
+    Get { key: String },
+    /// Set a config value by key path
+    Set { key: String, value: String },
+    /// Unset a config value by key path
+    Unset { key: String },
+    /// List the full config
+    List,
 }
 
 #[derive(Subcommand)]

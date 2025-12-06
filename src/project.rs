@@ -26,6 +26,14 @@ pub struct Project {
     pub config_path: PathBuf,
 }
 
+#[derive(Debug, Clone)]
+pub struct GitInfo {
+    pub root: String,
+    #[allow(dead_code)]
+    pub remote: String,
+    pub repo_slug: Option<String>, // owner/name if GitHub-like
+}
+
 impl Project {
     pub fn find() -> Result<Self> {
         let current_dir = env::current_dir().context("Failed to get current directory")?;
@@ -70,8 +78,8 @@ impl Project {
     }
 
     #[allow(dead_code)]
+    // Later feature
     pub fn add_key_to_scopes(&self, _scope_names: &[String], _key: &str) -> Result<()> {
-        // Scopes removed in v1; keep signature to minimize churn
         Ok(())
     }
 }
@@ -90,39 +98,13 @@ pub(crate) fn init_at(root: &Path) -> Result<()> {
 
     let project_id = Uuid::new_v4();
 
-    // Detect git root (best effort)
-    let git_root = match Command::new("git")
-        .args(["rev-parse", "--show-toplevel"])
-        .current_dir(root)
-        .output()
-    {
-        Ok(out) if out.status.success() => {
-            let path = String::from_utf8_lossy(&out.stdout).trim().to_string();
-            if !path.is_empty() { Some(path) } else { None }
-        }
-        _ => {
-            println!("⚠️  This directory is not part of a git repository.");
-            println!("   Remote safety checks will be disabled.");
-            None
-        }
-    };
-
-    let git_repo = match git_root.as_ref() {
-        Some(root_path) => {
-            match Command::new("git")
-                .args(["config", "--get", "remote.origin.url"])
-                .current_dir(root_path)
-                .output()
-            {
-                Ok(out) if out.status.success() => {
-                    let remote = String::from_utf8_lossy(&out.stdout).trim().to_string();
-                    normalize_github_remote(&remote)
-                }
-                _ => None,
-            }
-        }
-        None => None,
-    };
+    let git_info = detect_git(Some(root));
+    if git_info.is_none() {
+        println!("⚠️  This directory is not part of a git repository.");
+        println!("   Remote safety checks will be disabled.");
+    }
+    let git_root = git_info.as_ref().map(|g| g.root.clone());
+    let git_repo = git_info.as_ref().and_then(|g| g.repo_slug.clone());
 
     let git_root_line = git_root
         .as_ref()
@@ -186,6 +168,40 @@ fn normalize_github_remote(remote: &str) -> Option<String> {
         return None;
     }
     Some(format!("{}/{}", owner, repo))
+}
+
+pub fn detect_git(base: Option<&Path>) -> Option<GitInfo> {
+    let base_dir = base.unwrap_or_else(|| Path::new("."));
+    let root = Command::new("git")
+        .args(["rev-parse", "--show-toplevel"])
+        .current_dir(base_dir)
+        .output()
+        .ok()
+        .filter(|o| o.status.success())
+        .and_then(|o| {
+            let s = String::from_utf8_lossy(&o.stdout).trim().to_string();
+            if s.is_empty() { None } else { Some(s) }
+        })?;
+
+    let remote_opt = Command::new("git")
+        .args(["config", "--get", "remote.origin.url"])
+        .current_dir(&root)
+        .output()
+        .ok()
+        .filter(|o| o.status.success())
+        .and_then(|o| {
+            let s = String::from_utf8_lossy(&o.stdout).trim().to_string();
+            if s.is_empty() { None } else { Some(s) }
+        });
+
+    let repo_slug = remote_opt.as_ref().and_then(|r| normalize_github_remote(r));
+    let remote_str = remote_opt.unwrap_or_default();
+
+    Some(GitInfo {
+        root,
+        remote: remote_str,
+        repo_slug,
+    })
 }
 
 fn update_gitignore(root: &Path) -> Result<()> {

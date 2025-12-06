@@ -40,11 +40,10 @@ async fn run(cli: Cli) -> Result<()> {
             }
             cli::TargetAction::Revoke { name } => {
                 println!("🔌 Attempting to revoke token for target '{}'...", name);
-                let global_config = config::load()?;
-                if let Some(token) = global_config.targets.get(&name.to_string()) {
+                if let Some(token) = config::get_target_token(&name.to_string())? {
                     if let Some(p) = targets::get(name) {
                         // Atomic Revoke
-                        if let Err(e) = p.revoke_auth_token(token).await {
+                        if let Err(e) = p.revoke_auth_token(&token).await {
                             eprintln!("x Remote revocation failed: {}", e);
                             return Ok(());
                         }
@@ -87,8 +86,7 @@ async fn run(cli: Cli) -> Result<()> {
                 }
                 SecretAction::Revoke { key, target } => {
                      // 1. Get Source Token
-                    let global_config = config::load()?;
-                    let source_token = match global_config.targets.get(&target.to_string()) {
+                    let source_token = match config::get_target_token(&target.to_string())? {
                         Some(t) => t,
                         None => { eprintln!("No token for source {}", target); return Ok(()); }
                     };
@@ -107,7 +105,7 @@ async fn run(cli: Cli) -> Result<()> {
                     
                     println!("🔌 Contacting {} to revoke '{}'...", target, key);
                     // Note: This will fail if target doesn't support revoke (like GitHub)
-                    if let Err(e) = source_impl.revoke_secret(&key, &secret_value, source_token).await {
+                    if let Err(e) = source_impl.revoke_secret(&key, &secret_value, &source_token).await {
                          eprintln!("x Failed to revoke at source: {}", e);
                          return Ok(());
                     }
@@ -127,26 +125,25 @@ async fn run(cli: Cli) -> Result<()> {
                 None => { eprintln!("Error: Target '{}' not supported.", args.target); return Ok(()); }
             };
 
-            let global_config = config::load()?;
-            let token = global_config.targets.get(&args.target.to_string())
+            let token = config::get_target_token(&args.target.to_string())?
                 .ok_or_else(|| anyhow::anyhow!("No token found for {}.", args.target))?;
 
             let proj = project::Project::find()?;
-            let project_config = proj.load_config()?;
+            let git_info = project::detect_git(None);
 
             let master_key = proj.get_master_key()?;
             let vault = vault::Vault::load(&proj.vault_path, master_key)?;
 
             let repo = match args.repo.clone() {
                 Some(r) => {
-                    if let Some(stored) = project_config.git_repo.clone() {
-                        if stored != r {
-                            bail!("Refusing to push: provided --repo '{}' does not match recorded repo '{}'.", r, stored);
+                    if let Some(live) = git_info.as_ref().and_then(|g| g.repo_slug.clone()) {
+                        if live != r {
+                            bail!("Refusing to push: provided --repo '{}' does not match detected repo '{}'.", r, live);
                         }
                     }
                     Some(r)
                 }
-                None => project_config.git_repo.clone(),
+                None => git_info.and_then(|g| g.repo_slug),
             };
 
             if matches!(args.target, targets::Target::Github) && repo.is_none() {
@@ -173,7 +170,7 @@ async fn run(cli: Cli) -> Result<()> {
 
             println!("📦 Pushing {} secrets...", filtered.len());
             let options = targets::PushOptions { repo };
-            if let Err(e) = target_impl.push(&filtered, token, &options).await {
+            if let Err(e) = target_impl.push(&filtered, &token, &options).await {
                 eprintln!("x Failed to push: {}", e);
             } else {
                 println!("✓ Operations complete.");
@@ -186,8 +183,7 @@ async fn run(cli: Cli) -> Result<()> {
                 None => { eprintln!("Error: Unknown target"); return Ok(()); }
             };
 
-            let global_config = config::load()?;
-            let token = global_config.targets.get(&args.target.to_string())
+            let token = config::get_target_token(&args.target.to_string())?
                 .ok_or_else(|| anyhow::anyhow!("No token for {}", args.target))?;
 
             let keys_to_prune: Vec<String> = if !args.keys.is_empty() {
@@ -199,18 +195,17 @@ async fn run(cli: Cli) -> Result<()> {
 
             if keys_to_prune.is_empty() { return Ok(()); }
 
-            let proj = project::Project::find()?;
-            let project_config = proj.load_config()?;
+            let git_info = project::detect_git(None);
             let repo = match args.repo.clone() {
                 Some(r) => {
-                    if let Some(stored) = project_config.git_repo.clone() {
-                        if stored != r {
-                            bail!("Refusing to prune: provided --repo '{}' does not match recorded repo '{}'.", r, stored);
+                    if let Some(live) = git_info.as_ref().and_then(|g| g.repo_slug.clone()) {
+                        if live != r {
+                            bail!("Refusing to prune: provided --repo '{}' does not match detected repo '{}'.", r, live);
                         }
                     }
                     Some(r)
                 }
-                None => project_config.git_repo.clone(),
+                None => git_info.and_then(|g| g.repo_slug),
             };
 
             if matches!(args.target, targets::Target::Github) && repo.is_none() {
@@ -221,20 +216,32 @@ async fn run(cli: Cli) -> Result<()> {
             let options = targets::PushOptions { repo };
             
             // ATOMIC: Remote fail stops local delete
-            target_impl.delete(&keys_to_prune, token, &options).await?;
+            target_impl.delete(&keys_to_prune, &token, &options).await?;
 
-            println!("✓ Remote delete successful. Cleaning local vault...");
-            let proj = project::Project::find()?;
-            let master_key = proj.get_master_key()?;
-            let mut vault = vault::Vault::load(&proj.vault_path, master_key)?;
+            println!("✓ Remote delete successful (local vault unchanged).");
+        }
 
-            for key in keys_to_prune {
-                if vault.remove(&key).is_some() {
-                    println!("  ✓ Removed local: {}", key);
+        Commands::Config { action } => {
+            match action {
+                cli::ConfigAction::Get { key } => {
+                    match config::config_get(&key)? {
+                        Some(v) => println!("{}", v),
+                        None => println!("(not set)"),
+                    }
+                }
+                cli::ConfigAction::Set { key, value } => {
+                    config::config_set(&key, &value)?;
+                    println!("Set {}.", key);
+                }
+                cli::ConfigAction::Unset { key } => {
+                    config::config_unset(&key)?;
+                    println!("Unset {}.", key);
+                }
+                cli::ConfigAction::List => {
+                    let s = config::config_list()?;
+                    println!("{}", s);
                 }
             }
-            vault.save()?;
-            println!("✓ Prune complete (Atomic).");
         }
     }
     Ok(())

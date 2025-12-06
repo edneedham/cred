@@ -1,8 +1,22 @@
 # cred
 
-`cred` is a local-first credential manager that lets you create, store, and manage secrets on your machine — and then push them directly to the platforms that need them for deployment or CI/CD.
+## What it is
 
-I wanted something consistent for handling `.env` variables, API keys, PEM files, and target-specific secrets etc.. I think this is it.
+`cred` is a local-first secrets manager that securely pushes credentials to CI/CD platforms without committing .env files or running infrastructure.
+
+⚠️ **Status: Early Preview (v0.1.0)**
+
+`cred` is currently in active development. The on-disk format, CLI surface, and security model may change between minor versions. Do not rely on it as your sole secrets backup yet.
+
+## What it is **not**
+
+- A hosted secrets manager
+- A multi-user access control system
+- A replacement for HashiCorp Vault or AWS Secrets Manager
+- A bidirectional secrets sync tool
+- A runtime secret injector for applications
+
+It is a **developer-side deployment tool** for managing and pushing secrets safely.
 
 ## Who is this for
 
@@ -12,8 +26,6 @@ I wanted something consistent for handling `.env` variables, API keys, PEM files
 -   People who don't _need_ enterprise infrastructure yet
 
 ---
-
-A Target consumes secrets; a Source produces secrets. They are never the same abstraction.
 
 ## Why cred exists
 
@@ -27,41 +39,20 @@ Every platform has different rules for how it parses `.env`, how it handles mult
 
 Your secrets live inside `.cred/vault.enc` as an encrypted flat key/value store.
 
-### **2. A global target authentication vault**
+### **2. A global target configuration store**
 
-Stored once at:
-
-```
-~/.config/cred/global.toml
-```
-
-This keeps your target login tokens separate from project secrets.
+Metadata and preferences live in `~/.config/cred/global.toml`, while target tokens are stored securely in the OS credential store (keyring). Nothing sensitive is written to the TOML.
 
 ### **3. Target-agnostic secret pushing**
 
-You manage secrets locally, but `cred` can upload them to:
+You manage secrets locally, but `cred` can upload them to specified targets.
 
--   GitHub (Actions secrets)
+#### Supported targets:
 
-With new targets to be added.
-
-Use:
-
-```bash
-cred push <target>
-```
-
-This makes your CI/CD pipelines simple because the secrets already exist exactly where the target expects them.
-
-### **4. Automatic secret generation**
-
-Some sources (planned) allow API-driven key creation. Future `cred` releases can request and store these keys for you.
-
-### **5. One workflow instead of five**
-
-No more juggling different CLIs and UI dashboards.
-No more breaking `.env` formats across platforms.
-No more encoding keys manually.
+- GitHub Actions (repository secrets)
+- Vercel (planned)
+- Fly.io (planned)
+- AWS / Azure (future)
 
 ---
 
@@ -89,58 +80,64 @@ cred --version
 cred init
 ```
 
-This will:
+-   Creates `.cred/`, `project.toml`, `vault.enc`, and registers a project ID in your OS keychain.
+-   If run inside a git repo, records `git_root` and normalized `git_repo` (`owner/name`) for safety checks.
+-   If not in git, init still succeeds but will warn you; later GitHub push/prune requires `--repo owner/name`.
 
--   Create `.cred/` in the current directory (if none found in parent directories)
--   Create `.cred/project.toml`
--   Create `.cred/vault.enc`
--   Verify your global vault at `~/.config/cred/global.toml`
--   Automatically add `.cred/` to `.gitignore`
+### Global target authentication
 
-Example output:
-
-```
-Initialized new cred project at ./ .cred
-Global vault located at ~/.config/cred/global.toml
-```
-
----
-
-## Global target authentication
-
-Before you can push secrets, authenticate the targets you want to use:
+Set a token (GitHub v0.1.0):
 
 ```bash
-cred target set github --token GH_TOKEN=ghp_123...
+cred target set github --token example-token
 ```
 
-Tokens live in your global.toml — never inside projects. If you omit `--token`, `cred` will securely prompt for it.
+-   If `--token` is omitted, you’ll be prompted securely (no echo/history).
 
-And to remove unused targets:
+List configured targets:
+
+```bash
+cred target list
+```
+
+Revoke token:
 
 ```bash
 cred target revoke github
 ```
 
----
+Tokens are stored in the OS credential store under an internal `auth_ref`; `global.toml` keeps only references/metadata.
 
-## Managing local project secrets
+### Manage configuration (non-secret)
 
-All secrets live in a single encrypted key/value store.
+```bash
+cred config set preferences.default_target github
+cred config set preferences.confirm_destructive true
+cred config get preferences.default_target
+cred config list
+```
 
-### Set a secret
+### Manage local secrets (flat key/value)
+
+Set:
 
 ```bash
 cred secret set DATABASE_URL postgres://localhost:5432/db
 ```
 
-### List all secrets
+Get:
+
+```bash
+cred secret get DATABASE_URL
+```
+
+List:
 
 ```bash
 cred secret list
 ```
 
-### Remove a secret
+Remove locally (does NOT touch remote):
 
 ```bash
 cred secret remove DATABASE_URL
@@ -167,7 +164,7 @@ All project secrets (API keys, environment variables, PEM files, tokens, certifi
 -   At-rest storage: Always encrypted
 -   Integrity protected: Tampering with the vault is detected
 
-Therefore, even if someone steals your project folder, repository, backups, or filesystem snapshot, they **cannot read your secrets** without access to your local encryption key.
+Therefore, if someone steals your project folder, repository, or filesystem snapshot without also compromising your OS user account, your secrets remain unreadable.
 
 \*\*\* Where the encryption key is stored
 By default, the encryption key is stored in your operating system’s secure key store:
@@ -192,39 +189,45 @@ This is the same security model used by:
 
 ---
 
-## Pushing secrets to targets (CI/CD ready)
+## Pushing secrets to targets (create/update only)
+Note: GitHub secrets are write-only by design. `cred` cannot read, diff or verify existing remote secrets after upload.
 
-This is the core purpose of `cred`.
-
-Push to GitHub (for Actions):
+-   Push all local secrets:
 
 ```bash
 cred push github
 ```
 
-Push specific keys only:
+-   Push specific keys only:
 
 ```bash
 cred push github API_URL API_KEY
 ```
 
-These commands read your local `.cred/vault.enc`, transform formats required by the target, upload secrets using the target API, and validate the result. No more manually creating secrets via platform dashboards.
+Repo rules for GitHub:
 
-## Removing secrets from targets
+-   If git metadata was recorded at init, it’s auto-used.
+-   If you pass `--repo` and it doesn’t match the recorded repo, cred hard-fails to prevent cross-repo mistakes.
+-   If you initialized outside git, you must provide `--repo owner/name`.
 
-Mistakes and changes happen.
+`push` reads your local `.cred/vault.enc`, transforms formats required by the target, and upserts secrets via the target API. It never deletes remote secrets.
 
-### Remove all secrets from a target
+## Removing secrets from targets (remote-only)
 
-```bash
-cred prune <target> KEY1 KEY2
-```
-
-### Remove a single secret from a target
+Prune deletes exactly the keys you specify on the remote; it does not diff and does not touch your local vault.
 
 ```bash
-cred prune <target> <key>
+cred prune github KEY1 KEY2 --repo owner/name
 ```
+
+```bash
+cred prune github <key> --repo owner/name
+```
+
+Notes:
+
+-   `--repo` is required if no git metadata was recorded; if provided, it must match the recorded repo to prevent cross-repo mistakes.
+-   Prune is remote-only; use `cred secret remove` for local deletes.
 
 ---
 
@@ -235,7 +238,7 @@ Once initialized:
 ```
 .cred/
   project.toml
-  vault.json
+  vault.enc
 ```
 
 Global configuration lives at:
@@ -243,14 +246,3 @@ Global configuration lives at:
 ```
 ~/.config/cred/global.toml
 ```
-
----
-
-## Status
-
-`cred` is under active development. The `1.0` milestone focuses on:
-
--   A stable vault format
--   Reliable target authentication
--   Universal secret push flows
--   Consistent secret handling across platforms

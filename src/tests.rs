@@ -5,19 +5,11 @@ mod tests {
     use std::fs;
     use rand::RngCore;
 
-    // ========================================================================
-    // HELPERS
-    // ========================================================================
-
     fn get_test_key() -> [u8; 32] {
         let mut key = [0u8; 32];
         rand::rng().fill_bytes(&mut key);
         key
     }
-
-    // ========================================================================
-    // 1. PROJECT INITIALIZATION TESTS
-    // ========================================================================
 
     #[test]
     fn test_project_init_creates_structure() {
@@ -44,10 +36,8 @@ mod tests {
         fs::create_dir(&cred_dir).unwrap();
         fs::write(cred_dir.join("project.toml"), "").unwrap();
 
-        // 1. Create a dummy gitignore
         fs::write(&gitignore, "target/\n").unwrap();
 
-        // 2. Simulate update logic
         let entry = "\n.cred/\n";
         let mut file = fs::OpenOptions::new().write(true).append(true).open(&gitignore).unwrap();
         use std::io::Write;
@@ -57,10 +47,6 @@ mod tests {
         assert!(content.contains("target/"));
         assert!(content.contains(".cred/"));
     }
-
-    // ========================================================================
-    // 2. GLOBAL CONFIG TESTS
-    // ========================================================================
 
     #[test]
     fn test_global_config_logic() {
@@ -74,24 +60,18 @@ mod tests {
         assert!(content.contains("[targets]"));
     }
 
-    // ========================================================================
-    // 3. VAULT MATRIX TESTS
-    // ========================================================================
-
     #[test]
     fn test_vault_persistence() {
         let dir = tempdir().unwrap();
         let vault_path = dir.path().join("vault.enc");
         let key = get_test_key();
 
-        // 1. Create and populate
         let mut v = vault::Vault::load(&vault_path, key).unwrap();
         v.set("API_URL_DEV", "http://dev.local");
         v.set("API_URL_PROD", "https://prod.com");
         v.set("DB_PASS", "secret");
         v.save().unwrap();
 
-        // 2. Reload with same key
         let v2 = vault::Vault::load(&vault_path, key).unwrap();
 
         assert_eq!(v2.get("API_URL_DEV"), Some(&"http://dev.local".to_string()));
@@ -109,12 +89,10 @@ mod tests {
         v.set("KEY", "VAL");
         v.save().unwrap();
 
-        // Remove
         let removed = v.remove("KEY");
         assert_eq!(removed, Some("VAL".to_string()));
         assert_eq!(v.get("KEY"), None);
 
-        // Remove non-existent
         assert_eq!(v.remove("GHOST"), None);
     }
 
@@ -144,13 +122,10 @@ mod tests {
         v.set("SECRET_KEY", "PLAIN_TEXT_PASSWORD");
         v.save().unwrap();
 
-        // Read the file directly as a string
         let raw_content = fs::read_to_string(&vault_path).unwrap();
 
-        // The plaintext should NOT be visible in the file
         assert!(!raw_content.contains("PLAIN_TEXT_PASSWORD"));
         assert!(raw_content.contains("ciphertext"));
     }
 
-    // Scope-related tests removed (scopes no longer supported)
 }

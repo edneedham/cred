@@ -30,11 +30,8 @@ pub struct PushOptions {
     pub repo: Option<String>,
 }
 
-/// TargetAdapter drives interactions with a destination (where secrets are pushed).
 pub trait TargetAdapter {
     fn name(&self) -> &str;
-    
-    // --- DESTINATION CAPABILITIES ---
     
     async fn push(&self, _secrets: &HashMap<String, String>, _auth_token: &str, _options: &PushOptions) -> Result<()> {
         anyhow::bail!("Target '{}' is not a hosting platform; you cannot push secrets to it.", self.name());
@@ -44,8 +41,6 @@ pub trait TargetAdapter {
         anyhow::bail!("Target '{}' is not a hosting platform; you cannot prune secrets from it.", self.name());
     }
     
-    // --- SOURCE CAPABILITIES ---
-
     #[allow(dead_code)]
     async fn generate(&self, _env: &str, _auth_token: &str) -> Result<(String, String)> {
         anyhow::bail!("Target '{}' does not support API key generation.", self.name());
@@ -55,8 +50,6 @@ pub trait TargetAdapter {
         anyhow::bail!("Target '{}' does not support API key revocation.", self.name());
     }
 
-    // --- AUTHENTICATION ---
-    
     async fn revoke_auth_token(&self, _auth_token: &str) -> Result<()> { 
         Ok(()) // Default to ok (allows local logout)
     }
@@ -122,12 +115,9 @@ pub(crate) fn get(name: Target) -> Option<TargetWrapper> {
 mod tests {
     use super::*;
 
-    // Mock Target to test Trait Defaults
     struct MockTarget;
     impl TargetAdapter for MockTarget {
         fn name(&self) -> &str { "mock_target" }
-        // We do NOT implement push/delete (relying on defaults)
-        // We only implement generate
         async fn generate(&self, _env: &str, _token: &str) -> Result<(String, String)> {
             Ok(("KEY".to_string(), "VAL".to_string()))
         }
@@ -146,12 +136,10 @@ mod tests {
         let secrets = HashMap::new();
         let options = PushOptions { repo: None };
 
-        // 1. Should fail to Push (Defaults to error)
         let push_result = p.push(&secrets, "token", &options).await;
         assert!(push_result.is_err());
         assert!(push_result.unwrap_err().to_string().contains("not a hosting platform"));
 
-        // 2. Should fail to Delete (Defaults to error)
         let delete_result = p.delete(&[], "token", &options).await;
         assert!(delete_result.is_err());
         assert!(delete_result.unwrap_err().to_string().contains("not a hosting platform"));
@@ -159,19 +147,15 @@ mod tests {
 
     #[tokio::test]
     async fn test_target_wrapper_dispatch() {
-        // This tests that the Enum Wrapper correctly routes calls
         let p = get(Target::Github).unwrap();
         
-        // GitHub supports Push
         let secrets = HashMap::new();
         let options = PushOptions { repo: None };
         
-        // We expect an error here (network fail), but NOT "Method not supported"
         let result = p.push(&secrets, "token", &options).await;
         
         if let Err(e) = result {
             let msg = e.to_string();
-            // It might fail on network or repo check, but it should NOT say "not a hosting platform"
             assert!(!msg.contains("not a hosting platform"));
         }
     }

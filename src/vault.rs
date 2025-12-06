@@ -24,13 +24,11 @@ pub struct Vault {
 
     #[serde(skip)]
     key: [u8; 32],
-    // Flat key-value store
     secrets: HashMap<String, String>,
 }
 
 impl Zeroize for Vault {
     fn zeroize(&mut self) {
-        // Recursively drain and zeroize the map contents
         self.secrets.drain().for_each(|(mut k, mut v)| {
             k.zeroize();
             v.zeroize();
