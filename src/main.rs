@@ -452,6 +452,98 @@ async fn run(cli: Cli, flags: &CliFlags) -> Result<(), AppError> {
                 }
             }
         }
+
+        Commands::Project { action } => {
+            match action {
+                cli::ProjectAction::Status => {
+                    let mut is_project = false;
+                    let mut project_name: Option<String> = None;
+                    let mut vault_exists = false;
+                    let mut vault_accessible = false;
+                    let mut git_detected = false;
+                    let mut git_root: Option<String> = None;
+                    let mut git_remote_current: Option<String> = None;
+                    let mut git_remote_bound: Option<String> = None;
+                    let mut git_bound = false;
+                    let mut ready_for_push = false;
+                    let mut targets_configured: Vec<String> = Vec::new();
+
+                    let proj = project::Project::find();
+                    if let Ok(p) = proj {
+                        is_project = true;
+                        vault_exists = p.vault_path.exists();
+                        let cfg = p.load_config().ok();
+                        if let Some(c) = cfg.as_ref() {
+                            if let Some(n) = c.name.clone() {
+                                project_name = Some(n);
+                            }
+                            git_root = c.git_root.clone();
+                            git_remote_bound = c.git_repo.clone();
+                            git_bound = c.git_repo.is_some();
+                        }
+
+                        if vault_exists {
+                            if let Ok(master_key) = p.get_master_key() {
+                                if let Ok(v) = vault::Vault::load(&p.vault_path, master_key) {
+                                    let _ = v.list(); // access to ensure decrypt succeeded
+                                    vault_accessible = true;
+                                }
+                            }
+                        }
+
+                        if let Some(gi) = project::detect_git(None) {
+                            git_detected = true;
+                            git_root = Some(gi.root);
+                            git_remote_current = gi.repo_slug.clone();
+                        }
+
+                        if let Ok(gc) = config::load() {
+                            targets_configured = gc.targets.keys().cloned().collect();
+                        }
+
+                        ready_for_push = is_project
+                            && vault_exists
+                            && vault_accessible
+                            && (!matches!(git_remote_bound.as_ref(), Some(_)) || git_remote_current == git_remote_bound)
+                            && !targets_configured.is_empty();
+                    }
+
+                    if flags.json {
+                        let payload = serde_json::json!({
+                            "api_version": "1",
+                            "status": "ok",
+                            "data": {
+                                "is_project": is_project,
+                                "project_name": project_name,
+                                "vault_exists": vault_exists,
+                                "vault_accessible": vault_accessible,
+                                "git_detected": git_detected,
+                                "git_root": git_root,
+                                "git_bound": git_bound,
+                                "git_remote_current": git_remote_current,
+                                "git_remote_bound": git_remote_bound,
+                                "targets_configured": targets_configured,
+                                "ready_for_push": ready_for_push
+                            }
+                        });
+                        println!("{}", serde_json::to_string(&payload).unwrap_or_default());
+                    } else {
+                        println!("Project status:");
+                        println!("  is_project: {}", is_project);
+                        println!("  project_name: {:?}", project_name);
+                        println!("  vault_exists: {}", vault_exists);
+                        println!("  vault_accessible: {}", vault_accessible);
+                        println!("  git_detected: {}", git_detected);
+                        println!("  git_root: {:?}", git_root);
+                        println!("  git_bound: {}", git_bound);
+                        println!("  git_remote_current: {:?}", git_remote_current);
+                        println!("  git_remote_bound: {:?}", git_remote_bound);
+                        println!("  targets_configured: {:?}", targets_configured);
+                        println!("  ready_for_push: {}", ready_for_push);
+                    }
+                }
+            }
+        }
     }
     Ok(())
 }
