@@ -140,8 +140,9 @@ async fn run(cli: Cli, flags: &CliFlags) -> Result<(), AppError> {
             }
             cli::TargetAction::List => {
                 let cfg = config::load()?;
-                if flags.json {
-                    let names: Vec<String> = cfg.targets.keys().cloned().collect();
+                    let mut names: Vec<String> = cfg.targets.keys().cloned().collect();
+                    names.sort();
+                    if flags.json {
                     let payload = serde_json::json!({
                         "api_version": "1",
                         "status": "ok",
@@ -150,7 +151,9 @@ async fn run(cli: Cli, flags: &CliFlags) -> Result<(), AppError> {
                     println!("{}", serde_json::to_string(&payload).unwrap_or_default());
                 } else {
                     println!("Configured Targets:");
-                    for (name, _) in cfg.targets { println!("- {}", name); }
+                        for name in names {
+                            println!("- {}", name);
+                        }
                 }
             }
             cli::TargetAction::Revoke { name } => {
@@ -225,8 +228,9 @@ async fn run(cli: Cli, flags: &CliFlags) -> Result<(), AppError> {
                     }
                 }
                 SecretAction::List {} => {
+                    let mut keys: Vec<String> = vault.list().keys().cloned().collect();
+                    keys.sort();
                     if flags.json {
-                        let keys: Vec<&String> = vault.list().keys().collect();
                         let payload = serde_json::json!({
                             "api_version": "1",
                             "status": "ok",
@@ -235,7 +239,9 @@ async fn run(cli: Cli, flags: &CliFlags) -> Result<(), AppError> {
                         println!("{}", serde_json::to_string(&payload).unwrap_or_default());
                     } else {
                         println!("Vault content:");
-                        for (k, _) in vault.list() { println!("  {} = *****", k); }
+                        for k in keys {
+                            println!("  {} = *****", k);
+                        }
                     }
                 }
                 SecretAction::Revoke { key, target } => {
