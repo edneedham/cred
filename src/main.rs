@@ -17,10 +17,31 @@ use std::process;
 #[tokio::main]
 async fn main() {
     let cli = Cli::parse();
-    match run(cli).await {
+    let flags = CliFlags { json: cli.json, non_interactive: cli.non_interactive, dry_run: cli.dry_run, yes: cli.yes };
+    match run(cli, &flags).await {
         Ok(()) => process::exit(ExitCode::Ok as i32),
         Err(err) => {
-            eprintln!("Error: {}", err.error);
+            if flags.json {
+                let code = match err.code {
+                    ExitCode::NotAuthenticated => "NOT_AUTHENTICATED",
+                    ExitCode::GitError => "GIT_ERROR",
+                    ExitCode::TargetRejected => "TARGET_REJECTED",
+                    ExitCode::VaultError => "VAULT_ERROR",
+                    ExitCode::NetworkError => "NETWORK_ERROR",
+                    ExitCode::UserError | ExitCode::Ok => "USER_ERROR",
+                };
+                let payload = serde_json::json!({
+                    "api_version": "1",
+                    "status": "error",
+                    "error": {
+                        "code": code,
+                        "message": err.error.to_string()
+                    }
+                });
+                println!("{}", serde_json::to_string(&payload).unwrap_or_default());
+            } else {
+                eprintln!("Error: {}", err.error);
+            }
             process::exit(err.code as i32);
         }
     }
@@ -63,6 +84,18 @@ struct CliFlags {
     yes: bool,
 }
 
+fn print_out(flags: &CliFlags, msg: &str) {
+    if !flags.json {
+        println!("{}", msg);
+    }
+}
+
+fn print_err(flags: &CliFlags, msg: &str) {
+    if !flags.json {
+        eprintln!("{}", msg);
+    }
+}
+
 impl AppError {
     fn new(code: ExitCode, error: anyhow::Error) -> Self { Self { code, error } }
     fn user(error: anyhow::Error) -> Self { Self::new(ExitCode::UserError, error) }
@@ -81,58 +114,63 @@ impl From<anyhow::Error> for AppError {
     }
 }
 
-async fn run(cli: Cli) -> Result<(), AppError> {
-    let flags = CliFlags {
-        json: cli.json,
-        non_interactive: cli.non_interactive,
-        dry_run: cli.dry_run,
-        yes: cli.yes,
-    };
-
-    if flags.json {
-        // Not implemented yet; avoid mixing prose
-        return Err(AppError::user(anyhow::anyhow!(
-            "--json output is not yet implemented"
-        )));
-    }
+async fn run(cli: Cli, flags: &CliFlags) -> Result<(), AppError> {
 
     match cli.command {
         Commands::Init => {
             config::ensure_global_config_exists()?;
             project::init()?;
+            if flags.json {
+                let payload = serde_json::json!({
+                    "api_version": "1",
+                    "status": "ok",
+                    "data": serde_json::Value::Null
+                });
+                println!("{}", serde_json::to_string(&payload).unwrap_or_default());
+            }
         }
         
         Commands::Target { action } => match action {
              cli::TargetAction::Set(args) => {
                 if flags.dry_run {
-                    println!("(dry-run) Target set skipped");
+                    print_out(flags, "(dry-run) Target set skipped");
                     return Ok(());
                 }
                 handle_target_set(args, &flags)?;
             }
             cli::TargetAction::List => {
                 let cfg = config::load()?;
-                println!("Configured Targets:");
-                for (name, _) in cfg.targets { println!("- {}", name); }
+                if flags.json {
+                    let names: Vec<String> = cfg.targets.keys().cloned().collect();
+                    let payload = serde_json::json!({
+                        "api_version": "1",
+                        "status": "ok",
+                        "data": { "targets": names }
+                    });
+                    println!("{}", serde_json::to_string(&payload).unwrap_or_default());
+                } else {
+                    println!("Configured Targets:");
+                    for (name, _) in cfg.targets { println!("- {}", name); }
+                }
             }
             cli::TargetAction::Revoke { name } => {
                 require_yes(&flags, "target revoke")?;
                 if flags.dry_run {
-                    println!("(dry-run) Target revoke skipped");
+                    print_out(flags, "(dry-run) Target revoke skipped");
                     return Ok(());
                 }
-                println!("🔌 Attempting to revoke token for target '{}'...", name);
+                print_out(flags, &format!("🔌 Attempting to revoke token for target '{}'...", name));
                 if let Some(token) = config::get_target_token(&name.to_string())? {
                     if let Some(p) = targets::get(name) {
                         // Atomic Revoke
                         if let Err(e) = p.revoke_auth_token(&token).await {
-                            eprintln!("x Remote revocation failed: {}", e);
+                            print_err(flags, &format!("x Remote revocation failed: {}", e));
                             return Ok(());
                         }
                     }
                     config::remove_target_token(&name.to_string())?;
                 } else {
-                    println!("Target '{}' was not configured.", name);
+                    print_out(flags, &format!("Target '{}' was not configured.", name));
                 }
             }
         },
@@ -149,80 +187,107 @@ async fn run(cli: Cli) -> Result<(), AppError> {
                         return Ok(());
                     }
                     vault.set(&key, &value);
-                    vault.save()?;
-                    println!("✓ Set {} = *****", key);
+                    if !flags.dry_run {
+                        vault.save()?;
+                        print_out(flags, &format!("✓ Set {} = *****", key));
+                    } else {
+                        print_out(flags, &format!("(dry-run) Would set {}", key));
+                    }
                 }
                 SecretAction::Get { key } => {
                     match vault.get(&key) {
-                        Some(val) => println!("{}", val),
-                        None => eprintln!("Secret '{}' not found", key),
+                        Some(val) => {
+                            if flags.json {
+                                let payload = serde_json::json!({
+                                    "api_version": "1",
+                                    "status": "ok",
+                                    "data": { "key": key, "value": val }
+                                });
+                                println!("{}", serde_json::to_string(&payload).unwrap_or_default());
+                            } else {
+                                println!("{}", val)
+                            }
+                        }
+                        None => print_err(flags, &format!("Secret '{}' not found", key)),
                     }
                 }
                 SecretAction::Remove { key } => {
                     require_yes(&flags, "secret remove")?;
                     if flags.dry_run {
-                        println!("(dry-run) Would remove {}", key);
+                        print_out(flags, &format!("(dry-run) Would remove {}", key));
                         return Ok(());
                     }
                     if vault.remove(&key).is_some() {
                         vault.save()?;
-                        println!("✓ Removed '{}' from local vault.", key);
+                        print_out(flags, &format!("✓ Removed '{}' from local vault.", key));
                     } else {
-                        println!("Secret '{}' did not exist locally.", key);
+                        print_out(flags, &format!("Secret '{}' did not exist locally.", key));
                     }
                 }
                 SecretAction::List {} => {
-                    println!("Vault content:");
-                    for (k, _) in vault.list() { println!("  {} = *****", k); }
+                    if flags.json {
+                        let keys: Vec<&String> = vault.list().keys().collect();
+                        let payload = serde_json::json!({
+                            "api_version": "1",
+                            "status": "ok",
+                            "data": { "keys": keys }
+                        });
+                        println!("{}", serde_json::to_string(&payload).unwrap_or_default());
+                    } else {
+                        println!("Vault content:");
+                        for (k, _) in vault.list() { println!("  {} = *****", k); }
+                    }
                 }
                 SecretAction::Revoke { key, target } => {
                     require_yes(&flags, "secret revoke")?;
                     if flags.dry_run {
-                        println!("(dry-run) Would revoke '{}' from {}", key, target);
+                        print_out(flags, &format!("(dry-run) Would revoke '{}' from {}", key, target));
                         return Ok(());
                     }
                      // 1. Get Source Token
                     let source_token = match config::get_target_token(&target.to_string())? {
                         Some(t) => t,
-                        None => { eprintln!("No token for source {}", target); return Ok(()); }
+                        None => { print_err(flags, &format!("No token for source {}", target)); return Ok(()); }
                     };
 
                     // 2. Get Value for Revocation
                     let secret_value = match vault.get(&key) {
                         Some(v) => v.clone(),
-                        None => { eprintln!("Secret '{}' not found locally.", key); return Ok(()); }
+                        None => { print_err(flags, &format!("Secret '{}' not found locally.", key)); return Ok(()); }
                     };
 
                     // 3. Remote Revoke
                     let source_impl = match targets::get(target) {
                         Some(p) => p,
-                        None => { eprintln!("Unknown target {}", target); return Ok(()); }
+                        None => { print_err(flags, &format!("Unknown target {}", target)); return Ok(()); }
                     };
                     
-                    println!("🔌 Contacting {} to revoke '{}'...", target, key);
+                    print_out(flags, &format!("🔌 Contacting {} to revoke '{}'...", target, key));
                     // Note: This will fail if target doesn't support revoke (like GitHub)
                     if let Err(e) = source_impl.revoke_secret(&key, &secret_value, &source_token).await {
-                         eprintln!("x Failed to revoke at source: {}", e);
+                         print_err(flags, &format!("x Failed to revoke at source: {}", e));
                          return Ok(());
                     }
-                    println!("✓ Remote key destroyed.");
+                    print_out(flags, "✓ Remote key destroyed.");
 
                     // 4. Local Remove
                     vault.remove(&key);
-                    vault.save()?;
-                    println!("✓ Removed from local vault.");
+                    if !flags.dry_run {
+                        vault.save()?;
+                        print_out(flags, "✓ Removed from local vault.");
+                    }
                 }
             }
         }
         
         Commands::Push(args) => {
             if flags.dry_run {
-                println!("(dry-run) Push skipped (no remote mutation).");
+                print_out(flags, "(dry-run) Push skipped (no remote mutation).");
                 return Ok(());
             }
             let target_impl = match targets::get(args.target) {
                 Some(p) => p,
-                None => { eprintln!("Error: Target '{}' not supported.", args.target); return Ok(()); }
+                None => { print_err(flags, &format!("Error: Target '{}' not supported.", args.target)); return Ok(()); }
             };
 
             let token = config::get_target_token(&args.target.to_string())?
@@ -269,28 +334,28 @@ async fn run(cli: Cli) -> Result<(), AppError> {
             }
 
             if filtered.is_empty() {
-                println!("No secrets to push.");
+                print_out(flags, "No secrets to push.");
                 return Ok(());
             }
 
-            println!("📦 Pushing {} secrets...", filtered.len());
+            print_out(flags, &format!("📦 Pushing {} secrets...", filtered.len()));
             let options = targets::PushOptions { repo };
             if let Err(e) = target_impl.push(&filtered, &token, &options).await {
-                eprintln!("x Failed to push: {}", e);
+                print_err(flags, &format!("x Failed to push: {}", e));
             } else {
-                println!("✓ Operations complete.");
+                print_out(flags, "✓ Operations complete.");
             }
         }
 
         Commands::Prune(args) => {
             require_yes(&flags, "prune")?;
             if flags.dry_run {
-                println!("(dry-run) Prune skipped (no remote mutation).");
+                print_out(flags, "(dry-run) Prune skipped (no remote mutation).");
                 return Ok(());
             }
             let target_impl = match targets::get(args.target) {
                 Some(p) => p,
-                None => { eprintln!("Error: Unknown target"); return Ok(()); }
+                None => { print_err(flags, "Error: Unknown target"); return Ok(()); }
             };
 
             let token = config::get_target_token(&args.target.to_string())?
@@ -299,7 +364,7 @@ async fn run(cli: Cli) -> Result<(), AppError> {
             let keys_to_prune: Vec<String> = if !args.keys.is_empty() {
                 args.keys
             } else {
-                eprintln!("Error: Specify keys to prune.");
+                print_err(flags, "Error: Specify keys to prune.");
                 return Ok(());
             };
 
@@ -327,43 +392,63 @@ async fn run(cli: Cli) -> Result<(), AppError> {
                 )));
             }
 
-            println!("🔌 Deleting from Remote ({}) first...", args.target);
+            print_out(flags, &format!("🔌 Deleting from Remote ({}) first...", args.target));
             let options = targets::PushOptions { repo };
             
             // ATOMIC: Remote fail stops local delete
             target_impl.delete(&keys_to_prune, &token, &options).await?;
 
-            println!("✓ Remote delete successful (local vault unchanged).");
+            print_out(flags, "✓ Remote delete successful (local vault unchanged).");
         }
 
         Commands::Config { action } => {
             match action {
                 cli::ConfigAction::Get { key } => {
                     match config::config_get(&key)? {
-                        Some(v) => println!("{}", v),
-                        None => println!("(not set)"),
+                        Some(v) => {
+                            if flags.json {
+                                let payload = serde_json::json!({
+                                    "api_version": "1",
+                                    "status": "ok",
+                                    "data": { "key": key, "value": v }
+                                });
+                                println!("{}", serde_json::to_string(&payload).unwrap_or_default());
+                            } else {
+                                println!("{}", v)
+                            }
+                        }
+                        None => print_out(flags, "(not set)"),
                     }
                 }
                 cli::ConfigAction::Set { key, value } => {
                     if flags.dry_run {
-                        println!("(dry-run) Would set {}", key);
+                        print_out(flags, &format!("(dry-run) Would set {}", key));
                         return Ok(());
                     }
                     config::config_set(&key, &value)?;
-                    println!("Set {}.", key);
+                    print_out(flags, &format!("Set {}.", key));
                 }
                 cli::ConfigAction::Unset { key } => {
                     require_yes(&flags, "config unset")?;
                     if flags.dry_run {
-                        println!("(dry-run) Would unset {}", key);
+                        print_out(flags, &format!("(dry-run) Would unset {}", key));
                         return Ok(());
                     }
                     config::config_unset(&key)?;
-                    println!("Unset {}.", key);
+                    print_out(flags, &format!("Unset {}.", key));
                 }
                 cli::ConfigAction::List => {
                     let s = config::config_list()?;
-                    println!("{}", s);
+                    if flags.json {
+                        let payload = serde_json::json!({
+                            "api_version": "1",
+                            "status": "ok",
+                            "data": { "config": s }
+                        });
+                        println!("{}", serde_json::to_string(&payload).unwrap_or_default());
+                    } else {
+                        println!("{}", s);
+                    }
                 }
             }
         }
