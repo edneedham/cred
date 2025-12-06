@@ -281,10 +281,6 @@ async fn run(cli: Cli, flags: &CliFlags) -> Result<(), AppError> {
         }
         
         Commands::Push(args) => {
-            if flags.dry_run {
-                print_out(flags, "(dry-run) Push skipped (no remote mutation).");
-                return Ok(());
-            }
             let target_impl = match targets::get(args.target) {
                 Some(p) => p,
                 None => { print_err(flags, &format!("Error: Target '{}' not supported.", args.target)); return Ok(()); }
@@ -334,7 +330,56 @@ async fn run(cli: Cli, flags: &CliFlags) -> Result<(), AppError> {
             }
 
             if filtered.is_empty() {
-                print_out(flags, "No secrets to push.");
+                if flags.json {
+                    let payload = serde_json::json!({
+                        "api_version": "1",
+                        "status": "ok",
+                        "data": {
+                            "target": format!("{}", args.target),
+                            "repo": repo,
+                            "will_create": [],
+                            "will_update": [],
+                            "will_delete": []
+                        }
+                    });
+                    println!("{}", serde_json::to_string(&payload).unwrap_or_default());
+                } else {
+                    print_out(flags, "No secrets to push.");
+                }
+                return Ok(());
+            }
+
+            if flags.dry_run {
+                let creates: Vec<String> = Vec::new();
+                let mut updates: Vec<String> = Vec::new();
+                // With no remote read, we conservatively treat all as updates (or creates)
+                // Deterministic ordering: sort keys
+                let mut keys: Vec<String> = filtered.keys().cloned().collect();
+                keys.sort();
+                // If we had a way to diff remote, we could split create/update; here we label as updates
+                updates.extend(keys);
+
+                if flags.json {
+                    let payload = serde_json::json!({
+                        "api_version": "1",
+                        "status": "ok",
+                        "data": {
+                            "target": format!("{}", args.target),
+                            "repo": repo,
+                            "will_create": creates,
+                            "will_update": updates,
+                            "will_delete": Vec::<String>::new()
+                        }
+                    });
+                    println!("{}", serde_json::to_string(&payload).unwrap_or_default());
+                } else {
+                    print_out(flags, "(dry-run) Push skipped (no remote mutation).");
+                    print_out(flags, &format!("Target: {}", args.target));
+                    if let Some(r) = repo.as_ref() {
+                        print_out(flags, &format!("Repo: {}", r));
+                    }
+                    print_out(flags, &format!("Will update: {:?}", updates));
+                }
                 return Ok(());
             }
 
