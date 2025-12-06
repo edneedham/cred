@@ -322,6 +322,7 @@ async fn run(cli: Cli, flags: &CliFlags) -> Result<(), AppError> {
 
             let proj = project::Project::find()?;
             let git_info = project::detect_git(None);
+            let bound_repo = proj.load_config().ok().and_then(|c| c.git_repo);
 
             let master_key = proj.get_master_key()?;
             let vault = vault::Vault::load(&proj.vault_path, master_key)?;
@@ -336,9 +337,33 @@ async fn run(cli: Cli, flags: &CliFlags) -> Result<(), AppError> {
                             )));
                         }
                     }
+                    if let Some(bound) = bound_repo {
+                        if bound != r {
+                            return Err(AppError::git(anyhow::anyhow!(
+                                "Refusing to push: provided --repo '{}' does not match bound repo '{}'.",
+                                r, bound
+                            )));
+                        }
+                    }
                     Some(r)
                 }
-                None => git_info.and_then(|g| g.repo_slug),
+                None => {
+                    if let Some(live) = git_info.and_then(|g| g.repo_slug) {
+                        if let Some(bound) = bound_repo.clone() {
+                            if bound != live {
+                                return Err(AppError::git(anyhow::anyhow!(
+                                    "Refusing to push: detected repo '{}' does not match bound repo '{}'.",
+                                    live, bound
+                                )));
+                            }
+                        }
+                        Some(live)
+                    } else if let Some(bound) = bound_repo {
+                        Some(bound)
+                    } else {
+                        None
+                    }
+                },
             };
 
             if matches!(args.target, targets::Target::Github) && repo.is_none() {
@@ -447,6 +472,7 @@ async fn run(cli: Cli, flags: &CliFlags) -> Result<(), AppError> {
             if keys_to_prune.is_empty() { return Ok(()); }
 
             let git_info = project::detect_git(None);
+            let bound_repo = project::Project::find().ok().and_then(|p| p.load_config().ok()).and_then(|c| c.git_repo);
             let repo = match args.repo.clone() {
                 Some(r) => {
                     if let Some(live) = git_info.as_ref().and_then(|g| g.repo_slug.clone()) {
@@ -457,9 +483,33 @@ async fn run(cli: Cli, flags: &CliFlags) -> Result<(), AppError> {
                             )));
                         }
                     }
+                    if let Some(bound) = bound_repo {
+                        if bound != r {
+                            return Err(AppError::git(anyhow::anyhow!(
+                                "Refusing to prune: provided --repo '{}' does not match bound repo '{}'.",
+                                r, bound
+                            )));
+                        }
+                    }
                     Some(r)
                 }
-                None => git_info.and_then(|g| g.repo_slug),
+                None => {
+                    if let Some(live) = git_info.and_then(|g| g.repo_slug) {
+                        if let Some(bound) = bound_repo.clone() {
+                            if bound != live {
+                                return Err(AppError::git(anyhow::anyhow!(
+                                    "Refusing to prune: detected repo '{}' does not match bound repo '{}'.",
+                                    live, bound
+                                )));
+                            }
+                        }
+                        Some(live)
+                    } else if let Some(bound) = bound_repo {
+                        Some(bound)
+                    } else {
+                        None
+                    }
+                },
             };
 
             if matches!(args.target, targets::Target::Github) && repo.is_none() {
@@ -541,7 +591,7 @@ async fn run(cli: Cli, flags: &CliFlags) -> Result<(), AppError> {
                     let mut git_remote_current: Option<String> = None;
                     let mut git_remote_bound: Option<String> = None;
                     let mut git_bound = false;
-                    let mut ready_for_push = false;
+            let mut ready_for_push = false;
                     let mut targets_configured: Vec<String> = Vec::new();
 
                     let proj = project::Project::find();
@@ -575,6 +625,7 @@ async fn run(cli: Cli, flags: &CliFlags) -> Result<(), AppError> {
 
                         if let Ok(gc) = config::load() {
                             targets_configured = gc.targets.keys().cloned().collect();
+                            targets_configured.sort();
                         }
 
                         ready_for_push = is_project
