@@ -17,7 +17,14 @@ use std::process;
 #[tokio::main]
 async fn main() {
     let cli = Cli::parse();
-    let flags = CliFlags { json: cli.json, non_interactive: cli.non_interactive, dry_run: cli.dry_run, yes: cli.yes };
+    let no_color_env = std::env::var("NO_COLOR").is_ok();
+    let flags = CliFlags {
+        json: cli.json,
+        non_interactive: cli.non_interactive,
+        dry_run: cli.dry_run,
+        yes: cli.yes,
+        no_color: no_color_env || cli.json,
+    };
     match run(cli, &flags).await {
         Ok(()) => process::exit(ExitCode::Ok as i32),
         Err(err) => {
@@ -38,9 +45,9 @@ async fn main() {
                         "message": err.error.to_string()
                     }
                 });
-                println!("{}", serde_json::to_string(&payload).unwrap_or_default());
+                print_json(&payload);
             } else {
-                eprintln!("Error: {}", err.error);
+                print_plain_err(&format!("Error: {}", err.error));
             }
             process::exit(err.code as i32);
         }
@@ -82,16 +89,33 @@ struct CliFlags {
     non_interactive: bool,
     dry_run: bool,
     yes: bool,
+    no_color: bool,
 }
 
 fn print_out(flags: &CliFlags, msg: &str) {
-    if !flags.json {
+    if !flags.json && !flags.no_color {
+        println!("{}", msg);
+    } else if !flags.json {
         println!("{}", msg);
     }
 }
 
+fn print_plain(msg: &str) {
+    println!("{}", msg);
+}
+
+fn print_plain_err(msg: &str) {
+    eprintln!("{}", msg);
+}
+
+fn print_json(payload: &serde_json::Value) {
+    print_plain(&serde_json::to_string(payload).unwrap_or_default());
+}
+
 fn print_err(flags: &CliFlags, msg: &str) {
-    if !flags.json {
+    if !flags.json && !flags.no_color {
+        eprintln!("{}", msg);
+    } else if !flags.json {
         eprintln!("{}", msg);
     }
 }
@@ -126,7 +150,7 @@ async fn run(cli: Cli, flags: &CliFlags) -> Result<(), AppError> {
                     "status": "ok",
                     "data": serde_json::Value::Null
                 });
-                println!("{}", serde_json::to_string(&payload).unwrap_or_default());
+                print_json(&payload);
             }
         }
         
