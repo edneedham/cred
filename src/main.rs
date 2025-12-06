@@ -8,21 +8,62 @@ mod tests;
 
 use clap::Parser;
 use cli::{Cli, Commands, SecretAction, SetTargetArgs};
-use anyhow::{Context, Result, bail};
+use anyhow::Context;
 use targets::TargetAdapter;
 use rpassword::prompt_password;
 use zeroize::Zeroize;
+use std::process;
 
 #[tokio::main]
 async fn main() {
     let cli = Cli::parse();
-    if let Err(e) = run(cli).await {
-        eprintln!("Error: {:?}", e);
-        std::process::exit(1);
+    match run(cli).await {
+        Ok(()) => process::exit(ExitCode::Ok as i32),
+        Err(err) => {
+            eprintln!("Error: {}", err.error);
+            process::exit(err.code as i32);
+        }
     }
 }
 
-async fn run(cli: Cli) -> Result<()> {
+#[allow(dead_code)]
+#[derive(Debug, Copy, Clone)]
+#[repr(i32)]
+enum ExitCode {
+    Ok = 0,
+    UserError = 1,
+    NotAuthenticated = 2,
+    NetworkError = 3,
+    TargetRejected = 4,
+    VaultError = 5,
+    GitError = 6,
+}
+
+#[derive(Debug)]
+struct AppError {
+    code: ExitCode,
+    error: anyhow::Error,
+}
+
+impl AppError {
+    fn new(code: ExitCode, error: anyhow::Error) -> Self { Self { code, error } }
+    fn user(error: anyhow::Error) -> Self { Self::new(ExitCode::UserError, error) }
+    fn auth(error: anyhow::Error) -> Self { Self::new(ExitCode::NotAuthenticated, error) }
+    #[allow(dead_code)]
+    fn git(error: anyhow::Error) -> Self { Self::new(ExitCode::GitError, error) }
+    #[allow(dead_code)]
+    fn vault(error: anyhow::Error) -> Self { Self::new(ExitCode::VaultError, error) }
+    #[allow(dead_code)]
+    fn target(error: anyhow::Error) -> Self { Self::new(ExitCode::TargetRejected, error) }
+}
+
+impl From<anyhow::Error> for AppError {
+    fn from(error: anyhow::Error) -> Self {
+        AppError::user(error)
+    }
+}
+
+async fn run(cli: Cli) -> Result<(), AppError> {
     match cli.command {
         Commands::Init => {
             config::ensure_global_config_exists()?;
@@ -138,7 +179,10 @@ async fn run(cli: Cli) -> Result<()> {
                 Some(r) => {
                     if let Some(live) = git_info.as_ref().and_then(|g| g.repo_slug.clone()) {
                         if live != r {
-                            bail!("Refusing to push: provided --repo '{}' does not match detected repo '{}'.", r, live);
+                            return Err(AppError::user(anyhow::anyhow!(
+                                "Refusing to push: provided --repo '{}' does not match detected repo '{}'.",
+                                r, live
+                            )));
                         }
                     }
                     Some(r)
@@ -147,7 +191,9 @@ async fn run(cli: Cli) -> Result<()> {
             };
 
             if matches!(args.target, targets::Target::Github) && repo.is_none() {
-                bail!("GitHub push requires a repository. Provide --repo owner/name or initialize inside a git repo so it can be recorded.");
+                return Err(AppError::git(anyhow::anyhow!(
+                    "GitHub push requires a repository. Provide --repo owner/name or initialize inside a git repo so it can be recorded."
+                )));
             }
 
             let keys_to_push: Vec<String> = if !args.keys.is_empty() {
@@ -200,7 +246,10 @@ async fn run(cli: Cli) -> Result<()> {
                 Some(r) => {
                     if let Some(live) = git_info.as_ref().and_then(|g| g.repo_slug.clone()) {
                         if live != r {
-                            bail!("Refusing to prune: provided --repo '{}' does not match detected repo '{}'.", r, live);
+                            return Err(AppError::user(anyhow::anyhow!(
+                                "Refusing to prune: provided --repo '{}' does not match detected repo '{}'.",
+                                r, live
+                            )));
                         }
                     }
                     Some(r)
@@ -209,7 +258,9 @@ async fn run(cli: Cli) -> Result<()> {
             };
 
             if matches!(args.target, targets::Target::Github) && repo.is_none() {
-                bail!("GitHub prune requires a repository. Provide --repo owner/name or initialize inside a git repo so it can be recorded.");
+                return Err(AppError::git(anyhow::anyhow!(
+                    "GitHub prune requires a repository. Provide --repo owner/name or initialize inside a git repo so it can be recorded."
+                )));
             }
 
             println!("🔌 Deleting from Remote ({}) first...", args.target);
@@ -247,15 +298,16 @@ async fn run(cli: Cli) -> Result<()> {
     Ok(())
 }
 
-fn read_token_securely(maybe_token: Option<String>) -> Result<String> {
+fn read_token_securely(maybe_token: Option<String>) -> Result<String, AppError> {
     match maybe_token {
         Some(token) => Ok(token),
         None => {
             let token = prompt_password("Enter target token: ")
-                .context("Failed to read token securely")?;
+                .context("Failed to read token securely")
+                .map_err(AppError::user)?;
 
             if token.trim().is_empty() {
-                anyhow::bail!("Token cannot be empty");
+                return Err(AppError::user(anyhow::anyhow!("Token cannot be empty")));
             }
 
             Ok(token)
@@ -263,10 +315,10 @@ fn read_token_securely(maybe_token: Option<String>) -> Result<String> {
     }
 }
 
-fn handle_target_set(args: SetTargetArgs) -> Result<()> {
+fn handle_target_set(args: SetTargetArgs) -> Result<(), AppError> {
     let mut token = read_token_securely(args.token)?;
 
-    config::set_target_token(&args.name.to_string(), &token)?;
+    config::set_target_token(&args.name.to_string(), &token).map_err(AppError::auth)?;
     println!("Target '{}' authenticated successfully.", args.name);
 
     token.zeroize();

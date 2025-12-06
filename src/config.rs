@@ -40,6 +40,40 @@ pub struct GlobalConfig {
     pub targets: HashMap<String, TargetConfig>,
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_parse_value_coercion() {
+        assert_eq!(parse_value("true"), Value::Boolean(true));
+        assert_eq!(parse_value("false"), Value::Boolean(false));
+        assert_eq!(parse_value("42"), Value::Integer(42));
+        assert_eq!(parse_value("3.14"), Value::Float(3.14));
+        assert_eq!(parse_value("text"), Value::String("text".to_string()));
+    }
+
+    #[test]
+    fn test_set_get_unset_path() {
+        let mut root = Value::Table(toml::map::Map::new());
+        set_path(&mut root, &["preferences", "default_target"], Value::String("github".into()));
+        let got = get_path(&root, &["preferences", "default_target"]);
+        assert_eq!(got, Some(&Value::String("github".into())));
+
+        unset_path(&mut root, &["preferences", "default_target"]);
+        let got = get_path(&root, &["preferences", "default_target"]);
+        assert!(got.is_none());
+    }
+
+    #[test]
+    fn test_default_config_shape() {
+        let cfg = default_config();
+        assert_eq!(cfg.cred.config_version, 1);
+        assert_eq!(cfg.cred.version, "0.1.0");
+        assert!(cfg.preferences.default_target.is_some());
+    }
+}
+
 fn resolve_config_dir() -> Result<PathBuf> {
     if cfg!(target_os = "macos") {
         let home = dirs::home_dir().context("Could not determine home directory")?;
