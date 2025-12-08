@@ -144,6 +144,15 @@ mod main_tests {
     }
 
     #[test]
+    fn test_resolve_repo_binding_mismatch_detected_vs_bound() {
+        let detected = Some("org/repoB".to_string());
+        let bound = Some("org/repoA".to_string());
+        let provided = None;
+        let res = resolve_repo_binding(detected, bound, provided, "push");
+        assert!(res.is_err());
+    }
+
+    #[test]
     fn test_project_status_payload_schema() {
         let data = ProjectStatusData {
             is_project: true,
