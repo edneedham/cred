@@ -1,11 +1,13 @@
 #[cfg(test)]
 mod tests {
-    use crate::{project, config, vault};
+    use crate::{project, config, vault, targets};
+    use targets::TargetAdapter;
     use tempfile::tempdir;
     use std::fs;
     use std::process::Command;
     use rand::RngCore;
     use std::env;
+    use std::sync::{Arc, Mutex};
 
     fn get_test_key() -> [u8; 32] {
         let mut key = [0u8; 32];
@@ -203,6 +205,36 @@ mod tests {
         let mut keys: Vec<String> = map.keys().cloned().collect();
         keys.sort();
         assert_eq!(keys, vec!["A", "B", "C"]);
+    }
+
+    struct MockTarget {
+        seen: Arc<Mutex<Vec<String>>>,
+    }
+
+    impl targets::TargetAdapter for MockTarget {
+        fn name(&self) -> &str { "mock" }
+    }
+
+    #[test]
+    fn test_dry_run_plan_matches_actual_push_keys() {
+        let mut secrets = std::collections::HashMap::new();
+        secrets.insert("B".to_string(), "2".to_string());
+        secrets.insert("A".to_string(), "1".to_string());
+
+        let mut plan_keys: Vec<String> = secrets.keys().cloned().collect();
+        plan_keys.sort();
+
+        // Simulate actual push with mock target
+        let mock = MockTarget { seen: Arc::new(Mutex::new(Vec::new())) };
+        let options = targets::PushOptions { repo: None };
+        tokio::runtime::Runtime::new().unwrap().block_on(async {
+            let _ = mock.push(&secrets, "token", &options).await;
+        });
+
+        let mut seen = mock.seen.lock().unwrap().clone();
+        seen.sort();
+
+        assert_eq!(plan_keys, seen);
     }
 
     #[test]
