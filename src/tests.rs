@@ -268,4 +268,40 @@ mod tests {
         let combined = format!("{}{}", stdout, stderr);
         assert!(combined.contains("\"status\":\"error\"") || combined.contains("\"status\": \"error\""));
     }
+
+    #[test]
+    fn test_vault_corruption_handled_gracefully() {
+        let dir = tempdir().unwrap();
+        let cred_dir = dir.path().join(".cred");
+        fs::create_dir_all(&cred_dir).unwrap();
+        let vault_path = cred_dir.join("vault.enc");
+        fs::write(&vault_path, "garbage-data").unwrap();
+
+        // minimal project config
+        fs::write(cred_dir.join("project.toml"), "").unwrap();
+
+        let bin_path = env::current_exe().unwrap();
+
+        // Isolate home/config
+        let home = dir.path().join("home");
+        fs::create_dir_all(&home).unwrap();
+        unsafe {
+            std::env::set_var("HOME", &home);
+            std::env::set_var("XDG_CONFIG_HOME", home.join(".config"));
+        }
+
+        let output = Command::new(bin_path)
+            .arg("secret")
+            .arg("list")
+            .arg("--json")
+            .current_dir(dir.path())
+            .output()
+            .expect("failed to run cred binary");
+
+        assert!(!output.status.success());
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        let combined = format!("{}{}", stdout, stderr);
+        assert!(combined.contains("\"status\":\"error\"") || combined.contains("\"status\": \"error\""));
+    }
 }
