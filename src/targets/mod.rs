@@ -30,6 +30,7 @@ pub struct PushOptions {
     pub repo: Option<String>,
 }
 
+#[allow(async_fn_in_trait)] // Async in trait is crate-internal; we accept the bound
 pub trait TargetAdapter {
     fn name(&self) -> &str;
     
