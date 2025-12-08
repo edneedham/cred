@@ -304,4 +304,41 @@ mod tests {
         let combined = format!("{}{}", stdout, stderr);
         assert!(combined.contains("\"status\":\"error\"") || combined.contains("\"status\": \"error\""));
     }
+
+    #[test]
+    fn test_secret_list_json_is_deterministic() {
+        let dir = tempdir().unwrap();
+        let cred_dir = dir.path().join(".cred");
+        fs::create_dir_all(&cred_dir).unwrap();
+        let vault_path = cred_dir.join("vault.enc");
+        let key = get_test_key();
+
+        // Build a vault with deterministic ordering
+        let mut v = vault::Vault::load(&vault_path, key).unwrap();
+        v.set("B", "2");
+        v.set("A", "1");
+        v.save().unwrap();
+
+        // minimal project config so secret list works
+        fs::write(cred_dir.join("project.toml"), "").unwrap();
+
+        let bin_path = env::current_exe().unwrap();
+
+        let run_once = |dir: &tempfile::TempDir| -> String {
+            let output = Command::new(&bin_path)
+                .arg("secret")
+                .arg("list")
+                .arg("--json")
+                .current_dir(dir.path())
+                .output()
+                .expect("failed to run cred binary");
+            assert!(output.status.success());
+            String::from_utf8_lossy(&output.stdout).to_string()
+        };
+
+        let first = run_once(&dir);
+        let second = run_once(&dir);
+
+        assert_eq!(first, second);
+    }
 }
