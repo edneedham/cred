@@ -3,6 +3,7 @@ mod tests {
     use crate::{project, config, vault};
     use tempfile::tempdir;
     use std::fs;
+    use std::process::Command;
     use rand::RngCore;
 
     fn get_test_key() -> [u8; 32] {
@@ -12,17 +13,17 @@ mod tests {
     }
 
     #[test]
-    fn test_project_init_creates_structure() {
+    fn test_project_init_creates_expected_files() {
         let dir = tempdir().unwrap();
         let root = dir.path();
 
-        // Run init (this touches OS keychain)
-        if project::init_at(root).is_ok() {
-            let cred_dir = root.join(".cred");
-            assert!(cred_dir.exists());
-            assert!(cred_dir.join("project.toml").exists());
-            assert!(cred_dir.join("vault.enc").exists()); 
-        }
+        let result = project::init_at(root);
+        assert!(result.is_ok());
+
+        let cred_dir = root.join(".cred");
+        assert!(cred_dir.exists());
+        assert!(cred_dir.join("project.toml").exists());
+        assert!(cred_dir.join("vault.enc").exists());
     }
 
     #[test]
@@ -46,6 +47,45 @@ mod tests {
         let content = fs::read_to_string(&gitignore).unwrap();
         assert!(content.contains("target/"));
         assert!(content.contains(".cred/"));
+    }
+
+    #[test]
+    fn test_git_binding_present() {
+        let dir = tempdir().unwrap();
+        let root = dir.path();
+
+        Command::new("git").args(["init"]).current_dir(root).output().unwrap();
+        Command::new("git").args(["remote", "add", "origin", "git@github.com:org/repo.git"]).current_dir(root).output().unwrap();
+
+        let result = project::init_at(root);
+        assert!(result.is_ok());
+
+        let cred_dir = root.join(".cred");
+        let proj = project::Project {
+            vault_path: cred_dir.join("vault.enc"),
+            config_path: cred_dir.join("project.toml"),
+        };
+        let cfg = proj.load_config().unwrap();
+        assert_eq!(cfg.git_repo, Some("org/repo".to_string()));
+        assert_eq!(cfg.git_root, Some(root.to_path_buf().to_string_lossy().to_string()));
+    }
+
+    #[test]
+    fn test_git_binding_absent() {
+        let dir = tempdir().unwrap();
+        let root = dir.path();
+
+        let result = project::init_at(root);
+        assert!(result.is_ok());
+
+        let cred_dir = root.join(".cred");
+        let proj = project::Project {
+            vault_path: cred_dir.join("vault.enc"),
+            config_path: cred_dir.join("project.toml"),
+        };
+        let cfg = proj.load_config().unwrap();
+        assert!(cfg.git_repo.is_none());
+        assert!(cfg.git_root.is_none());
     }
 
     #[test]
