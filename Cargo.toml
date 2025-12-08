@@ -2,8 +2,11 @@
 name = "cred"
 version = "0.1.0"
 edition = "2024"
-description = "A command line tool to manage secrets and environment variables locally and remotely."
+description = "A command-line tool to manage secrets and environment variables locally and remotely."
 readme = "README.md"
+keywords = ["secrets", "automation", "ai", "ci", "devops"]
+categories = ["command-line-utilities", "development-tools"]
+license = "MIT OR Apache-2.0"
 
 [features]
 default = ["github"]

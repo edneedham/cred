@@ -2,7 +2,7 @@
 
 ## What it is
 
-`cred` is a local-first secrets manager that securely pushes credentials to CI/CD platforms without committing .env files or running infrastructure.
+`cred` stores encrypted secrets locally and safely syncs them to CI/CD platforms on demand.
 
 ⚠️ **Status: Early Preview (v0.1.0)**
 
@@ -29,9 +29,7 @@ It is a **developer-side deployment tool** for managing and pushing secrets safe
 
 ## Why cred exists
 
-Managing secrets across projects, targets, and sources is a mess.
-
-Every platform has different rules for how it parses `.env`, how it handles multiline secrets, and how you upload them. Debugging why something worked locally but broke in CI/CD is tedious and error-prone.
+Managing secrets across projects, targets, and sources is a mess and a chore.
 
 `cred` solves this by giving you:
 
@@ -246,3 +244,12 @@ Global configuration lives at:
 ```
 ~/.config/cred/global.toml
 ```
+
+## License
+
+Licensed under either of:
+
+- Apache License, Version 2.0 ([LICENSE-APACHE](LICENSE-APACHE) or http://www.apache.org/licenses/LICENSE-2.0)
+- MIT License ([LICENSE-MIT](LICENSE-MIT) or http://opensource.org/licenses/MIT)
+
+at your choice.
