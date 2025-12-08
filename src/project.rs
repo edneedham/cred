@@ -60,6 +60,18 @@ impl Project {
     }
 
     pub fn get_master_key(&self) -> Result<[u8; 32]> {
+        // Check for key in env for CI and testing
+        if let Ok(b64) = std::env::var("CRED_MASTER_KEY_B64") {
+            let bytes = base64::engine::general_purpose::STANDARD
+                .decode(b64.trim())
+                .context("Invalid base64 in CRED_MASTER_KEY_B64")?;
+            if bytes.len() != 32 {
+                anyhow::bail!("CRED_MASTER_KEY_B64 must decode to 32 bytes");
+            }
+            let mut key = [0u8; 32];
+            key.copy_from_slice(&bytes);
+            return Ok(key);
+        }
         let config = self.load_config()?;
         let project_id = config.id.ok_or_else(|| anyhow::anyhow!("Project ID missing in project.toml"))?;
         let entry = Entry::new("cred-cli", &project_id.to_string())?;
@@ -89,7 +101,7 @@ pub fn init() -> Result<()> {
     init_at(&current_dir)
 }
 
-pub(crate) fn init_at(root: &Path) -> Result<()> {
+pub fn init_at(root: &Path) -> Result<()> {
     let cred_dir = root.join(".cred");
     if cred_dir.exists() {
         bail!("Cred is already initialized here: {}", cred_dir.display());
@@ -172,7 +184,7 @@ fn normalize_github_remote(remote: &str) -> Option<String> {
 
 pub fn detect_git(base: Option<&Path>) -> Option<GitInfo> {
     let base_dir = base.unwrap_or_else(|| Path::new("."));
-    let root = Command::new("git")
+    let root_raw = Command::new("git")
         .args(["rev-parse", "--show-toplevel"])
         .current_dir(base_dir)
         .output()
@@ -182,6 +194,12 @@ pub fn detect_git(base: Option<&Path>) -> Option<GitInfo> {
             let s = String::from_utf8_lossy(&o.stdout).trim().to_string();
             if s.is_empty() { None } else { Some(s) }
         })?;
+    // Canonicalize to avoid platform-specific symlink prefixes (e.g., /private on macOS temp dirs)
+    let root = PathBuf::from(&root_raw)
+        .canonicalize()
+        .unwrap_or_else(|_| PathBuf::from(root_raw))
+        .to_string_lossy()
+        .to_string();
 
     let remote_opt = Command::new("git")
         .args(["config", "--get", "remote.origin.url"])

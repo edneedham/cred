@@ -6,6 +6,10 @@ use anyhow::{Context, Result};
 use toml::Value;
 use keyring::Entry;
 use rand::RngCore;
+use std::sync::OnceLock;
+use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
+use chacha20poly1305::{aead::{Aead, KeyInit}, ChaCha20Poly1305, Key, Nonce};
+use rand::Rng;
 
 #[derive(Serialize, Deserialize, Debug, Default)]
 pub struct CredMeta {
@@ -258,8 +262,7 @@ pub fn set_target_token(target: &str, token: &str) -> Result<()> {
     let toml_string = toml::to_string_pretty(&config)?;
     fs::write(&config_path, toml_string)?;
 
-    let entry = Entry::new("cred-target", &auth_ref)?;
-    entry.set_password(token)?;
+    keystore_set(&auth_ref, token)?;
     Ok(())
 }
 
@@ -269,19 +272,14 @@ pub fn get_target_token(target: &str) -> Result<Option<String>> {
         Some(r) => r.clone(),
         None => return Ok(None),
     };
-    let entry = Entry::new("cred-target", &auth_ref)?;
-    match entry.get_password() {
-        Ok(pw) => Ok(Some(pw)),
-        Err(_) => Ok(None),
-    }
+    keystore_get(&auth_ref)
 }
 
 pub fn remove_target_token(target: &str) -> Result<()> {
     let mut config = load()?;
     if let Some(tcfg) = config.targets.remove(target) {
         if let Some(auth_ref) = tcfg.auth_ref {
-            let entry = Entry::new("cred-target", &auth_ref)?;
-            let _ = entry.set_password("");
+            keystore_remove(&auth_ref)?;
         }
         let config_path = ensure_global_config_exists()?;
         let toml_string = toml::to_string_pretty(&config)?;
@@ -290,5 +288,176 @@ pub fn remove_target_token(target: &str) -> Result<()> {
     } else {
         println!("Target '{}' was not configured.", target);
     }
+    Ok(())
+}
+
+// ---------- Keystore backends ----------
+
+enum KeystoreBackend {
+    Memory,
+    File { path: PathBuf, key: [u8; 32] },
+    Keyring,
+}
+
+fn resolve_keystore() -> KeystoreBackend {
+    match std::env::var("CRED_KEYSTORE").as_deref() {
+        Ok("memory") => KeystoreBackend::Memory,
+        Ok("file") => {
+            let path = std::env::var("CRED_KEYSTORE_FILE")
+                .map(PathBuf::from)
+                .unwrap_or_else(|_| {
+                    resolve_config_dir()
+                        .unwrap_or_else(|_| PathBuf::from("."))
+                        .join("keystore.enc")
+                });
+            let key_b64 = std::env::var("CRED_KEYSTORE_FILE_KEY")
+                .expect("CRED_KEYSTORE_FILE_KEY (base64 32 bytes) required for file keystore");
+            let key_raw = BASE64.decode(key_b64).expect("Invalid base64 in CRED_KEYSTORE_FILE_KEY");
+            assert!(key_raw.len() == 32, "CRED_KEYSTORE_FILE_KEY must be 32 bytes");
+            let mut key = [0u8; 32];
+            key.copy_from_slice(&key_raw);
+            KeystoreBackend::File { path, key }
+        }
+        _ => KeystoreBackend::Keyring,
+    }
+}
+
+static MEMORY_KEYSTORE: OnceLock<std::sync::Mutex<HashMap<String, String>>> = OnceLock::new();
+
+fn keystore_set(auth_ref: &str, token: &str) -> Result<()> {
+    match resolve_keystore() {
+        KeystoreBackend::Memory => {
+            let store = MEMORY_KEYSTORE.get_or_init(|| std::sync::Mutex::new(HashMap::new()));
+            let mut guard = store.lock().unwrap();
+            guard.insert(auth_ref.to_string(), token.to_string());
+            Ok(())
+        }
+        KeystoreBackend::File { path, key } => keystore_file_write(&path, &key, auth_ref, token),
+        KeystoreBackend::Keyring => {
+            let entry = Entry::new("cred-target", auth_ref)?;
+            entry.set_password(token)?;
+            Ok(())
+        }
+    }
+}
+
+fn keystore_get(auth_ref: &str) -> Result<Option<String>> {
+    match resolve_keystore() {
+        KeystoreBackend::Memory => {
+            let store = MEMORY_KEYSTORE.get_or_init(|| std::sync::Mutex::new(HashMap::new()));
+            let guard = store.lock().unwrap();
+            Ok(guard.get(auth_ref).cloned())
+        }
+        KeystoreBackend::File { path, key } => keystore_file_read(&path, &key, auth_ref),
+        KeystoreBackend::Keyring => {
+            let entry = Entry::new("cred-target", auth_ref)?;
+            match entry.get_password() {
+                Ok(pw) => Ok(Some(pw)),
+                Err(_) => Ok(None),
+            }
+        }
+    }
+}
+
+fn keystore_remove(auth_ref: &str) -> Result<()> {
+    match resolve_keystore() {
+        KeystoreBackend::Memory => {
+            let store = MEMORY_KEYSTORE.get_or_init(|| std::sync::Mutex::new(HashMap::new()));
+            let mut guard = store.lock().unwrap();
+            guard.remove(auth_ref);
+            Ok(())
+        }
+        KeystoreBackend::File { path, key } => {
+            keystore_file_delete(&path, &key, auth_ref)?;
+            Ok(())
+        }
+        KeystoreBackend::Keyring => {
+            let entry = Entry::new("cred-target", auth_ref)?;
+            let _ = entry.set_password("");
+            Ok(())
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize)]
+struct EncKeystore {
+    nonce: String,
+    ciphertext: String,
+}
+
+fn keystore_file_read(path: &Path, key: &[u8; 32], auth_ref: &str) -> Result<Option<String>> {
+    if !path.exists() {
+        return Ok(None);
+    }
+    let raw = fs::read(path)?;
+    let enc: EncKeystore = serde_json::from_slice(&raw)?;
+    let nonce_bytes = BASE64.decode(enc.nonce)?;
+    let cipher_bytes = BASE64.decode(enc.ciphertext)?;
+    let cipher = ChaCha20Poly1305::new(Key::from_slice(key));
+    if nonce_bytes.len() != 12 {
+        anyhow::bail!("Invalid nonce length in keystore");
+    }
+    let nonce = Nonce::from_slice(&nonce_bytes);
+    let plaintext = cipher
+        .decrypt(nonce, cipher_bytes.as_ref())
+        .map_err(|e| anyhow::anyhow!("Failed to decrypt keystore: {}", e))?;
+    let mut map: HashMap<String, String> = serde_json::from_slice(&plaintext)?;
+    Ok(map.remove(auth_ref))
+}
+
+fn keystore_file_write(path: &Path, key: &[u8; 32], auth_ref: &str, token: &str) -> Result<()> {
+    let mut map = if path.exists() {
+        keystore_file_load_all(path, key)?
+    } else {
+        HashMap::new()
+    };
+    map.insert(auth_ref.to_string(), token.to_string());
+    keystore_file_save_all(path, key, &map)
+}
+
+fn keystore_file_delete(path: &Path, key: &[u8; 32], auth_ref: &str) -> Result<()> {
+    if !path.exists() {
+        return Ok(());
+    }
+    let mut map = keystore_file_load_all(path, key)?;
+    map.remove(auth_ref);
+    keystore_file_save_all(path, key, &map)
+}
+
+fn keystore_file_load_all(path: &Path, key: &[u8; 32]) -> Result<HashMap<String, String>> {
+    let raw = fs::read(path)?;
+    let enc: EncKeystore = serde_json::from_slice(&raw)?;
+    let nonce_bytes = BASE64.decode(enc.nonce)?;
+    let cipher_bytes = BASE64.decode(enc.ciphertext)?;
+    let cipher = ChaCha20Poly1305::new(Key::from_slice(key));
+    if nonce_bytes.len() != 12 {
+        anyhow::bail!("Invalid nonce length in keystore");
+    }
+    let nonce = Nonce::from_slice(&nonce_bytes);
+    let plaintext = cipher
+        .decrypt(nonce, cipher_bytes.as_ref())
+        .map_err(|e| anyhow::anyhow!("Failed to decrypt keystore: {}", e))?;
+    let map: HashMap<String, String> = serde_json::from_slice(&plaintext)?;
+    Ok(map)
+}
+
+fn keystore_file_save_all(path: &Path, key: &[u8; 32], map: &HashMap<String, String>) -> Result<()> {
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    let plaintext = serde_json::to_vec(map)?;
+    let cipher = ChaCha20Poly1305::new(Key::from_slice(key));
+    let mut nonce = [0u8; 12];
+    rand::rng().fill(&mut nonce);
+    let nonce_ga = Nonce::from_slice(&nonce);
+    let ciphertext = cipher
+        .encrypt(nonce_ga, plaintext.as_ref())
+        .map_err(|e| anyhow::anyhow!("Failed to encrypt keystore: {}", e))?;
+    let enc = EncKeystore {
+        nonce: BASE64.encode(nonce),
+        ciphertext: BASE64.encode(ciphertext),
+    };
+    let data = serde_json::to_vec_pretty(&enc)?;
+    fs::write(path, data)?;
     Ok(())
 }

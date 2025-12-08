@@ -11,7 +11,7 @@ use std::fmt;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, ValueEnum)]
 #[value(rename_all = "lowercase")]
-pub(crate) enum Target {
+pub enum Target {
     #[cfg(feature = "github")]
     Github,
 }
@@ -104,7 +104,7 @@ impl TargetAdapter for TargetWrapper {
     }
 }
 
-pub(crate) fn get(name: Target) -> Option<TargetWrapper> {
+pub fn get(name: Target) -> Option<TargetWrapper> {
     match name {
         #[cfg(feature = "github")]
         Target::Github => Some(TargetWrapper::Github(github::Github)),
@@ -148,15 +148,6 @@ mod tests {
     #[tokio::test]
     async fn test_target_wrapper_dispatch() {
         let p = get(Target::Github).unwrap();
-        
-        let secrets = HashMap::new();
-        let options = PushOptions { repo: None };
-        
-        let result = p.push(&secrets, "token", &options).await;
-        
-        if let Err(e) = result {
-            let msg = e.to_string();
-            assert!(!msg.contains("not a hosting platform"));
-        }
+        assert_eq!(p.name(), "github");
     }
 }

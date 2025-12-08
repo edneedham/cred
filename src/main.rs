@@ -3,8 +3,6 @@ mod config;
 mod project;
 mod targets;
 mod vault;
-#[cfg(test)]
-mod tests;
 
 use clap::Parser;
 use cli::{Cli, Commands, SecretAction, SetTargetArgs};
