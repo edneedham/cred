@@ -87,6 +87,10 @@ pub struct PruneArgs {
     /// Explicit repository (required if not in git for GitHub)
     #[arg(long)]
     pub repo: Option<String>,
+
+    /// Prune all known keys (requires --yes unless dry-run)
+    #[arg(long)]
+    pub all: bool,
 }
 
 #[derive(Subcommand, Debug)]

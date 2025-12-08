@@ -449,11 +449,19 @@ async fn run(cli: Cli, flags: &CliFlags) -> Result<(), AppError> {
         }
 
         Commands::Prune(args) => {
-            require_yes(&flags, "prune")?;
-            if flags.dry_run {
-                print_out(flags, "(dry-run) Prune skipped (no remote mutation).");
-                return Ok(());
+            let ci_force_dry = std::env::var("CI").is_ok() && !flags.yes;
+            let effective_dry = flags.dry_run || ci_force_dry;
+
+            if !effective_dry {
+                require_yes(&flags, "prune")?;
+            } else if ci_force_dry {
+                print_out(flags, "CI detected without --yes; forcing dry-run for prune.");
             }
+
+            if effective_dry {
+                print_out(flags, "(dry-run) Prune skipped (no remote mutation).");
+            }
+
             let target_impl = match targets::get(args.target) {
                 Some(p) => p,
                 None => { print_err(flags, "Error: Unknown target"); return Ok(()); }
@@ -462,10 +470,18 @@ async fn run(cli: Cli, flags: &CliFlags) -> Result<(), AppError> {
             let token = config::get_target_token(&args.target.to_string())?
                 .ok_or_else(|| anyhow::anyhow!("No token for {}", args.target))?;
 
-            let keys_to_prune: Vec<String> = if !args.keys.is_empty() {
+            let proj = project::Project::find()?;
+            let master_key = proj.get_master_key()?;
+            let vault = vault::Vault::load(&proj.vault_path, master_key)?;
+
+            let keys_to_prune: Vec<String> = if args.all {
+                let mut ks: Vec<String> = vault.list().keys().cloned().collect();
+                ks.sort();
+                ks
+            } else if !args.keys.is_empty() {
                 args.keys
             } else {
-                print_err(flags, "Error: Specify keys to prune.");
+                print_err(flags, "Error: Specify keys to prune or use --all.");
                 return Ok(());
             };
 
@@ -518,7 +534,32 @@ async fn run(cli: Cli, flags: &CliFlags) -> Result<(), AppError> {
                 )));
             }
 
-            print_out(flags, &format!("🔌 Deleting from Remote ({}) first...", args.target));
+            if effective_dry {
+                if flags.json {
+                    let mut keys_sorted = keys_to_prune.clone();
+                    keys_sorted.sort();
+                    let payload = serde_json::json!({
+                        "api_version": "1",
+                        "status": "ok",
+                        "data": {
+                            "target": format!("{}", args.target),
+                            "repo": repo,
+                            "will_delete": keys_sorted
+                        }
+                    });
+                    print_json(&payload);
+                } else {
+                    let mut keys_sorted = keys_to_prune.clone();
+                    keys_sorted.sort();
+                    print_out(flags, "(dry-run) Prune skipped (no remote mutation).");
+                    print_out(flags, &format!("Target: {}", args.target));
+                    if let Some(r) = repo.as_ref() { print_out(flags, &format!("Repo: {}", r)); }
+                    print_out(flags, &format!("Will delete: {:?}", keys_sorted));
+                }
+                return Ok(());
+            }
+
+            print_out(flags, &format!("Deleting from Remote ({})...", args.target));
             let options = targets::PushOptions { repo };
             
             // ATOMIC: Remote fail stops local delete
