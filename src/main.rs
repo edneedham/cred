@@ -14,6 +14,7 @@ use rpassword::prompt_password;
 use zeroize::Zeroize;
 use std::process;
 use keyring::Entry;
+use serde_json::Value;
 
 #[tokio::main]
 async fn main() {
@@ -84,6 +85,93 @@ struct AppError {
     error: anyhow::Error,
 }
 
+#[derive(Debug, Clone)]
+struct ProjectStatusData {
+    is_project: bool,
+    project_name: Option<String>,
+    vault_exists: bool,
+    vault_accessible: bool,
+    git_detected: bool,
+    git_root: Option<String>,
+    git_bound: bool,
+    git_remote_current: Option<String>,
+    git_remote_bound: Option<String>,
+    targets_configured: Vec<String>,
+    ready_for_push: bool,
+}
+
+#[cfg(test)]
+mod main_tests {
+    use super::*;
+    use serde_json::Value;
+
+    #[test]
+    fn test_exit_codes_values() {
+        assert_eq!(ExitCode::Ok as i32, 0);
+        assert_eq!(ExitCode::UserError as i32, 1);
+        assert_eq!(ExitCode::NotAuthenticated as i32, 2);
+        assert_eq!(ExitCode::NetworkError as i32, 3);
+        assert_eq!(ExitCode::TargetRejected as i32, 4);
+        assert_eq!(ExitCode::VaultError as i32, 5);
+        assert_eq!(ExitCode::GitError as i32, 6);
+    }
+
+    #[test]
+    fn test_resolve_repo_binding_matches_detected() {
+        let detected = Some("org/repo".to_string());
+        let bound = None;
+        let provided = None;
+        let res = resolve_repo_binding(detected, bound, provided, "push").unwrap();
+        assert_eq!(res, Some("org/repo".to_string()));
+    }
+
+    #[test]
+    fn test_resolve_repo_binding_mismatch_detected() {
+        let detected = Some("org/repo".to_string());
+        let bound = None;
+        let provided = Some("other/repo".to_string());
+        let res = resolve_repo_binding(detected, bound, provided, "push");
+        assert!(res.is_err());
+    }
+
+    #[test]
+    fn test_resolve_repo_binding_mismatch_bound() {
+        let detected = Some("org/repo".to_string());
+        let bound = Some("org/repo".to_string());
+        let provided = Some("other/repo".to_string());
+        let res = resolve_repo_binding(detected, bound, provided, "push");
+        assert!(res.is_err());
+    }
+
+    #[test]
+    fn test_project_status_payload_schema() {
+        let data = ProjectStatusData {
+            is_project: true,
+            project_name: Some("myapp".to_string()),
+            vault_exists: true,
+            vault_accessible: true,
+            git_detected: true,
+            git_root: Some("/path".to_string()),
+            git_bound: true,
+            git_remote_current: Some("org/repo".to_string()),
+            git_remote_bound: Some("org/repo".to_string()),
+            targets_configured: vec!["github".to_string()],
+            ready_for_push: true,
+        };
+        let payload = project_status_payload(&data);
+        if let Value::Object(map) = payload {
+            assert_eq!(map.get("api_version").unwrap(), "1");
+            assert_eq!(map.get("status").unwrap(), "ok");
+            let data_val = map.get("data").unwrap();
+            assert!(data_val.get("is_project").unwrap().as_bool().unwrap());
+            assert_eq!(data_val.get("project_name").unwrap(), "myapp");
+            assert_eq!(data_val.get("git_remote_current").unwrap(), "org/repo");
+        } else {
+            panic!("Payload is not an object");
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy)]
 struct CliFlags {
     json: bool,
@@ -119,6 +207,73 @@ fn print_err(flags: &CliFlags, msg: &str) {
     } else if !flags.json {
         eprintln!("{}", msg);
     }
+}
+
+fn resolve_repo_binding(
+    detected: Option<String>,
+    bound: Option<String>,
+    provided: Option<String>,
+    verb: &str,
+) -> Result<Option<String>, AppError> {
+    if let Some(r) = provided.clone() {
+        if let Some(live) = detected.as_ref() {
+            if live != &r {
+                return Err(AppError::user(anyhow::anyhow!(
+                    "Refusing to {}: provided --repo '{}' does not match detected repo '{}'.",
+                    verb,
+                    r,
+                    live
+                )));
+            }
+        }
+        if let Some(bound_repo) = bound.as_ref() {
+            if bound_repo != &r {
+                return Err(AppError::git(anyhow::anyhow!(
+                    "Refusing to {}: provided --repo '{}' does not match bound repo '{}'.",
+                    verb,
+                    r,
+                    bound_repo
+                )));
+            }
+        }
+        return Ok(Some(r));
+    }
+
+    if let Some(live) = detected.clone() {
+        if let Some(bound_repo) = bound.as_ref() {
+            if bound_repo != &live {
+                return Err(AppError::git(anyhow::anyhow!(
+                    "Refusing to {}: detected repo '{}' does not match bound repo '{}'.",
+                    verb,
+                    live,
+                    bound_repo
+                )));
+            }
+        }
+        return Ok(Some(live));
+    }
+
+    Ok(bound)
+}
+
+fn project_status_payload(data: &ProjectStatusData) -> Value {
+    serde_json::json!({
+        "api_version": "1",
+        "status": "ok",
+        "data": {
+            "is_project": data.is_project,
+            "project_name": data.project_name,
+            "vault_exists": data.vault_exists,
+            "vault_accessible": data.vault_accessible,
+            "git_detected": data.git_detected,
+            "git_root": data.git_root,
+            "git_bound": data.git_bound,
+            "git_remote_current": data.git_remote_current,
+            "git_remote_bound": data.git_remote_bound,
+            "targets_configured": data.targets_configured,
+            "ready_for_push": data.ready_for_push
+        }
+    })
 }
 
 impl AppError {
@@ -327,44 +482,12 @@ async fn run(cli: Cli, flags: &CliFlags) -> Result<(), AppError> {
             let master_key = proj.get_master_key()?;
             let vault = vault::Vault::load(&proj.vault_path, master_key)?;
 
-            let repo = match args.repo.clone() {
-                Some(r) => {
-                    if let Some(live) = git_info.as_ref().and_then(|g| g.repo_slug.clone()) {
-                        if live != r {
-                            return Err(AppError::user(anyhow::anyhow!(
-                                "Refusing to push: provided --repo '{}' does not match detected repo '{}'.",
-                                r, live
-                            )));
-                        }
-                    }
-                    if let Some(bound) = bound_repo {
-                        if bound != r {
-                            return Err(AppError::git(anyhow::anyhow!(
-                                "Refusing to push: provided --repo '{}' does not match bound repo '{}'.",
-                                r, bound
-                            )));
-                        }
-                    }
-                    Some(r)
-                }
-                None => {
-                    if let Some(live) = git_info.and_then(|g| g.repo_slug) {
-                        if let Some(bound) = bound_repo.clone() {
-                            if bound != live {
-                                return Err(AppError::git(anyhow::anyhow!(
-                                    "Refusing to push: detected repo '{}' does not match bound repo '{}'.",
-                                    live, bound
-                                )));
-                            }
-                        }
-                        Some(live)
-                    } else if let Some(bound) = bound_repo {
-                        Some(bound)
-                    } else {
-                        None
-                    }
-                },
-            };
+            let repo = resolve_repo_binding(
+                git_info.and_then(|g| g.repo_slug),
+                bound_repo,
+                args.repo.clone(),
+                "push"
+            )?;
 
             if matches!(args.target, targets::Target::Github) && repo.is_none() {
                 return Err(AppError::git(anyhow::anyhow!(
@@ -489,44 +612,12 @@ async fn run(cli: Cli, flags: &CliFlags) -> Result<(), AppError> {
 
             let git_info = project::detect_git(None);
             let bound_repo = project::Project::find().ok().and_then(|p| p.load_config().ok()).and_then(|c| c.git_repo);
-            let repo = match args.repo.clone() {
-                Some(r) => {
-                    if let Some(live) = git_info.as_ref().and_then(|g| g.repo_slug.clone()) {
-                        if live != r {
-                            return Err(AppError::user(anyhow::anyhow!(
-                                "Refusing to prune: provided --repo '{}' does not match detected repo '{}'.",
-                                r, live
-                            )));
-                        }
-                    }
-                    if let Some(bound) = bound_repo {
-                        if bound != r {
-                            return Err(AppError::git(anyhow::anyhow!(
-                                "Refusing to prune: provided --repo '{}' does not match bound repo '{}'.",
-                                r, bound
-                            )));
-                        }
-                    }
-                    Some(r)
-                }
-                None => {
-                    if let Some(live) = git_info.and_then(|g| g.repo_slug) {
-                        if let Some(bound) = bound_repo.clone() {
-                            if bound != live {
-                                return Err(AppError::git(anyhow::anyhow!(
-                                    "Refusing to prune: detected repo '{}' does not match bound repo '{}'.",
-                                    live, bound
-                                )));
-                            }
-                        }
-                        Some(live)
-                    } else if let Some(bound) = bound_repo {
-                        Some(bound)
-                    } else {
-                        None
-                    }
-                },
-            };
+            let repo = resolve_repo_binding(
+                git_info.and_then(|g| g.repo_slug),
+                bound_repo,
+                args.repo.clone(),
+                "prune"
+            )?;
 
             if matches!(args.target, targets::Target::Github) && repo.is_none() {
                 return Err(AppError::git(anyhow::anyhow!(
@@ -677,24 +768,21 @@ async fn run(cli: Cli, flags: &CliFlags) -> Result<(), AppError> {
                     }
 
                     if flags.json {
-                        let payload = serde_json::json!({
-                            "api_version": "1",
-                            "status": "ok",
-                            "data": {
-                                "is_project": is_project,
-                                "project_name": project_name,
-                                "vault_exists": vault_exists,
-                                "vault_accessible": vault_accessible,
-                                "git_detected": git_detected,
-                                "git_root": git_root,
-                                "git_bound": git_bound,
-                                "git_remote_current": git_remote_current,
-                                "git_remote_bound": git_remote_bound,
-                                "targets_configured": targets_configured,
-                                "ready_for_push": ready_for_push
-                            }
-                        });
-                        println!("{}", serde_json::to_string(&payload).unwrap_or_default());
+                        let data = ProjectStatusData {
+                            is_project,
+                            project_name,
+                            vault_exists,
+                            vault_accessible,
+                            git_detected,
+                            git_root,
+                            git_bound,
+                            git_remote_current,
+                            git_remote_bound,
+                            targets_configured,
+                            ready_for_push,
+                        };
+                        let payload = project_status_payload(&data);
+                        print_json(&payload);
                     } else {
                         println!("Project status:");
                         println!("  is_project: {}", is_project);

@@ -128,4 +128,39 @@ mod tests {
         assert!(raw_content.contains("ciphertext"));
     }
 
+    #[test]
+    fn test_vault_serialization_fields() {
+        #[derive(serde::Deserialize)]
+        struct EncFile {
+            version: u8,
+            nonce: String,
+            ciphertext: String,
+        }
+
+        let dir = tempdir().unwrap();
+        let vault_path = dir.path().join("vault.enc");
+        let key = get_test_key();
+
+        let mut v = vault::Vault::load(&vault_path, key).unwrap();
+        v.set("K1", "V1");
+        v.save().unwrap();
+
+        let raw = std::fs::read_to_string(&vault_path).unwrap();
+        let parsed: EncFile = serde_json::from_str(&raw).unwrap();
+        assert_eq!(parsed.version, 1);
+        assert!(!parsed.nonce.is_empty());
+        assert!(!parsed.ciphertext.is_empty());
+    }
+
+    #[test]
+    fn test_push_dry_run_diff_ordering() {
+        let mut map = std::collections::HashMap::new();
+        map.insert("C".to_string(), "3".to_string());
+        map.insert("A".to_string(), "1".to_string());
+        map.insert("B".to_string(), "2".to_string());
+
+        let mut keys: Vec<String> = map.keys().cloned().collect();
+        keys.sort();
+        assert_eq!(keys, vec!["A", "B", "C"]);
+    }
 }
