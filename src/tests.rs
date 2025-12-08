@@ -5,6 +5,7 @@ mod tests {
     use std::fs;
     use std::process::Command;
     use rand::RngCore;
+    use std::env;
 
     fn get_test_key() -> [u8; 32] {
         let mut key = [0u8; 32];
@@ -202,5 +203,37 @@ mod tests {
         let mut keys: Vec<String> = map.keys().cloned().collect();
         keys.sort();
         assert_eq!(keys, vec!["A", "B", "C"]);
+    }
+
+    #[test]
+    fn test_non_interactive_requires_token_and_json_error() {
+        // Simulate running the binary with --non-interactive and --json without token configured
+        let dir = tempdir().unwrap();
+        let bin_path = env::current_exe().unwrap(); // assumes tests run with built binary path
+
+        // ensure no global config in temp home
+        let home = dir.path().join("home");
+        fs::create_dir_all(&home).unwrap();
+        // Safe to override for subprocess scope
+        unsafe {
+            std::env::set_var("HOME", &home);
+            std::env::set_var("XDG_CONFIG_HOME", home.join(".config"));
+        }
+
+        let output = Command::new(bin_path)
+            .arg("push")
+            .arg("github")
+            .arg("--non-interactive")
+            .arg("--json")
+            .current_dir(dir.path())
+            .output()
+            .expect("failed to run cred binary");
+
+        assert!(!output.status.success());
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        // JSON error should be on stdout
+        let combined = format!("{}{}", stdout, stderr);
+        assert!(combined.contains("\"status\":\"error\"") || combined.contains("\"status\": \"error\""));
     }
 }
