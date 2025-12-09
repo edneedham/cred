@@ -268,7 +268,6 @@ pub fn resolve_repo_binding(
 }
 
 /// Build the JSON payload for `project status`.
-/// Build the JSON payload for `project status`.
 pub fn project_status_payload(data: &ProjectStatusData) -> serde_json::Value {
     serde_json::json!({
         "api_version": "1",

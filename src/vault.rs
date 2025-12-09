@@ -1,5 +1,4 @@
 //! Encrypted local vault (secrets at rest) using ChaCha20-Poly1305 and base64 serialization.
-
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;

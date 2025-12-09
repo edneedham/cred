@@ -15,7 +15,7 @@ mod tests {
         key
     }
 
-    /// Minimal init happy-path: ensures `.cred/` scaffolding appears.
+    // Minimal init happy-path: ensures `.cred/` scaffolding appears.
     #[test]
     fn test_project_init_creates_expected_files() {
         let dir = tempdir().unwrap();
@@ -53,7 +53,7 @@ mod tests {
         assert!(content.contains(".cred/"));
     }
 
-    /// Records git origin into project config when present (repo binding behavior).
+    // Records git origin into project config when present (repo binding behavior).
     #[test]
     fn test_git_binding_present() {
         let dir = tempdir().unwrap();
@@ -75,7 +75,7 @@ mod tests {
         assert_eq!(cfg.git_root, Some(root.to_path_buf().to_string_lossy().to_string()));
     }
 
-    /// When no git, binding fields stay empty (no false positives).
+    // When no git, binding fields stay empty (no false positives).
     #[test]
     fn test_git_binding_absent() {
         let dir = tempdir().unwrap();
@@ -106,7 +106,7 @@ mod tests {
         assert!(content.contains("[targets]"));
     }
 
-    /// Round-trip encryption/decryption: persisted vault reloads exact plaintext values.
+    // Round-trip encryption/decryption: persisted vault reloads exact plaintext values.
     #[test]
     fn test_vault_persistence() {
         let dir = tempdir().unwrap();
@@ -126,7 +126,7 @@ mod tests {
         assert_eq!(v2.get("DB_PASS"), Some(&"secret".to_string()));
     }
 
-    /// Vault removes entries and leaves no ghost values behind.
+    // Vault removes entries and leaves no ghost values behind.
     #[test]
     fn test_vault_removal() {
         let dir = tempdir().unwrap();
@@ -144,7 +144,7 @@ mod tests {
         assert_eq!(v.remove("GHOST"), None);
     }
 
-    /// Listing surfaces all keys present in memory (baseline invariant).
+    // Listing surfaces all keys present in memory (baseline invariant).
     #[test]
     fn test_vault_listing() {
         let dir = tempdir().unwrap();
@@ -161,7 +161,7 @@ mod tests {
         assert!(list.contains_key("B"));
     }
 
-    /// Never writes plaintext to disk: ciphertext blob must not contain secret values.
+    // Never writes plaintext to disk: ciphertext blob must not contain secret values.
     #[test]
     fn test_vault_encryption_actually_works() {
         let dir = tempdir().unwrap();
@@ -178,7 +178,7 @@ mod tests {
         assert!(raw_content.contains("ciphertext"));
     }
 
-    /// Serialized vault carries required fields (version/nonce/ciphertext) for compatibility.
+    // Serialized vault carries required fields (version/nonce/ciphertext) for compatibility.
     #[test]
     fn test_vault_serialization_fields() {
         #[derive(serde::Deserialize)]
@@ -203,7 +203,7 @@ mod tests {
         assert!(!parsed.ciphertext.is_empty());
     }
 
-    /// Dry-run ordering: diff/plans are deterministic and sorted.
+    // Dry-run ordering: diff/plans are deterministic and sorted.
     #[test]
     fn test_push_dry_run_diff_ordering() {
         let mut map = std::collections::HashMap::new();
@@ -224,7 +224,7 @@ mod tests {
         fn name(&self) -> &str { "mock" }
     }
 
-    /// Push plan matches actual push keys even with ordering differences (dry-run invariant).
+    // Push plan matches actual push keys even with ordering differences (dry-run invariant).
     #[test]
     fn test_dry_run_plan_matches_actual_push_keys() {
         let mut secrets = std::collections::HashMap::new();
@@ -247,7 +247,7 @@ mod tests {
         assert_eq!(plan_keys, seen);
     }
 
-    /// Failure mode: non-interactive without token must emit JSON error and fail.
+    // Failure mode: non-interactive without token must emit JSON error and fail.
     #[test]
     fn test_non_interactive_requires_token_and_json_error() {
         // Simulate running the binary with --non-interactive and --json without token configured
@@ -280,7 +280,7 @@ mod tests {
         assert!(combined.contains("\"status\":\"error\"") || combined.contains("\"status\": \"error\""));
     }
 
-    /// Regression guard: corrupted vault file should surface a JSON error, not panic.
+    // Regression guard: corrupted vault file should surface a JSON error, not panic.
     #[test]
     fn test_vault_corruption_handled_gracefully() {
         let dir = tempdir().unwrap();
@@ -317,7 +317,7 @@ mod tests {
         assert!(combined.contains("\"status\":\"error\"") || combined.contains("\"status\": \"error\""));
     }
 
-    /// End-to-end determinism: `secret list --json` output is stable across runs.
+    // End-to-end determinism: `secret list --json` output is stable across runs.
     #[test]
     fn test_secret_list_json_is_deterministic() {
         let dir = tempdir().unwrap();
