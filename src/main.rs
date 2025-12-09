@@ -1,3 +1,5 @@
+//! cred CLI entrypoint and command dispatcher.
+//! Parses args, routes to subcommands, and handles uniform error/exit code reporting.
 mod cli;
 mod config;
 mod project;
@@ -12,9 +14,10 @@ use rpassword::prompt_password;
 use zeroize::Zeroize;
 use std::process;
 use keyring::Entry;
-use serde_json::Value;
+use project::{ProjectStatusData, resolve_repo_binding, RepoBindingErrorKind};
 
 #[tokio::main]
+/// Tokio runtime entrypoint; parses CLI and normalizes exit codes/JSON errors.
 async fn main() {
     let cli = Cli::parse();
     let no_color_env = std::env::var("NO_COLOR").is_ok();
@@ -67,6 +70,7 @@ fn require_yes(flags: &CliFlags, action: &str) -> Result<(), AppError> {
 #[allow(dead_code)]
 #[derive(Debug, Copy, Clone)]
 #[repr(i32)]
+/// Stable process exit codes surfaced to users (and JSON consumers).
 enum ExitCode {
     Ok = 0,
     UserError = 1,
@@ -78,108 +82,16 @@ enum ExitCode {
 }
 
 #[derive(Debug)]
+/// Error wrapper carrying both an exit code and the underlying error.
 struct AppError {
     code: ExitCode,
     error: anyhow::Error,
 }
 
-#[derive(Debug, Clone)]
-struct ProjectStatusData {
-    is_project: bool,
-    project_name: Option<String>,
-    vault_exists: bool,
-    vault_accessible: bool,
-    git_detected: bool,
-    git_root: Option<String>,
-    git_bound: bool,
-    git_remote_current: Option<String>,
-    git_remote_bound: Option<String>,
-    targets_configured: Vec<String>,
-    ready_for_push: bool,
-}
 
-#[cfg(test)]
-mod main_tests {
-    use super::*;
-    use serde_json::Value;
-
-    #[test]
-    fn test_exit_codes_values() {
-        assert_eq!(ExitCode::Ok as i32, 0);
-        assert_eq!(ExitCode::UserError as i32, 1);
-        assert_eq!(ExitCode::NotAuthenticated as i32, 2);
-        assert_eq!(ExitCode::NetworkError as i32, 3);
-        assert_eq!(ExitCode::TargetRejected as i32, 4);
-        assert_eq!(ExitCode::VaultError as i32, 5);
-        assert_eq!(ExitCode::GitError as i32, 6);
-    }
-
-    #[test]
-    fn test_resolve_repo_binding_matches_detected() {
-        let detected = Some("org/repo".to_string());
-        let bound = None;
-        let provided = None;
-        let res = resolve_repo_binding(detected, bound, provided, "push").unwrap();
-        assert_eq!(res, Some("org/repo".to_string()));
-    }
-
-    #[test]
-    fn test_resolve_repo_binding_mismatch_detected() {
-        let detected = Some("org/repo".to_string());
-        let bound = None;
-        let provided = Some("other/repo".to_string());
-        let res = resolve_repo_binding(detected, bound, provided, "push");
-        assert!(res.is_err());
-    }
-
-    #[test]
-    fn test_resolve_repo_binding_mismatch_bound() {
-        let detected = Some("org/repo".to_string());
-        let bound = Some("org/repo".to_string());
-        let provided = Some("other/repo".to_string());
-        let res = resolve_repo_binding(detected, bound, provided, "push");
-        assert!(res.is_err());
-    }
-
-    #[test]
-    fn test_resolve_repo_binding_mismatch_detected_vs_bound() {
-        let detected = Some("org/repoB".to_string());
-        let bound = Some("org/repoA".to_string());
-        let provided = None;
-        let res = resolve_repo_binding(detected, bound, provided, "push");
-        assert!(res.is_err());
-    }
-
-    #[test]
-    fn test_project_status_payload_schema() {
-        let data = ProjectStatusData {
-            is_project: true,
-            project_name: Some("myapp".to_string()),
-            vault_exists: true,
-            vault_accessible: true,
-            git_detected: true,
-            git_root: Some("/path".to_string()),
-            git_bound: true,
-            git_remote_current: Some("org/repo".to_string()),
-            git_remote_bound: Some("org/repo".to_string()),
-            targets_configured: vec!["github".to_string()],
-            ready_for_push: true,
-        };
-        let payload = project_status_payload(&data);
-        if let Value::Object(map) = payload {
-            assert_eq!(map.get("api_version").unwrap(), "1");
-            assert_eq!(map.get("status").unwrap(), "ok");
-            let data_val = map.get("data").unwrap();
-            assert!(data_val.get("is_project").unwrap().as_bool().unwrap());
-            assert_eq!(data_val.get("project_name").unwrap(), "myapp");
-            assert_eq!(data_val.get("git_remote_current").unwrap(), "org/repo");
-        } else {
-            panic!("Payload is not an object");
-        }
-    }
-}
 
 #[derive(Debug, Clone, Copy)]
+/// Global switches derived from CLI flags/env that affect output and prompts.
 struct CliFlags {
     json: bool,
     non_interactive: bool,
@@ -216,73 +128,6 @@ fn print_err(flags: &CliFlags, msg: &str) {
     }
 }
 
-fn resolve_repo_binding(
-    detected: Option<String>,
-    bound: Option<String>,
-    provided: Option<String>,
-    verb: &str,
-) -> Result<Option<String>, AppError> {
-    if let Some(r) = provided.clone() {
-        if let Some(live) = detected.as_ref() {
-            if live != &r {
-                return Err(AppError::user(anyhow::anyhow!(
-                    "Refusing to {}: provided --repo '{}' does not match detected repo '{}'.",
-                    verb,
-                    r,
-                    live
-                )));
-            }
-        }
-        if let Some(bound_repo) = bound.as_ref() {
-            if bound_repo != &r {
-                return Err(AppError::git(anyhow::anyhow!(
-                    "Refusing to {}: provided --repo '{}' does not match bound repo '{}'.",
-                    verb,
-                    r,
-                    bound_repo
-                )));
-            }
-        }
-        return Ok(Some(r));
-    }
-
-    if let Some(live) = detected.clone() {
-        if let Some(bound_repo) = bound.as_ref() {
-            if bound_repo != &live {
-                return Err(AppError::git(anyhow::anyhow!(
-                    "Refusing to {}: detected repo '{}' does not match bound repo '{}'.",
-                    verb,
-                    live,
-                    bound_repo
-                )));
-            }
-        }
-        return Ok(Some(live));
-    }
-
-    Ok(bound)
-}
-
-fn project_status_payload(data: &ProjectStatusData) -> Value {
-    serde_json::json!({
-        "api_version": "1",
-        "status": "ok",
-        "data": {
-            "is_project": data.is_project,
-            "project_name": data.project_name,
-            "vault_exists": data.vault_exists,
-            "vault_accessible": data.vault_accessible,
-            "git_detected": data.git_detected,
-            "git_root": data.git_root,
-            "git_bound": data.git_bound,
-            "git_remote_current": data.git_remote_current,
-            "git_remote_bound": data.git_remote_bound,
-            "targets_configured": data.targets_configured,
-            "ready_for_push": data.ready_for_push
-        }
-    })
-}
-
 impl AppError {
     fn new(code: ExitCode, error: anyhow::Error) -> Self { Self { code, error } }
     fn user(error: anyhow::Error) -> Self { Self::new(ExitCode::UserError, error) }
@@ -301,6 +146,7 @@ impl From<anyhow::Error> for AppError {
     }
 }
 
+/// Core dispatcher for all subcommands.
 async fn run(cli: Cli, flags: &CliFlags) -> Result<(), AppError> {
 
     match cli.command {
@@ -494,7 +340,11 @@ async fn run(cli: Cli, flags: &CliFlags) -> Result<(), AppError> {
                 bound_repo,
                 args.repo.clone(),
                 "push"
-            )?;
+            )
+            .map_err(|e| match e.kind {
+                RepoBindingErrorKind::User => AppError::user(e.error),
+                RepoBindingErrorKind::Git => AppError::git(e.error),
+            })?;
 
             if matches!(args.target, targets::Target::Github) && repo.is_none() {
                 return Err(AppError::git(anyhow::anyhow!(
@@ -624,7 +474,11 @@ async fn run(cli: Cli, flags: &CliFlags) -> Result<(), AppError> {
                 bound_repo,
                 args.repo.clone(),
                 "prune"
-            )?;
+            )
+            .map_err(|e| match e.kind {
+                RepoBindingErrorKind::User => AppError::user(e.error),
+                RepoBindingErrorKind::Git => AppError::git(e.error),
+            })?;
 
             if matches!(args.target, targets::Target::Github) && repo.is_none() {
                 return Err(AppError::git(anyhow::anyhow!(
@@ -788,7 +642,7 @@ async fn run(cli: Cli, flags: &CliFlags) -> Result<(), AppError> {
                             targets_configured,
                             ready_for_push,
                         };
-                        let payload = project_status_payload(&data);
+                        let payload = project::project_status_payload(&data);
                         print_json(&payload);
                     } else {
                         println!("Project status:");
@@ -872,6 +726,7 @@ async fn run(cli: Cli, flags: &CliFlags) -> Result<(), AppError> {
     Ok(())
 }
 
+/// Prompt for a token if missing, enforcing non-interactive constraints and non-empty input.
 fn read_token_securely(maybe_token: Option<String>, flags: &CliFlags) -> Result<String, AppError> {
     match maybe_token {
         Some(token) => Ok(token),
@@ -894,6 +749,7 @@ fn read_token_securely(maybe_token: Option<String>, flags: &CliFlags) -> Result<
     }
 }
 
+/// Handle `target set`, persisting the token securely and zeroizing it afterward.
 fn handle_target_set(args: SetTargetArgs, flags: &CliFlags) -> Result<(), AppError> {
     let mut token = read_token_securely(args.token, flags)?;
 
@@ -902,4 +758,20 @@ fn handle_target_set(args: SetTargetArgs, flags: &CliFlags) -> Result<(), AppErr
 
     token.zeroize();
     Ok(())
+}
+
+#[cfg(test)]
+mod main_tests {
+    use super::*;
+
+    #[test]
+    fn test_exit_codes_values() {
+        assert_eq!(ExitCode::Ok as i32, 0);
+        assert_eq!(ExitCode::UserError as i32, 1);
+        assert_eq!(ExitCode::NotAuthenticated as i32, 2);
+        assert_eq!(ExitCode::NetworkError as i32, 3);
+        assert_eq!(ExitCode::TargetRejected as i32, 4);
+        assert_eq!(ExitCode::VaultError as i32, 5);
+        assert_eq!(ExitCode::GitError as i32, 6);
+    }
 }
