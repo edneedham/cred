@@ -2,7 +2,7 @@
 
 ## What it is
 
-`cred` stores encrypted secrets locally and safely syncs them to CI/CD platforms on demand.
+`cred` stores encrypted secrets locally and safely pushes them to CI/CD platforms on demand.
 
 ⚠️ **Status: Early Preview (v0.1.0)**
 
@@ -47,7 +47,7 @@ You manage secrets locally, but `cred` can upload them to specified targets.
 
 #### Supported targets:
 
-- GitHub Actions (repository secrets)
+- GitHub (repository secrets)
 - Vercel (planned)
 - Fly.io (planned)
 - AWS / Azure (future)
@@ -72,155 +72,235 @@ cred --version
 
 ## Usage
 
-### Initialize a new project
+It follows a simple workflow:
 
-```bash
-cred init
-```
+- Initialize a project
 
--   Creates `.cred/`, `project.toml`, `vault.enc`, and registers a project ID in your OS keychain.
--   If run inside a git repo, records `git_root` and normalized `git_repo` (`owner/name`) for safety checks.
--   If not in git, init still succeeds but will warn you; later GitHub push/prune requires `--repo owner/name`.
+- Add a target
 
-### Global target authentication
+- Store secrets locally
 
-Set a token (GitHub v0.1.0):
+- Push secrets to the target
 
-```bash
-cred target set github --token example-token
-```
+- Inspect, update, or remove as needed
 
--   If `--token` is omitted, you’ll be prompted securely (no echo/history).
+### 1. Initialize a Project
+
+Run this once inside your project directory:
+
+`cred init`
+
+
+This creates a local encrypted vault in the project and binds it to the current directory.
+
+Check project health:
+
+`cred doctor`
+
+
+Inspect project status:
+
+`cred project status`
+
+
+Machine-readable:
+
+`cred project status --json`
+
+### 2. Add a Target (e.g. GitHub)
+
+Authenticate a deployment target:
+
+`cred target set github`
+
+
+You will be securely prompted for a token. The token is stored in your OS credential store, not in plaintext on disk.
+
+Non-interactive (CI):
+
+`cred target set github --token "$GITHUB_TOKEN" --non-interactive`
+
 
 List configured targets:
 
-```bash
-cred target list
+`cred target list`
+
+
+Revoke a target:
+
+`cred target revoke github`
+
+### 3. Store Secrets Locally
+
+Add secrets to the encrypted local vault:
+
+`cred secret set DATABASE_URL "postgres://user:pass@localhost:5432/db"`
+`cred secret set JWT_SECRET "super-secret"`
+
+
+List all stored keys:
+
+`cred secret list`
+
+
+Retrieve a value:
+
+`cred secret get JWT_SECRET`
+
+
+Remove a secret locally only:
+
+`cred secret remove JWT_SECRET`
+
+### 4. Dry Run (Preview Changes)
+
+Before pushing anything remotely, preview what will change:
+
+`cred push github --dry-run`
+
+
+Preview specific keys:
+
+`cred push github DATABASE_URL JWT_SECRET --dry-run`
+
+
+Nothing is uploaded when --dry-run is used.
+
+### 5. Push Secrets to a Target
+
+Push all local secrets to GitHub:
+
+`cred push github`
+
+
+Push only specific keys:
+
+`cred push github DATABASE_URL JWT_SECRET`
+
+
+If not inside a Git repository, specify the repo explicitly:
+
+`cred push github --repo owner/repo`
+
+
+Non-interactive mode (CI):
+
+`cred push github --non-interactive`
+
+
+Machine-readable output:
+
+`cred push github --json`
+
+### 6. Update a Secret
+
+Update locally:
+
+`cred secret set JWT_SECRET "new-secret-value"`
+
+
+Preview:
+
+`cred push github --dry-run`
+
+
+Apply:
+
+`cred push github`
+
+
+Only changed keys are updated remotely.
+
+### 7. Prune (Delete Locally and Remotely)
+
+Remove a key everywhere:
+
+`cred prune github JWT_SECRET --yes`
+
+
+Preview a prune:
+
+`cred prune github JWT_SECRET --dry-run`
+
+
+Prune all known keys from a target:
+
+`cred prune github --all --yes`
+
+⚠️ **Destructive operations require --yes unless in --dry-run.**
+
+### 8. Global Configuration
+
+View configuration:
+
+`cred config list`
+
+
+Get a value:
+
+`cred config get preferences.default_target`
+
+
+Set a value:
+
+`cred config set preferences.default_target github`
+
+
+Unset a value:
+
+`cred config unset preferences.default_target`
+
+
+### 9. AI / Automation Friendly Usage
+
+All commands support:
+
+--json → machine output
+
+--non-interactive → fail instead of prompting
+
+--dry-run → safe planning mode
+
+Example automation pattern:
+
+`cred push github --non-interactive --json`
+
+
+Typical Workflow
+
+`cred init`
+`cred target set github`
+`# displays an auth token prompt...`
+
+`cred secret set DATABASE_URL postgres://...`
+`cred secret set JWT_SECRET super-secret`
+
+`cred push github --dry-run`
+`cred push github`
+
+CI Example
+
+```bash 
+cred target set github \
+  --token "$CRED_GITHUB_TOKEN" \
+  --non-interactive
 ```
 
-Revoke token:
+`cred push github --non-interactive`
 
-```bash
-cred target revoke github
-```
+Safety Guarantees
 
-Tokens are stored in the OS credential store under an internal `auth_ref`; `global.toml` keeps only references/metadata.
+Secrets are encrypted at rest.
 
-### Manage configuration (non-secret)
+Target tokens are stored in the OS credential store.
 
-```bash
-cred config set preferences.default_target github
-cred config set preferences.confirm_destructive true
-cred config get preferences.default_target
-cred config list
-```
+No secrets are written to plaintext files unless explicitly exported.
 
-### Manage local secrets (flat key/value)
+--dry-run allows safe inspection before mutation.
 
-Set:
-
-```bash
-cred secret set DATABASE_URL postgres://localhost:5432/db
-```
-
-Get:
-
-```bash
-cred secret get DATABASE_URL
-```
-
-List:
-
-```bash
-cred secret list
-```
-
-Remove locally (does NOT touch remote):
-
-```bash
-cred secret remove DATABASE_URL
-```
-
-## Security Model
-
-All sensitive project secrets are encrypted at rest, never stored in plaintext on disk, and only decrypted in memory when required. There is no central server, no accounts, and no remote storage owned by cred.
-
-### What is encrypted
-
-All project secrets (API keys, environment variables, PEM files, tokens, certificates, etc.) are stored in an encrypted local vault:
-
-```bash
-.cred/vault.enc
-```
-
-### Encryption properties
-
--   Algorithm: ChaCha20-Poly1305 (authenticated encryption)
--   Key size: 256-bit
--   Nonce: Random per write
--   Plaintext secrets: Exist **only in memory**
--   At-rest storage: Always encrypted
--   Integrity protected: Tampering with the vault is detected
-
-Therefore, if someone steals your project folder, repository, or filesystem snapshot without also compromising your OS user account, your secrets remain unreadable.
-
-\*\*\* Where the encryption key is stored
-By default, the encryption key is stored in your operating system’s secure key store:
-
--   macOS: Keychain
--   Windows: Credential Manager
--   Linux: Secret Service (libsecret)
-
-This provides:
-
--   Hardware-backed protection on many systems
--   OS-level access control
--   No plaintext keys on disk
--   No passwords to remember
-
-This is the same security model used by:
-
--   Git credential helpers
--   VS Code secret storage
--   Docker credentials
--   Chrome / browser password managers
+--json ensures reliable automation.
 
 ---
-
-## Pushing secrets to targets (create/update only)
-Note: GitHub secrets are write-only by design. `cred` cannot read, diff or verify existing remote secrets after upload.
-
--   Push all local secrets:
-
-```bash
-cred push github
-```
-
--   Push specific keys only:
-
-```bash
-cred push github API_URL API_KEY
-```
-
-Repo rules for GitHub:
-
--   If git metadata was recorded at init, it’s auto-used.
--   If you pass `--repo` and it doesn’t match the recorded repo, cred hard-fails to prevent cross-repo mistakes.
--   If you initialized outside git, you must provide `--repo owner/name`.
-
-`push` reads your local `.cred/vault.enc`, transforms formats required by the target, and upserts secrets via the target API. It never deletes remote secrets.
-
-## Removing secrets from targets (remote-only)
-
-Prune deletes exactly the keys you specify on the remote; it does not diff and does not touch your local vault.
-
-```bash
-cred prune github KEY1 KEY2 --repo owner/name
-```
-
-```bash
-cred prune github <key> --repo owner/name
-```
 
 Notes:
 
@@ -233,7 +313,7 @@ Notes:
 
 Once initialized:
 
-```
+```bash
 .cred/
   project.toml
   vault.enc
@@ -241,7 +321,7 @@ Once initialized:
 
 Global configuration lives at:
 
-```
+```bash
 ~/.config/cred/global.toml
 ```
 
