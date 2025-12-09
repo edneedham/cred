@@ -8,6 +8,8 @@ use tempfile::tempdir;
 
 const UA: &str = "cred-e2e";
 
+/// End-to-end GitHub target flow: set secrets locally, push, verify via API, then prune.
+/// Skips unless RUN_E2E=1 with GITHUB_PAT and E2E_GITHUB_REPO provided.
 #[tokio::test]
 async fn github_push_and_prune_round_trip() -> Result<()> {
     if env::var("RUN_E2E").as_deref() != Ok("1") {
@@ -51,6 +53,7 @@ async fn github_push_and_prune_round_trip() -> Result<()> {
     Ok(())
 }
 
+/// Assert secret exists remotely using GitHub Actions secrets API.
 async fn assert_secret_exists(client: &Client, token: &str, repo: &str, name: &str) -> Result<()> {
     let url = format!("https://api.github.com/repos/{}/actions/secrets/{}", repo, name);
     let resp = client.get(url)
@@ -63,6 +66,7 @@ async fn assert_secret_exists(client: &Client, token: &str, repo: &str, name: &s
     Ok(())
 }
 
+/// Assert secret is absent remotely; success means 404/410 or non-success status.
 async fn assert_secret_absent(client: &Client, token: &str, repo: &str, name: &str) -> Result<()> {
     let url = format!("https://api.github.com/repos/{}/actions/secrets/{}", repo, name);
     let resp = client.get(url)
