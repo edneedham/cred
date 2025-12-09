@@ -1,3 +1,4 @@
+//! Project discovery, git detection, repo binding, and project status helpers.
 use serde::{Deserialize, Serialize};
 use std::env;
 use std::fs;
@@ -13,6 +14,7 @@ use std::process::Command;
 
 use crate::vault;
 
+/// Project-level metadata stored in `.cred/project.toml`.
 #[derive(Serialize, Deserialize, Debug, Default)]
 pub struct ProjectConfig {
     pub name: Option<String>,
@@ -22,11 +24,13 @@ pub struct ProjectConfig {
     pub git_repo: Option<String>,
 }
 
+/// Holds paths to project resources under `.cred/`.
 pub struct Project {
     pub vault_path: PathBuf,
     pub config_path: PathBuf,
 }
 
+/// Git context derived from the current working tree.
 #[derive(Debug, Clone)]
 pub struct GitInfo {
     pub root: String,
@@ -76,6 +80,7 @@ impl std::error::Error for RepoBindingError {
 }
 
 impl Project {
+    /// Locate the nearest `.cred/` ancestor and return its paths.
     pub fn find() -> Result<Self> {
         let current_dir = env::current_dir().context("Failed to get current directory")?;
 
@@ -91,6 +96,7 @@ impl Project {
         bail!("No .cred directory found. Run 'cred init' to start.")
     }
 
+    /// Load the project configuration from `.cred/project.toml` (defaulting if absent).
     pub fn load_config(&self) -> Result<ProjectConfig> {
         if !self.config_path.exists() {
             return Ok(ProjectConfig::default());
@@ -100,6 +106,7 @@ impl Project {
         Ok(config)
     }
 
+    /// Fetch the 32-byte master key for this project (env override for CI, else OS keyring).
     pub fn get_master_key(&self) -> Result<[u8; 32]> {
         // Check for key in env for CI and testing
         if let Ok(b64) = std::env::var("CRED_MASTER_KEY_B64") {
@@ -142,6 +149,7 @@ pub fn init() -> Result<()> {
     init_at(&current_dir)
 }
 
+/// Initialize a project at the given root, creating `.cred/`, key, vault, and project.toml.
 pub fn init_at(root: &Path) -> Result<()> {
     let cred_dir = root.join(".cred");
     if cred_dir.exists() {
@@ -202,6 +210,7 @@ id = "{}"
 }
 
 /// Resolve repo to use for CLI operations, validating detected/bound/provided combinations.
+/// Resolve repo to use for CLI operations, validating detected/bound/provided combinations.
 pub fn resolve_repo_binding(
     detected: Option<String>,
     bound: Option<String>,
@@ -259,6 +268,7 @@ pub fn resolve_repo_binding(
 }
 
 /// Build the JSON payload for `project status`.
+/// Build the JSON payload for `project status`.
 pub fn project_status_payload(data: &ProjectStatusData) -> serde_json::Value {
     serde_json::json!({
         "api_version": "1",
@@ -279,6 +289,7 @@ pub fn project_status_payload(data: &ProjectStatusData) -> serde_json::Value {
     })
 }
 
+/// Normalize common GitHub remote forms to `owner/repo`.
 fn normalize_github_remote(remote: &str) -> Option<String> {
     let trimmed = remote.trim().trim_end_matches(".git");
 
@@ -301,6 +312,7 @@ fn normalize_github_remote(remote: &str) -> Option<String> {
     Some(format!("{}/{}", owner, repo))
 }
 
+/// Detect git root, origin URL, and normalized repo slug if GitHub-like.
 pub fn detect_git(base: Option<&Path>) -> Option<GitInfo> {
     let base_dir = base.unwrap_or_else(|| Path::new("."));
     let root_raw = Command::new("git")
@@ -341,6 +353,7 @@ pub fn detect_git(base: Option<&Path>) -> Option<GitInfo> {
     })
 }
 
+/// Ensure `.cred/` is ignored in the repository.
 fn update_gitignore(root: &Path) -> Result<()> {
     let gitignore = root.join(".gitignore");
     let entry = "\n.cred/\n";
