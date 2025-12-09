@@ -1,3 +1,5 @@
+//! Encrypted local vault (secrets at rest) using ChaCha20-Poly1305 and base64 serialization.
+
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
@@ -10,6 +12,7 @@ use chacha20poly1305::{
 };
 use zeroize::{Zeroize};
 
+/// On-disk representation of the vault file.
 #[derive(Serialize, Deserialize)]
 struct EncryptedVaultFile {
     version: u8,
@@ -17,6 +20,7 @@ struct EncryptedVaultFile {
     ciphertext: String
 }
 
+/// In-memory vault plus file/key context.
 #[derive(Serialize, Deserialize, Debug, Default)]
 pub struct Vault {
     #[serde(skip)]
@@ -43,6 +47,7 @@ impl Drop for Vault {
 }
 
 impl Vault {
+    /// Load or initialize a vault from disk, decrypting with the provided 32-byte key.
     pub fn load(vault_path: &Path, key: [u8; 32]) -> Result<Self> {
         let mut vault = Vault {
             path: vault_path.to_path_buf(),
@@ -74,6 +79,7 @@ impl Vault {
         Ok(vault)
     }
 
+    /// Encrypt and persist the current secrets to `vault.enc`.
     pub fn save(&self) -> Result<()> {
         let plaintext = serde_json::to_vec(&self.secrets)?;
         let cipher = ChaCha20Poly1305::new(&self.key.into());
@@ -90,18 +96,22 @@ impl Vault {
         Ok(())
     }
 
+    /// Insert or overwrite a secret key/value in memory (not persisted until `save`).
     pub fn set(&mut self, key: &str, value: &str) {
         self.secrets.insert(key.to_string(), value.to_string());
     }
 
+    /// Fetch a secret by key from memory.
     pub fn get(&self, key: &str) -> Option<&String> {
         self.secrets.get(key)
     }
 
+    /// Remove a secret, returning the prior value if present (not persisted until `save`).
     pub fn remove(&mut self, key: &str) -> Option<String> {
         self.secrets.remove(key)
     }
 
+    /// Borrow the in-memory secrets map.
     pub fn list(&self) -> &HashMap<String, String> {
         &self.secrets
     }
