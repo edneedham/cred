@@ -218,19 +218,6 @@ pub fn resolve_repo_binding(
     verb: &str,
 ) -> Result<Option<String>, RepoBindingError> {
     if let Some(r) = provided.clone() {
-        if let Some(live) = detected.as_ref() {
-            if live != &r {
-                return Err(RepoBindingError {
-                    kind: RepoBindingErrorKind::User,
-                    error: anyhow!(
-                        "Refusing to {}: provided --repo '{}' does not match detected repo '{}'.",
-                        verb,
-                        r,
-                        live
-                    ),
-                });
-            }
-        }
         if let Some(bound_repo) = bound.as_ref() {
             if bound_repo != &r {
                 return Err(RepoBindingError {
@@ -240,6 +227,19 @@ pub fn resolve_repo_binding(
                         verb,
                         r,
                         bound_repo
+                    ),
+                });
+            }
+        }
+        if let Some(live) = detected.as_ref() {
+            if live != &r {
+                return Err(RepoBindingError {
+                    kind: RepoBindingErrorKind::User,
+                    error: anyhow!(
+                        "Refusing to {}: provided --repo '{}' does not match detected repo '{}'.",
+                        verb,
+                        r,
+                        live
                     ),
                 });
             }
