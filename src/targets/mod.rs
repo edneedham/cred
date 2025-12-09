@@ -1,3 +1,6 @@
+//! Target registry and adapter trait.
+//! Each provider implements `TargetAdapter`, and this module dispatches based on CLI-selected target.
+
 #[cfg(feature = "github")]
 mod github;
 
@@ -9,6 +12,7 @@ use anyhow::Result;
 use clap::ValueEnum;
 use std::fmt;
 
+/// Supported remote targets (feature-gated).
 #[derive(Copy, Clone, Debug, PartialEq, Eq, ValueEnum)]
 #[value(rename_all = "lowercase")]
 pub enum Target {
@@ -31,31 +35,40 @@ pub struct PushOptions {
 }
 
 #[allow(async_fn_in_trait)] // Async in trait is crate-internal; we accept the bound
+/// Common interface every target must implement.
+/// Defaults are conservative: unsupported operations return errors unless overridden.
 pub trait TargetAdapter {
+    /// Human-readable target name.
     fn name(&self) -> &str;
     
+    /// Push secrets to the target. Default errors out for non-hosting targets.
     async fn push(&self, _secrets: &HashMap<String, String>, _auth_token: &str, _options: &PushOptions) -> Result<()> {
         anyhow::bail!("Target '{}' is not a hosting platform; you cannot push secrets to it.", self.name());
     }
 
+    /// Delete secrets from the target. Default errors out for non-hosting targets.
     async fn delete(&self, _keys: &[String], _auth_token: &str, _options: &PushOptions) -> Result<()> {
         anyhow::bail!("Target '{}' is not a hosting platform; you cannot prune secrets from it.", self.name());
     }
     
     #[allow(dead_code)]
+    /// Optionally generate a new API key/token for an environment.
     async fn generate(&self, _env: &str, _auth_token: &str) -> Result<(String, String)> {
         anyhow::bail!("Target '{}' does not support API key generation.", self.name());
     }
 
+    /// Revoke a specific secret/key value at the target.
     async fn revoke_secret(&self, _key_name: &str, _key_value: &str, _auth_token: &str) -> Result<()> {
         anyhow::bail!("Target '{}' does not support API key revocation.", self.name());
     }
 
+    /// Revoke the authentication token used for this target (if supported).
     async fn revoke_auth_token(&self, _auth_token: &str) -> Result<()> { 
         Ok(()) // Default to ok (allows local logout)
     }
 }
 
+/// Concrete wrapper to erase target-specific types while dispatching calls.
 pub enum TargetWrapper {
     #[cfg(feature = "github")]
     Github(github::Github),

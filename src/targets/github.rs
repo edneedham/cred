@@ -1,3 +1,7 @@
+//! GitHub target adapter for cred.
+//! Uses the repository public key and GitHub-required sealed boxes (Curve25519 + XSalsa20-Poly1305)
+//! when pushing secrets. Each target owns its own encryption format so future providers can diverge.
+
 use super::{TargetAdapter, PushOptions};
 use std::collections::HashMap;
 use anyhow::{Context, Result};
@@ -7,8 +11,10 @@ use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
 use sodiumoxide::crypto::box_::curve25519xsalsa20poly1305::PublicKey;
 use sodiumoxide::crypto::sealedbox;
 
+/// Adapter that pushes secrets to GitHub Actions using a PAT with `actions:write`.
 pub struct Github;
 
+/// Shape of the `GET /actions/secrets/public-key` response.
 #[derive(Deserialize)]
 struct PublicKeyResponse {
     key_id: String,
@@ -18,6 +24,8 @@ struct PublicKeyResponse {
 struct GitHubTarget(String);
 
 impl Github {
+    /// Encrypts a secret with GitHub's repository public key using NaCl sealed boxes.
+    /// Returns base64-encoded ciphertext suitable for `encrypted_value` in the API.
     fn encrypt_secret(&self, public_key_b64: &str, value: &str) -> Result<String> {
         sodiumoxide::init().map_err(|_| anyhow::anyhow!("Failed to initialize sodiumoxide"))?;
 
@@ -32,6 +40,8 @@ impl Github {
         Ok(BASE64.encode(encrypted_bytes))
     }
 
+    /// Derives `owner/repo` from `git remote get-url origin`.
+    /// Errors if the remote is missing or not in a recognizable format.
     fn get_repo_from_git(&self) -> Result<String> {
         use std::process::Command;
         
@@ -59,15 +69,18 @@ impl Github {
         Ok(format!("{}/{}", owner, repo))
     }
 
-    // ... resolve_target remains the same ...
+    /// Resolves a GitHub target from CLI options; kept for parity with other targets.
     async fn resolve_target(&self, _client: &Client, _token: &str, repo: &str) -> Result<GitHubTarget> {
         Ok(GitHubTarget(repo.to_string()))
     }
 }
 
 impl TargetAdapter for Github {
+    /// Human-readable adapter name.
     fn name(&self) -> &str { "github" }
 
+    /// Pushes secrets to a repository by fetching its public key, encrypting each value,
+    /// and calling `PUT /repos/{owner}/{repo}/actions/secrets/{name}`.
     async fn push(&self, secrets: &HashMap<String, String>, auth_token: &str, _options: &PushOptions) -> Result<()> {
         let repo_name = match &_options.repo {
             Some(r) => r.clone(),
@@ -118,6 +131,8 @@ impl TargetAdapter for Github {
         Ok(())
     }
 
+    /// Deletes secrets from a repository via `DELETE /repos/{owner}/{repo}/actions/secrets/{name}`.
+    /// Treats 404s as no-op skips; other failures abort the operation.
     async fn delete(&self, keys: &[String], auth_token: &str, _options: &PushOptions) -> Result<()> {
         let repo_name = match &_options.repo {
             Some(r) => r.clone(),
@@ -152,6 +167,7 @@ impl TargetAdapter for Github {
         Ok(())
     }
 
+    /// GitHub PAT revocation is not supported via API; we only inform the user.
     async fn revoke_auth_token(&self, _auth_token: &str) -> Result<()> {
         println!("ℹ️  GitHub PATs cannot be revoked via API.");
         Ok(())

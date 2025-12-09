@@ -1,3 +1,6 @@
+//! CLI argument and command definitions for cred.
+//! Parsed once in `main` and dispatched to command handlers.
+
 use clap::{Args, Parser, Subcommand};
 use crate::targets::Target;
 
