@@ -52,7 +52,6 @@ impl From<RepoBindingError> for AppError {
     }
 }
 
-
 #[derive(Debug, Clone, Copy)]
 pub enum RepoBindingErrorKind {
     User,
@@ -76,6 +75,3 @@ impl std::error::Error for RepoBindingError {
         self.error.source()
     }
 }
-
-
-

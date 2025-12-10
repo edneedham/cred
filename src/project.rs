@@ -1,4 +1,5 @@
 //! Project discovery, git detection, repo binding, and project status helpers.
+use crate::error::{RepoBindingError, RepoBindingErrorKind};
 use anyhow::anyhow;
 use anyhow::{Context, Result, bail};
 use base64::{Engine, engine::general_purpose::STANDARD as BASE64};
@@ -11,7 +12,6 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use uuid::Uuid;
-use crate::error::{RepoBindingError, RepoBindingErrorKind};
 
 use crate::vault;
 

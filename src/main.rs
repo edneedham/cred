@@ -2,21 +2,21 @@
 //! Parses args, routes to subcommands, and handles uniform error/exit code reporting.
 mod cli;
 mod config;
-mod io;
 mod error;
+mod io;
 mod project;
 mod targets;
 mod vault;
 
 use clap::Parser;
-use cli::{Cli, Commands, SecretAction, SetTargetArgs, CliFlags};
+use cli::{Cli, CliFlags, Commands, SecretAction, SetTargetArgs};
+use error::{AppError, ExitCode};
 use io::{print_err, print_json, print_out, print_plain_err, read_token_securely, require_yes};
 use keyring::Entry;
 use project::{ProjectStatusData, resolve_repo_binding};
 use std::process;
 use targets::TargetAdapter;
 use zeroize::Zeroize;
-use error::{AppError, ExitCode};
 
 #[tokio::main]
 /// Tokio runtime entrypoint; parses CLI and normalizes exit codes/JSON errors.
