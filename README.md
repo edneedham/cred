@@ -1,3 +1,7 @@
+[![CI and Release](https://github.com/OWNER/REPO/actions/workflows/ci-cd.yml/badge.svg?branch=main)](https://github.com/edneedham/cred/actions/workflows/ci-cd.yml)
+[![Crates.io](https://img.shields.io/crates/v/cred.svg)](https://crates.io/crates/cred)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE-MIT)
+
 # cred
 
 ## What it is
@@ -89,6 +93,18 @@ Run this once inside your project directory:
 
 
 This creates a local encrypted vault in the project and binds it to the current directory.
+
+```bash
+.cred/
+  project.toml
+  vault.enc
+```
+
+Global configuration lives at:
+
+```bash
+~/.config/cred/global.toml
+```
 
 Check project health:
 
@@ -306,21 +322,6 @@ Notes:
 
 ---
 
-## Project structure
-
-Once initialized:
-
-```bash
-.cred/
-  project.toml
-  vault.enc
-```
-
-Global configuration lives at:
-
-```bash
-~/.config/cred/global.toml
-```
 
 ## License
 
