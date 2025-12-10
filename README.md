@@ -8,7 +8,7 @@
 
 `cred` stores encrypted secrets locally and safely pushes them to CI/CD platforms on demand.
 
-⚠️ **Status: Early Preview (v0.1.1)**
+⚠️ **Status: Early Preview (v0.1.2)**
 
 `cred` is currently in active development. The on-disk format, CLI surface, and security model may change between minor versions. Do not rely on it as your sole secrets backup yet.
 
