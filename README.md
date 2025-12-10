@@ -1,4 +1,4 @@
-[![CI and Release](https://github.com/OWNER/REPO/actions/workflows/ci-cd.yml/badge.svg?branch=main)](https://github.com/edneedham/cred/actions/workflows/ci-cd.yml)
+[![CI and Release](https://github.com/edneedham/cred/actions/workflows/ci-cd.yml/badge.svg?branch=main)](https://github.com/edneedham/cred/actions/workflows/ci-cd.yml)
 [![Crates.io](https://img.shields.io/crates/v/cred.svg)](https://crates.io/crates/cred)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE-MIT)
 
