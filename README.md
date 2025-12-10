@@ -1,6 +1,9 @@
 [![CI and Release](https://github.com/edneedham/cred/actions/workflows/ci-cd.yml/badge.svg?branch=main)](https://github.com/edneedham/cred/actions/workflows/ci-cd.yml)
 [![Crates.io](https://img.shields.io/crates/v/cred.svg)](https://crates.io/crates/cred)
-[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE-MIT)
+[![GitHub Release](https://img.shields.io/github/v/release/edneedham/cred)](https://github.com/edneedham/cred/releases/latest)
+[![Homebrew](https://img.shields.io/badge/homebrew-edneedham%2Fcred-orange)](https://github.com/edneedham/homebrew-cred)
+[![License](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](LICENSE-MIT)
+[![Downloads](https://img.shields.io/github/downloads/edneedham/cred/total)](https://github.com/edneedham/cred/releases)
 
 # cred
 
@@ -57,11 +60,36 @@ You manage secrets locally, but `cred` can upload them to specified targets.
 
 ## Installation
 
-Install with Cargo:
+### Homebrew (macOS)
+
+`brew tap edneedham/cred`
+`brew install edneedham/cred/cred`
+
+### Quick install (shell)
+
+`curl -fsSL https://raw.githubusercontent.com/edneedham/cred/main/scripts/install.sh | sh -s`
+
+### Install with Cargo:
 
 ```bash
 cargo install cred
 ```
+
+### Pre-built binaries
+
+Download the latest release for your platform from [GitHub Releases](https://github.com/edneedham/cred/releases).
+
+Available targets:
+
+- `cred-vX.Y.Z-aarch64-apple-darwin` - macOS Apple Silicon
+- `cred-vX.Y.Z-x86_64-apple-darwin` - macOS Intel
+- `cred-vX.Y.Z-x86_64-unknown-linux-gnu` - Linux x86_64
+- `cred-vX.Y.Z-x86_64-pc-windows-msvc.exe` - Windows
+
+Make the binary executable and move it to your PATH:
+
+`chmod +x cred-*`
+`sudo mv cred-* /usr/local/bin/cred`
 
 Check installation:
 

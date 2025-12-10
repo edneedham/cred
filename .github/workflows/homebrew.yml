@@ -1,0 +1,212 @@
+name: Homebrew Tap Update
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to release'
+        required: true
+
+env:
+  TAP_REPO: edneedham/homebrew-cred
+  FORMULA_NAME: cred
+
+jobs:
+  update-formula:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      sha256: ${{ steps.sha.outputs.sha256 }}
+    steps:
+      - name: Determine version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            VERSION="${{ github.event.inputs.tag }}"
+          else
+            VERSION="${GITHUB_REF_NAME}"
+          fi
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "Using version: ${VERSION}"
+
+      - name: Compute tarball SHA256
+        id: sha
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          URL="https://github.com/${{ github.repository }}/archive/refs/tags/${VERSION}.tar.gz"
+          echo "Fetching: ${URL}"
+          SHA=$(curl -sL "${URL}" | shasum -a 256 | cut -d' ' -f1)
+          echo "sha256=${SHA}" >> "$GITHUB_OUTPUT"
+          echo "SHA256: ${SHA}"
+
+      - name: Checkout tap
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.TAP_REPO }}
+          token: ${{ secrets.TAP_PUSH_TOKEN }}
+          path: tap
+
+      - name: Update formula URL and SHA
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          SHA="${{ steps.sha.outputs.sha256 }}"
+          FORMULA="tap/Formula/${FORMULA_NAME}.rb"
+
+          # Update url line
+          sed -i "s|url \"https://github.com/.*/archive/refs/tags/.*\.tar\.gz\"|url \"https://github.com/${{ github.repository }}/archive/refs/tags/${VERSION}.tar.gz\"|" "$FORMULA"
+
+          # Update sha256 line (the one right after url, not in bottle block)
+          # Match sha256 followed by a 64-char hex string on its own line
+          sed -i "s/^\([[:space:]]*\)sha256 \"[a-f0-9]\{64\}\"/\1sha256 \"${SHA}\"/" "$FORMULA"
+
+          # Remove existing bottle block (will be re-added after bottles are built)
+          sed -i '/^[[:space:]]*bottle do/,/^[[:space:]]*end/d' "$FORMULA"
+
+          echo "Updated formula:"
+          cat "$FORMULA"
+
+      - name: Commit formula update
+        working-directory: tap
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add Formula/${FORMULA_NAME}.rb
+          git commit -m "Update ${FORMULA_NAME} to ${{ steps.version.outputs.version }}" || echo "No changes to commit"
+          git push
+
+  build-bottles:
+    needs: update-formula
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-14
+            arch: arm64_sequoia
+          - os: macos-13
+            arch: ventura
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout tap
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.TAP_REPO }}
+          token: ${{ secrets.TAP_PUSH_TOKEN }}
+
+      - name: Set up Homebrew
+        run: brew update
+
+      - name: Build bottle
+        id: bottle
+        run: |
+          VERSION="${{ needs.update-formula.outputs.version }}"
+          ROOT_URL="https://github.com/${TAP_REPO}/releases/download/${VERSION}"
+
+          brew install --build-bottle ./Formula/${FORMULA_NAME}.rb
+          brew bottle --root-url="${ROOT_URL}" ./Formula/${FORMULA_NAME}.rb
+
+          # Find the bottle file
+          BOTTLE_FILE=$(ls ${FORMULA_NAME}--*.bottle.tar.gz 2>/dev/null | head -1)
+          echo "bottle_file=${BOTTLE_FILE}" >> "$GITHUB_OUTPUT"
+
+          # Extract SHA from JSON
+          JSON_FILE=$(ls ${FORMULA_NAME}--*.bottle.json 2>/dev/null | head -1)
+          BOTTLE_SHA=$(cat "$JSON_FILE" | ruby -rjson -e 'j=JSON.parse(STDIN.read); j["bottles"].each{|k,v| puts v["sha256"]}')
+          echo "bottle_sha=${BOTTLE_SHA}" >> "$GITHUB_OUTPUT"
+          echo "Bottle SHA: ${BOTTLE_SHA}"
+
+      - name: Upload bottle artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: bottle-${{ matrix.arch }}
+          path: |
+            ${{ env.FORMULA_NAME }}--*.bottle.tar.gz
+            ${{ env.FORMULA_NAME }}--*.bottle.json
+
+  publish-bottles:
+    needs: [update-formula, build-bottles]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout tap
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.TAP_REPO }}
+          token: ${{ secrets.TAP_PUSH_TOKEN }}
+
+      - name: Download all bottle artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: bottle-*
+          merge-multiple: true
+          path: bottles
+
+      - name: Create tap release and upload bottles
+        env:
+          GH_TOKEN: ${{ secrets.TAP_PUSH_TOKEN }}
+        run: |
+          VERSION="${{ needs.update-formula.outputs.version }}"
+          cd bottles
+
+          # Create release in tap repo (or update if exists)
+          gh release create "${VERSION}" \
+            --repo "${TAP_REPO}" \
+            --title "${FORMULA_NAME} ${VERSION}" \
+            --notes "Bottles for ${FORMULA_NAME} ${VERSION}" \
+            ${FORMULA_NAME}--*.bottle.tar.gz \
+            2>/dev/null || \
+          gh release upload "${VERSION}" \
+            --repo "${TAP_REPO}" \
+            --clobber \
+            ${FORMULA_NAME}--*.bottle.tar.gz
+
+      - name: Generate and insert bottle block
+        run: |
+          VERSION="${{ needs.update-formula.outputs.version }}"
+          FORMULA="Formula/${FORMULA_NAME}.rb"
+          ROOT_URL="https://github.com/${TAP_REPO}/releases/download/${VERSION}"
+
+          # Parse all bottle JSONs and build the bottle block
+          BOTTLE_BLOCK="  bottle do\n    root_url \"${ROOT_URL}\"\n"
+
+          for json in bottles/${FORMULA_NAME}--*.bottle.json; do
+            if [ -f "$json" ]; then
+              ARCH_BLOCK=$(cat "$json" | ruby -rjson -e '
+                j = JSON.parse(STDIN.read)
+                j["bottles"].each do |arch, info|
+                  puts "    sha256 cellar: :any_skip_relocation, #{arch}: \"#{info["sha256"]}\""
+                end
+              ')
+              BOTTLE_BLOCK="${BOTTLE_BLOCK}${ARCH_BLOCK}\n"
+            fi
+          done
+
+          BOTTLE_BLOCK="${BOTTLE_BLOCK}  end"
+
+          echo "Generated bottle block:"
+          echo -e "$BOTTLE_BLOCK"
+
+          # Insert bottle block after the sha256 line (source sha, not in a block)
+          # Find line number of sha256 (not in bottle block)
+          LINE=$(grep -n '^[[:space:]]*sha256 "[a-f0-9]\{64\}"' "$FORMULA" | head -1 | cut -d: -f1)
+
+          if [ -n "$LINE" ]; then
+            # Insert after that line
+            head -n "$LINE" "$FORMULA" > formula.tmp
+            echo -e "\n$BOTTLE_BLOCK" >> formula.tmp
+            tail -n +$((LINE + 1)) "$FORMULA" >> formula.tmp
+            mv formula.tmp "$FORMULA"
+          fi
+
+          echo "Updated formula:"
+          cat "$FORMULA"
+
+      - name: Commit bottle block
+        run: |
+          VERSION="${{ needs.update-formula.outputs.version }}"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add Formula/${FORMULA_NAME}.rb
+          git commit -m "Add bottles for ${FORMULA_NAME} ${VERSION}" || echo "No changes to commit"
+          git push
+
