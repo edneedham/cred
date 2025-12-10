@@ -2,19 +2,21 @@
 //! Parses args, routes to subcommands, and handles uniform error/exit code reporting.
 mod cli;
 mod config;
+mod io;
+mod error;
 mod project;
 mod targets;
 mod vault;
 
 use clap::Parser;
-use cli::{Cli, Commands, SecretAction, SetTargetArgs};
-use anyhow::Context;
-use targets::TargetAdapter;
-use rpassword::prompt_password;
-use zeroize::Zeroize;
-use std::process;
+use cli::{Cli, Commands, SecretAction, SetTargetArgs, CliFlags};
+use io::{print_err, print_json, print_out, print_plain_err, read_token_securely, require_yes};
 use keyring::Entry;
-use project::{ProjectStatusData, resolve_repo_binding, RepoBindingErrorKind};
+use project::{ProjectStatusData, resolve_repo_binding};
+use std::process;
+use targets::TargetAdapter;
+use zeroize::Zeroize;
+use error::{AppError, ExitCode};
 
 #[tokio::main]
 /// Tokio runtime entrypoint; parses CLI and normalizes exit codes/JSON errors.
@@ -57,98 +59,8 @@ async fn main() {
     }
 }
 
-fn require_yes(flags: &CliFlags, action: &str) -> Result<(), AppError> {
-    if !flags.yes {
-        return Err(AppError::user(anyhow::anyhow!(
-            "{} is destructive; rerun with --yes",
-            action
-        )));
-    }
-    Ok(())
-}
-
-#[allow(dead_code)]
-#[derive(Debug, Copy, Clone)]
-#[repr(i32)]
-/// Stable process exit codes surfaced to users (and JSON consumers).
-enum ExitCode {
-    Ok = 0,
-    UserError = 1,
-    NotAuthenticated = 2,
-    NetworkError = 3,
-    TargetRejected = 4,
-    VaultError = 5,
-    GitError = 6,
-}
-
-#[derive(Debug)]
-/// Error wrapper carrying both an exit code and the underlying error.
-struct AppError {
-    code: ExitCode,
-    error: anyhow::Error,
-}
-
-
-
-#[derive(Debug, Clone, Copy)]
-/// Global switches derived from CLI flags/env that affect output and prompts.
-struct CliFlags {
-    json: bool,
-    non_interactive: bool,
-    dry_run: bool,
-    yes: bool,
-    no_color: bool,
-}
-
-fn print_out(flags: &CliFlags, msg: &str) {
-    if !flags.json && !flags.no_color {
-        println!("{}", msg);
-    } else if !flags.json {
-        println!("{}", msg);
-    }
-}
-
-fn print_plain(msg: &str) {
-    println!("{}", msg);
-}
-
-fn print_plain_err(msg: &str) {
-    eprintln!("{}", msg);
-}
-
-fn print_json(payload: &serde_json::Value) {
-    print_plain(&serde_json::to_string(payload).unwrap_or_default());
-}
-
-fn print_err(flags: &CliFlags, msg: &str) {
-    if !flags.json && !flags.no_color {
-        eprintln!("{}", msg);
-    } else if !flags.json {
-        eprintln!("{}", msg);
-    }
-}
-
-impl AppError {
-    fn new(code: ExitCode, error: anyhow::Error) -> Self { Self { code, error } }
-    fn user(error: anyhow::Error) -> Self { Self::new(ExitCode::UserError, error) }
-    fn auth(error: anyhow::Error) -> Self { Self::new(ExitCode::NotAuthenticated, error) }
-    #[allow(dead_code)]
-    fn git(error: anyhow::Error) -> Self { Self::new(ExitCode::GitError, error) }
-    #[allow(dead_code)]
-    fn vault(error: anyhow::Error) -> Self { Self::new(ExitCode::VaultError, error) }
-    #[allow(dead_code)]
-    fn target(error: anyhow::Error) -> Self { Self::new(ExitCode::TargetRejected, error) }
-}
-
-impl From<anyhow::Error> for AppError {
-    fn from(error: anyhow::Error) -> Self {
-        AppError::user(error)
-    }
-}
-
 /// Core dispatcher for all subcommands.
 async fn run(cli: Cli, flags: &CliFlags) -> Result<(), AppError> {
-
     match cli.command {
         Commands::Init => {
             config::ensure_global_config_exists()?;
@@ -162,9 +74,9 @@ async fn run(cli: Cli, flags: &CliFlags) -> Result<(), AppError> {
                 print_json(&payload);
             }
         }
-        
+
         Commands::Target { action } => match action {
-             cli::TargetAction::Set(args) => {
+            cli::TargetAction::Set(args) => {
                 if flags.dry_run {
                     print_out(flags, "(dry-run) Target set skipped");
                     return Ok(());
@@ -173,9 +85,9 @@ async fn run(cli: Cli, flags: &CliFlags) -> Result<(), AppError> {
             }
             cli::TargetAction::List => {
                 let cfg = config::load()?;
-                    let mut names: Vec<String> = cfg.targets.keys().cloned().collect();
-                    names.sort();
-                    if flags.json {
+                let mut names: Vec<String> = cfg.targets.keys().cloned().collect();
+                names.sort();
+                if flags.json {
                     let payload = serde_json::json!({
                         "api_version": "1",
                         "status": "ok",
@@ -184,9 +96,9 @@ async fn run(cli: Cli, flags: &CliFlags) -> Result<(), AppError> {
                     println!("{}", serde_json::to_string(&payload).unwrap_or_default());
                 } else {
                     println!("Configured Targets:");
-                        for name in names {
-                            println!("- {}", name);
-                        }
+                    for name in names {
+                        println!("- {}", name);
+                    }
                 }
             }
             cli::TargetAction::Revoke { name } => {
@@ -195,7 +107,10 @@ async fn run(cli: Cli, flags: &CliFlags) -> Result<(), AppError> {
                     print_out(flags, "(dry-run) Target revoke skipped");
                     return Ok(());
                 }
-                print_out(flags, &format!("🔌 Attempting to revoke token for target '{}'...", name));
+                print_out(
+                    flags,
+                    &format!("🔌 Attempting to revoke token for target '{}'...", name),
+                );
                 if let Some(token) = config::get_target_token(&name.to_string())? {
                     if let Some(p) = targets::get(name) {
                         // Atomic Revoke
@@ -230,23 +145,21 @@ async fn run(cli: Cli, flags: &CliFlags) -> Result<(), AppError> {
                         print_out(flags, &format!("(dry-run) Would set {}", key));
                     }
                 }
-                SecretAction::Get { key } => {
-                    match vault.get(&key) {
-                        Some(val) => {
-                            if flags.json {
-                                let payload = serde_json::json!({
-                                    "api_version": "1",
-                                    "status": "ok",
-                                    "data": { "key": key, "value": val }
-                                });
-                                println!("{}", serde_json::to_string(&payload).unwrap_or_default());
-                            } else {
-                                println!("{}", val)
-                            }
+                SecretAction::Get { key } => match vault.get(&key) {
+                    Some(val) => {
+                        if flags.json {
+                            let payload = serde_json::json!({
+                                "api_version": "1",
+                                "status": "ok",
+                                "data": { "key": key, "value": val }
+                            });
+                            println!("{}", serde_json::to_string(&payload).unwrap_or_default());
+                        } else {
+                            println!("{}", val)
                         }
-                        None => print_err(flags, &format!("Secret '{}' not found", key)),
                     }
-                }
+                    None => print_err(flags, &format!("Secret '{}' not found", key)),
+                },
                 SecretAction::Remove { key } => {
                     require_yes(&flags, "secret remove")?;
                     if flags.dry_run {
@@ -280,32 +193,50 @@ async fn run(cli: Cli, flags: &CliFlags) -> Result<(), AppError> {
                 SecretAction::Revoke { key, target } => {
                     require_yes(&flags, "secret revoke")?;
                     if flags.dry_run {
-                        print_out(flags, &format!("(dry-run) Would revoke '{}' from {}", key, target));
+                        print_out(
+                            flags,
+                            &format!("(dry-run) Would revoke '{}' from {}", key, target),
+                        );
                         return Ok(());
                     }
-                     // 1. Get Source Token
+                    // 1. Get Source Token
                     let source_token = match config::get_target_token(&target.to_string())? {
                         Some(t) => t,
-                        None => { print_err(flags, &format!("No token for source {}", target)); return Ok(()); }
+                        None => {
+                            print_err(flags, &format!("No token for source {}", target));
+                            return Ok(());
+                        }
                     };
 
                     // 2. Get Value for Revocation
                     let secret_value = match vault.get(&key) {
                         Some(v) => v.clone(),
-                        None => { print_err(flags, &format!("Secret '{}' not found locally.", key)); return Ok(()); }
+                        None => {
+                            print_err(flags, &format!("Secret '{}' not found locally.", key));
+                            return Ok(());
+                        }
                     };
 
                     // 3. Remote Revoke
                     let source_impl = match targets::get(target) {
                         Some(p) => p,
-                        None => { print_err(flags, &format!("Unknown target {}", target)); return Ok(()); }
+                        None => {
+                            print_err(flags, &format!("Unknown target {}", target));
+                            return Ok(());
+                        }
                     };
-                    
-                    print_out(flags, &format!("🔌 Contacting {} to revoke '{}'...", target, key));
+
+                    print_out(
+                        flags,
+                        &format!("🔌 Contacting {} to revoke '{}'...", target, key),
+                    );
                     // Note: This will fail if target doesn't support revoke (like GitHub)
-                    if let Err(e) = source_impl.revoke_secret(&key, &secret_value, &source_token).await {
-                         print_err(flags, &format!("x Failed to revoke at source: {}", e));
-                         return Ok(());
+                    if let Err(e) = source_impl
+                        .revoke_secret(&key, &secret_value, &source_token)
+                        .await
+                    {
+                        print_err(flags, &format!("x Failed to revoke at source: {}", e));
+                        return Ok(());
                     }
                     print_out(flags, "✓ Remote key destroyed.");
 
@@ -318,11 +249,17 @@ async fn run(cli: Cli, flags: &CliFlags) -> Result<(), AppError> {
                 }
             }
         }
-        
+
         Commands::Push(args) => {
             let target_impl = match targets::get(args.target) {
                 Some(p) => p,
-                None => { print_err(flags, &format!("Error: Target '{}' not supported.", args.target)); return Ok(()); }
+                None => {
+                    print_err(
+                        flags,
+                        &format!("Error: Target '{}' not supported.", args.target),
+                    );
+                    return Ok(());
+                }
             };
 
             let token = config::get_target_token(&args.target.to_string())?
@@ -339,12 +276,9 @@ async fn run(cli: Cli, flags: &CliFlags) -> Result<(), AppError> {
                 git_info.and_then(|g| g.repo_slug),
                 bound_repo,
                 args.repo.clone(),
-                "push"
+                "push",
             )
-            .map_err(|e| match e.kind {
-                RepoBindingErrorKind::User => AppError::user(e.error),
-                RepoBindingErrorKind::Git => AppError::git(e.error),
-            })?;
+            .map_err(AppError::from)?;
 
             if matches!(args.target, targets::Target::Github) && repo.is_none() {
                 return Err(AppError::git(anyhow::anyhow!(
@@ -435,7 +369,10 @@ async fn run(cli: Cli, flags: &CliFlags) -> Result<(), AppError> {
             if !effective_dry {
                 require_yes(&flags, "prune")?;
             } else if ci_force_dry {
-                print_out(flags, "CI detected without --yes; forcing dry-run for prune.");
+                print_out(
+                    flags,
+                    "CI detected without --yes; forcing dry-run for prune.",
+                );
             }
 
             if effective_dry {
@@ -444,7 +381,10 @@ async fn run(cli: Cli, flags: &CliFlags) -> Result<(), AppError> {
 
             let target_impl = match targets::get(args.target) {
                 Some(p) => p,
-                None => { print_err(flags, "Error: Unknown target"); return Ok(()); }
+                None => {
+                    print_err(flags, "Error: Unknown target");
+                    return Ok(());
+                }
             };
 
             let token = config::get_target_token(&args.target.to_string())?
@@ -465,20 +405,22 @@ async fn run(cli: Cli, flags: &CliFlags) -> Result<(), AppError> {
                 return Ok(());
             };
 
-            if keys_to_prune.is_empty() { return Ok(()); }
+            if keys_to_prune.is_empty() {
+                return Ok(());
+            }
 
             let git_info = project::detect_git(None);
-            let bound_repo = project::Project::find().ok().and_then(|p| p.load_config().ok()).and_then(|c| c.git_repo);
+            let bound_repo = project::Project::find()
+                .ok()
+                .and_then(|p| p.load_config().ok())
+                .and_then(|c| c.git_repo);
             let repo = resolve_repo_binding(
                 git_info.and_then(|g| g.repo_slug),
                 bound_repo,
                 args.repo.clone(),
-                "prune"
+                "prune",
             )
-            .map_err(|e| match e.kind {
-                RepoBindingErrorKind::User => AppError::user(e.error),
-                RepoBindingErrorKind::Git => AppError::git(e.error),
-            })?;
+            .map_err(AppError::from)?;
 
             if matches!(args.target, targets::Target::Github) && repo.is_none() {
                 return Err(AppError::git(anyhow::anyhow!(
@@ -505,7 +447,9 @@ async fn run(cli: Cli, flags: &CliFlags) -> Result<(), AppError> {
                     keys_sorted.sort();
                     print_out(flags, "(dry-run) Prune skipped (no remote mutation).");
                     print_out(flags, &format!("Target: {}", args.target));
-                    if let Some(r) = repo.as_ref() { print_out(flags, &format!("Repo: {}", r)); }
+                    if let Some(r) = repo.as_ref() {
+                        print_out(flags, &format!("Repo: {}", r));
+                    }
                     print_out(flags, &format!("Will delete: {:?}", keys_sorted));
                 }
                 return Ok(());
@@ -513,64 +457,60 @@ async fn run(cli: Cli, flags: &CliFlags) -> Result<(), AppError> {
 
             print_out(flags, &format!("Deleting from Remote ({})...", args.target));
             let options = targets::PushOptions { repo };
-            
+
             // ATOMIC: Remote fail stops local delete
             target_impl.delete(&keys_to_prune, &token, &options).await?;
 
             print_out(flags, "✓ Remote delete successful (local vault unchanged).");
         }
 
-        Commands::Config { action } => {
-            match action {
-                cli::ConfigAction::Get { key } => {
-                    match config::config_get(&key)? {
-                        Some(v) => {
-                            if flags.json {
-                                let payload = serde_json::json!({
-                                    "api_version": "1",
-                                    "status": "ok",
-                                    "data": { "key": key, "value": v }
-                                });
-                                println!("{}", serde_json::to_string(&payload).unwrap_or_default());
-                            } else {
-                                println!("{}", v)
-                            }
-                        }
-                        None => print_out(flags, "(not set)"),
-                    }
-                }
-                cli::ConfigAction::Set { key, value } => {
-                    if flags.dry_run {
-                        print_out(flags, &format!("(dry-run) Would set {}", key));
-                        return Ok(());
-                    }
-                    config::config_set(&key, &value)?;
-                    print_out(flags, &format!("Set {}.", key));
-                }
-                cli::ConfigAction::Unset { key } => {
-                    require_yes(&flags, "config unset")?;
-                    if flags.dry_run {
-                        print_out(flags, &format!("(dry-run) Would unset {}", key));
-                        return Ok(());
-                    }
-                    config::config_unset(&key)?;
-                    print_out(flags, &format!("Unset {}.", key));
-                }
-                cli::ConfigAction::List => {
-                    let s = config::config_list()?;
+        Commands::Config { action } => match action {
+            cli::ConfigAction::Get { key } => match config::config_get(&key)? {
+                Some(v) => {
                     if flags.json {
                         let payload = serde_json::json!({
                             "api_version": "1",
                             "status": "ok",
-                            "data": { "config": s }
+                            "data": { "key": key, "value": v }
                         });
                         println!("{}", serde_json::to_string(&payload).unwrap_or_default());
                     } else {
-                        println!("{}", s);
+                        println!("{}", v)
                     }
                 }
+                None => print_out(flags, "(not set)"),
+            },
+            cli::ConfigAction::Set { key, value } => {
+                if flags.dry_run {
+                    print_out(flags, &format!("(dry-run) Would set {}", key));
+                    return Ok(());
+                }
+                config::config_set(&key, &value)?;
+                print_out(flags, &format!("Set {}.", key));
             }
-        }
+            cli::ConfigAction::Unset { key } => {
+                require_yes(&flags, "config unset")?;
+                if flags.dry_run {
+                    print_out(flags, &format!("(dry-run) Would unset {}", key));
+                    return Ok(());
+                }
+                config::config_unset(&key)?;
+                print_out(flags, &format!("Unset {}.", key));
+            }
+            cli::ConfigAction::List => {
+                let s = config::config_list()?;
+                if flags.json {
+                    let payload = serde_json::json!({
+                        "api_version": "1",
+                        "status": "ok",
+                        "data": { "config": s }
+                    });
+                    println!("{}", serde_json::to_string(&payload).unwrap_or_default());
+                } else {
+                    println!("{}", s);
+                }
+            }
+        },
 
         Commands::Project { action } => {
             match action {
@@ -584,7 +524,7 @@ async fn run(cli: Cli, flags: &CliFlags) -> Result<(), AppError> {
                     let mut git_remote_current: Option<String> = None;
                     let mut git_remote_bound: Option<String> = None;
                     let mut git_bound = false;
-            let mut ready_for_push = false;
+                    let mut ready_for_push = false;
                     let mut targets_configured: Vec<String> = Vec::new();
 
                     let proj = project::Project::find();
@@ -624,7 +564,8 @@ async fn run(cli: Cli, flags: &CliFlags) -> Result<(), AppError> {
                         ready_for_push = is_project
                             && vault_exists
                             && vault_accessible
-                            && (!matches!(git_remote_bound.as_ref(), Some(_)) || git_remote_current == git_remote_bound)
+                            && (!matches!(git_remote_bound.as_ref(), Some(_))
+                                || git_remote_current == git_remote_bound)
                             && !targets_configured.is_empty();
                     }
 
@@ -665,7 +606,8 @@ async fn run(cli: Cli, flags: &CliFlags) -> Result<(), AppError> {
         Commands::Doctor => {
             let version = env!("CARGO_PKG_VERSION").to_string();
 
-            let global_config = config::ensure_global_config_exists().is_ok() && config::load().is_ok();
+            let global_config =
+                config::ensure_global_config_exists().is_ok() && config::load().is_ok();
 
             let keychain_access = {
                 if let Ok(entry) = Entry::new("cred-doctor", "probe") {
@@ -719,34 +661,14 @@ async fn run(cli: Cli, flags: &CliFlags) -> Result<(), AppError> {
             if flags.json {
                 print_json(&payload);
             } else {
-                println!("{}", serde_json::to_string_pretty(&payload).unwrap_or_default());
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(&payload).unwrap_or_default()
+                );
             }
         }
     }
     Ok(())
-}
-
-/// Prompt for a token if missing, enforcing non-interactive constraints and non-empty input.
-fn read_token_securely(maybe_token: Option<String>, flags: &CliFlags) -> Result<String, AppError> {
-    match maybe_token {
-        Some(token) => Ok(token),
-        None => {
-            if flags.non_interactive {
-                return Err(AppError::user(anyhow::anyhow!(
-                    "--non-interactive set; token must be provided via --token"
-                )));
-            }
-            let token = prompt_password("Enter target token: ")
-                .context("Failed to read token securely")
-                .map_err(AppError::user)?;
-
-            if token.trim().is_empty() {
-                return Err(AppError::user(anyhow::anyhow!("Token cannot be empty")));
-            }
-
-            Ok(token)
-        }
-    }
 }
 
 /// Handle `target set`, persisting the token securely and zeroizing it afterward.

@@ -1,22 +1,22 @@
 //! Encrypted local vault (secrets at rest) using ChaCha20-Poly1305 and base64 serialization.
+use anyhow::{Context, Result};
+use base64::{Engine, engine::general_purpose::STANDARD as BASE64};
+use chacha20poly1305::{
+    ChaCha20Poly1305, Nonce,
+    aead::{Aead, AeadCore, KeyInit, OsRng},
+};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
-use anyhow::{Context, Result};
-use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
-use chacha20poly1305::{
-    aead::{Aead, AeadCore, KeyInit, OsRng},
-    ChaCha20Poly1305, Nonce
-};
-use zeroize::{Zeroize};
+use zeroize::Zeroize;
 
 /// On-disk representation of the vault file.
 #[derive(Serialize, Deserialize)]
 struct EncryptedVaultFile {
     version: u8,
     nonce: String,
-    ciphertext: String
+    ciphertext: String,
 }
 
 /// In-memory vault plus file/key context.
@@ -58,21 +58,26 @@ impl Vault {
             return Ok(vault);
         }
         let content = fs::read_to_string(vault_path).context("Failed to read vault.enc")?;
-        let file_data: EncryptedVaultFile = serde_json::from_str(&content)
-            .context("Failed to parse vault structure")?;
+        let file_data: EncryptedVaultFile =
+            serde_json::from_str(&content).context("Failed to parse vault structure")?;
 
         let cipher = ChaCha20Poly1305::new(&key.into());
 
-        let nonce_bytes = BASE64.decode(&file_data.nonce).context("Invalid nonce base64")?;
-        let ciphertext = BASE64.decode(&file_data.ciphertext).context("Invalid ciphertext base64")?;
+        let nonce_bytes = BASE64
+            .decode(&file_data.nonce)
+            .context("Invalid nonce base64")?;
+        let ciphertext = BASE64
+            .decode(&file_data.ciphertext)
+            .context("Invalid ciphertext base64")?;
 
         let nonce = Nonce::from_slice(&nonce_bytes);
 
-        let plaintext = cipher.decrypt(nonce, ciphertext.as_ref())
+        let plaintext = cipher
+            .decrypt(nonce, ciphertext.as_ref())
             .map_err(|_| anyhow::anyhow!("Decryption failed. Data corrupted or wrong key."))?;
 
-        let secrets: HashMap<String, String> = serde_json::from_slice(&plaintext)
-            .context("Failed to parse decrypted secrets JSON")?;
+        let secrets: HashMap<String, String> =
+            serde_json::from_slice(&plaintext).context("Failed to parse decrypted secrets JSON")?;
 
         vault.secrets = secrets;
         Ok(vault)
@@ -83,7 +88,8 @@ impl Vault {
         let plaintext = serde_json::to_vec(&self.secrets)?;
         let cipher = ChaCha20Poly1305::new(&self.key.into());
         let nonce = ChaCha20Poly1305::generate_nonce(&mut OsRng);
-        let ciphertext = cipher.encrypt(&nonce, plaintext.as_ref())
+        let ciphertext = cipher
+            .encrypt(&nonce, plaintext.as_ref())
             .map_err(|e| anyhow::anyhow!("Encryption failed: {:?}", e))?;
         let file_data = EncryptedVaultFile {
             version: 1,
@@ -114,5 +120,4 @@ impl Vault {
     pub fn list(&self) -> &HashMap<String, String> {
         &self.secrets
     }
-    
 }

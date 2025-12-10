@@ -47,10 +47,7 @@ You manage secrets locally, but `cred` can upload them to specified targets.
 
 #### Supported targets:
 
-- GitHub (repository secrets)
-- Vercel (planned)
-- Fly.io (planned)
-- AWS / Azure (future)
+- GitHub
 
 ---
 

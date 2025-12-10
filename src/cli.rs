@@ -1,8 +1,18 @@
 //! CLI argument and command definitions for cred.
 //! Parsed once in `main` and dispatched to command handlers.
 
-use clap::{Args, Parser, Subcommand};
 use crate::targets::Target;
+use clap::{Args, Parser, Subcommand};
+
+#[derive(Debug, Clone, Copy)]
+/// Global switches derived from CLI flags/env that affect output and prompts.
+pub struct CliFlags {
+    pub json: bool,
+    pub non_interactive: bool,
+    pub dry_run: bool,
+    pub yes: bool,
+    pub no_color: bool,
+}
 
 #[derive(Parser)]
 #[command(name = "cred")]
@@ -114,13 +124,14 @@ pub enum ProjectAction {
     Status,
 }
 
-#[derive(Subcommand)]
-#[derive(Debug)]
+#[derive(Subcommand, Debug)]
 pub enum TargetAction {
     Set(SetTargetArgs),
     List,
     /// Revoke a target's authentication token (Logout)
-    Revoke { name: Target }, 
+    Revoke {
+        name: Target,
+    },
 }
 
 #[derive(Args, Debug)]
@@ -132,20 +143,18 @@ pub struct SetTargetArgs {
     pub token: Option<String>,
 }
 
-#[derive(Subcommand)]
-#[derive(Debug)]
+#[derive(Subcommand, Debug)]
 pub enum SecretAction {
-    Set { 
-        key: String, 
+    Set {
+        key: String,
         value: String,
     },
-    Get { 
+    Get {
         key: String,
     },
-    List {
-    },
+    List {},
     /// Remove from Local Vault ONLY (Use 'prune' for remote removal)
-    Remove { 
+    Remove {
         key: String,
     },
     /// Revoke a generated secret at the source AND locally
@@ -153,5 +162,5 @@ pub enum SecretAction {
         key: String,
         #[arg(long)]
         target: Target,
-    }
+    },
 }

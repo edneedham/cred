@@ -1,18 +1,21 @@
 //! Global configuration and keystore utilities for cred.
 //! Handles `~/.config/cred/global.toml` plus pluggable secret storage backends.
 
+use anyhow::{Context, Result};
+use base64::{Engine, engine::general_purpose::STANDARD as BASE64};
+use chacha20poly1305::{
+    ChaCha20Poly1305, Key, Nonce,
+    aead::{Aead, KeyInit},
+};
+use keyring::Entry;
+use rand::Rng;
+use rand::RngCore;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
-use anyhow::{Context, Result};
-use toml::Value;
-use keyring::Entry;
-use rand::RngCore;
 use std::sync::OnceLock;
-use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
-use chacha20poly1305::{aead::{Aead, KeyInit}, ChaCha20Poly1305, Key, Nonce};
-use rand::Rng;
+use toml::Value;
 
 /// Versioning information for the global config.
 #[derive(Serialize, Deserialize, Debug, Default)]
@@ -101,7 +104,8 @@ pub fn load() -> Result<GlobalConfig> {
 fn load_raw() -> Result<Value> {
     let config_path = ensure_global_config_exists()?;
     let content = fs::read_to_string(&config_path).unwrap_or_default();
-    let val: Value = toml::from_str(&content).unwrap_or_else(|_| Value::Table(toml::map::Map::new()));
+    let val: Value =
+        toml::from_str(&content).unwrap_or_else(|_| Value::Table(toml::map::Map::new()));
     Ok(val)
 }
 
@@ -113,78 +117,87 @@ fn save_raw(val: &Value) -> Result<()> {
     Ok(())
 }
 
-/// Coerce string input into TOML types (bool, int, float, or string).
-fn parse_value(input: &str) -> Value {
-    if input.eq_ignore_ascii_case("true") {
-        return Value::Boolean(true);
-    }
-    if input.eq_ignore_ascii_case("false") {
-        return Value::Boolean(false);
-    }
-    if let Ok(i) = input.parse::<i64>() {
-        return Value::Integer(i);
-    }
-    if let Ok(f) = input.parse::<f64>() {
-        return Value::Float(f);
-    }
-    Value::String(input.to_string())
-}
+mod toml_path {
+    use super::*;
 
-/// Set a dotted path in a TOML `Value`, creating tables as needed.
-fn set_path(root: &mut Value, path: &[&str], value: Value) {
-    if path.is_empty() { return; }
-    let mut current = root;
-    for seg in path[..path.len()-1].iter() {
-        // ensure table
-        if !current.is_table() {
-            *current = Value::Table(toml::map::Map::new());
+    /// Coerce string input into TOML types (bool, int, float, or string).
+    pub fn parse_value(input: &str) -> Value {
+        if input.eq_ignore_ascii_case("true") {
+            return Value::Boolean(true);
         }
-        let tbl = current.as_table_mut().unwrap();
-        current = tbl.entry(seg.to_string()).or_insert(Value::Table(toml::map::Map::new()));
-    }
-    if let Some(last) = path.last() {
-        if !current.is_table() {
-            *current = Value::Table(toml::map::Map::new());
+        if input.eq_ignore_ascii_case("false") {
+            return Value::Boolean(false);
         }
-        let tbl = current.as_table_mut().unwrap();
-        tbl.insert(last.to_string(), value);
+        if let Ok(i) = input.parse::<i64>() {
+            return Value::Integer(i);
+        }
+        if let Ok(f) = input.parse::<f64>() {
+            return Value::Float(f);
+        }
+        Value::String(input.to_string())
     }
-}
 
-/// Remove a dotted path from a TOML `Value` if it exists.
-fn unset_path(root: &mut Value, path: &[&str]) {
-    if path.is_empty() { return; }
-    let mut current = root;
-    for seg in path[..path.len()-1].iter() {
-        if let Some(tbl) = current.as_table_mut() {
-            if let Some(next) = tbl.get_mut(*seg) {
-                current = next;
+    /// Set a dotted path in a TOML `Value`, creating tables as needed.
+    pub fn set_path(root: &mut Value, path: &[&str], value: Value) {
+        if path.is_empty() {
+            return;
+        }
+        let mut current = root;
+        for seg in path[..path.len() - 1].iter() {
+            if !current.is_table() {
+                *current = Value::Table(toml::map::Map::new());
+            }
+            let tbl = current.as_table_mut().unwrap();
+            current = tbl
+                .entry(seg.to_string())
+                .or_insert(Value::Table(toml::map::Map::new()));
+        }
+        if let Some(last) = path.last() {
+            if !current.is_table() {
+                *current = Value::Table(toml::map::Map::new());
+            }
+            let tbl = current.as_table_mut().unwrap();
+            tbl.insert(last.to_string(), value);
+        }
+    }
+
+    /// Remove a dotted path from a TOML `Value` if it exists.
+    pub fn unset_path(root: &mut Value, path: &[&str]) {
+        if path.is_empty() {
+            return;
+        }
+        let mut current = root;
+        for seg in path[..path.len() - 1].iter() {
+            if let Some(tbl) = current.as_table_mut() {
+                if let Some(next) = tbl.get_mut(*seg) {
+                    current = next;
+                } else {
+                    return;
+                }
             } else {
                 return;
             }
-        } else {
-            return;
         }
-    }
-    if let Some(last) = path.last() {
-        if let Some(tbl) = current.as_table_mut() {
-            tbl.remove(*last);
-        }
-    }
-}
-
-/// Fetch a dotted path from a TOML `Value`.
-fn get_path<'a>(root: &'a Value, path: &[&str]) -> Option<&'a Value> {
-    let mut current = root;
-    for seg in path {
-        match current {
-            Value::Table(t) => {
-                current = t.get(*seg)?;
+        if let Some(last) = path.last() {
+            if let Some(tbl) = current.as_table_mut() {
+                tbl.remove(*last);
             }
-            _ => return None,
         }
     }
-    Some(current)
+
+    /// Fetch a dotted path from a TOML `Value`.
+    pub fn get_path<'a>(root: &'a Value, path: &[&str]) -> Option<&'a Value> {
+        let mut current = root;
+        for seg in path {
+            match current {
+                Value::Table(t) => {
+                    current = t.get(*seg)?;
+                }
+                _ => return None,
+            }
+        }
+        Some(current)
+    }
 }
 
 /// Set a config value at a dotted path, coercing primitive types.
@@ -194,8 +207,8 @@ pub fn config_set(key_path: &str, val: &str) -> Result<()> {
     if parts.is_empty() {
         anyhow::bail!("Invalid key path");
     }
-    let value = parse_value(val);
-    set_path(&mut root, &parts, value);
+    let value = toml_path::parse_value(val);
+    toml_path::set_path(&mut root, &parts, value);
     save_raw(&root)
 }
 
@@ -206,7 +219,7 @@ pub fn config_get(key_path: &str) -> Result<Option<Value>> {
     if parts.is_empty() {
         return Ok(None);
     }
-    Ok(get_path(&root, &parts).cloned())
+    Ok(toml_path::get_path(&root, &parts).cloned())
 }
 
 /// Remove a config value at a dotted path.
@@ -216,7 +229,7 @@ pub fn config_unset(key_path: &str) -> Result<()> {
     if parts.is_empty() {
         return Ok(());
     }
-    unset_path(&mut root, &parts);
+    toml_path::unset_path(&mut root, &parts);
     save_raw(&root)
 }
 
@@ -235,9 +248,19 @@ fn default_config() -> GlobalConfig {
     let hostname = std::env::var("HOSTNAME").ok();
 
     GlobalConfig {
-        cred: CredMeta { version: "0.1.0".to_string(), config_version: 1 },
-        machine: Some(Machine { id: Some(machine_id), hostname }),
-        preferences: Preferences { default_target: Some("github".to_string()), confirm_destructive: Some(true), color_output: Some(true) },
+        cred: CredMeta {
+            version: "0.1.0".to_string(),
+            config_version: 1,
+        },
+        machine: Some(Machine {
+            id: Some(machine_id),
+            hostname,
+        }),
+        preferences: Preferences {
+            default_target: Some("github".to_string()),
+            confirm_destructive: Some(true),
+            color_output: Some(true),
+        },
         targets: HashMap::new(),
     }
 }
@@ -246,13 +269,17 @@ fn default_config() -> GlobalConfig {
 pub fn set_target_token(target: &str, token: &str) -> Result<()> {
     let mut config = load()?;
     let auth_ref = format!("cred:target:{}:default", target);
-    config.targets.entry(target.to_string()).or_default().auth_ref = Some(auth_ref.clone());
+    config
+        .targets
+        .entry(target.to_string())
+        .or_default()
+        .auth_ref = Some(auth_ref.clone());
 
     let config_path = ensure_global_config_exists()?;
     let toml_string = toml::to_string_pretty(&config)?;
     fs::write(&config_path, toml_string)?;
 
-    keystore_set(&auth_ref, token)?;
+    keystore::set(&auth_ref, token)?;
     Ok(())
 }
 
@@ -263,7 +290,7 @@ pub fn get_target_token(target: &str) -> Result<Option<String>> {
         Some(r) => r.clone(),
         None => return Ok(None),
     };
-    keystore_get(&auth_ref)
+    keystore::get(&auth_ref)
 }
 
 /// Remove a target token reference and delete the stored secret if present.
@@ -271,7 +298,7 @@ pub fn remove_target_token(target: &str) -> Result<()> {
     let mut config = load()?;
     if let Some(tcfg) = config.targets.remove(target) {
         if let Some(auth_ref) = tcfg.auth_ref {
-            keystore_remove(&auth_ref)?;
+            keystore::remove(&auth_ref)?;
         }
         let config_path = ensure_global_config_exists()?;
         let toml_string = toml::to_string_pretty(&config)?;
@@ -285,184 +312,199 @@ pub fn remove_target_token(target: &str) -> Result<()> {
 
 // ---------- Keystore backends ----------
 
-/// Pluggable secret storage backend for target tokens.
-enum KeystoreBackend {
-    Memory,
-    File { path: PathBuf, key: [u8; 32] },
-    Keyring,
-}
+mod keystore {
+    use super::*;
 
-/// Select keystore backend via env vars (memory, file, or platform keyring).
-fn resolve_keystore() -> KeystoreBackend {
-    match std::env::var("CRED_KEYSTORE").as_deref() {
-        Ok("memory") => KeystoreBackend::Memory,
-        Ok("file") => {
-            let path = std::env::var("CRED_KEYSTORE_FILE")
-                .map(PathBuf::from)
-                .unwrap_or_else(|_| {
-                    resolve_config_dir()
-                        .unwrap_or_else(|_| PathBuf::from("."))
-                        .join("keystore.enc")
-                });
-            let key_b64 = std::env::var("CRED_KEYSTORE_FILE_KEY")
-                .expect("CRED_KEYSTORE_FILE_KEY (base64 32 bytes) required for file keystore");
-            let key_raw = BASE64.decode(key_b64).expect("Invalid base64 in CRED_KEYSTORE_FILE_KEY");
-            assert!(key_raw.len() == 32, "CRED_KEYSTORE_FILE_KEY must be 32 bytes");
-            let mut key = [0u8; 32];
-            key.copy_from_slice(&key_raw);
-            KeystoreBackend::File { path, key }
-        }
-        _ => KeystoreBackend::Keyring,
+    /// Pluggable secret storage backend for target tokens.
+    enum KeystoreBackend {
+        Memory,
+        File { path: PathBuf, key: [u8; 32] },
+        Keyring,
     }
-}
 
-static MEMORY_KEYSTORE: OnceLock<std::sync::Mutex<HashMap<String, String>>> = OnceLock::new();
-
-/// Store a token in the active keystore backend.
-fn keystore_set(auth_ref: &str, token: &str) -> Result<()> {
-    match resolve_keystore() {
-        KeystoreBackend::Memory => {
-            let store = MEMORY_KEYSTORE.get_or_init(|| std::sync::Mutex::new(HashMap::new()));
-            let mut guard = store.lock().unwrap();
-            guard.insert(auth_ref.to_string(), token.to_string());
-            Ok(())
-        }
-        KeystoreBackend::File { path, key } => keystore_file_write(&path, &key, auth_ref, token),
-        KeystoreBackend::Keyring => {
-            let entry = Entry::new("cred-target", auth_ref)?;
-            entry.set_password(token)?;
-            Ok(())
+    /// Select keystore backend via env vars (memory, file, or platform keyring).
+    fn resolve_keystore() -> KeystoreBackend {
+        match std::env::var("CRED_KEYSTORE").as_deref() {
+            Ok("memory") => KeystoreBackend::Memory,
+            Ok("file") => {
+                let path = std::env::var("CRED_KEYSTORE_FILE")
+                    .map(PathBuf::from)
+                    .unwrap_or_else(|_| {
+                        resolve_config_dir()
+                            .unwrap_or_else(|_| PathBuf::from("."))
+                            .join("keystore.enc")
+                    });
+                let key_b64 = std::env::var("CRED_KEYSTORE_FILE_KEY")
+                    .expect("CRED_KEYSTORE_FILE_KEY (base64 32 bytes) required for file keystore");
+                let key_raw = BASE64
+                    .decode(key_b64)
+                    .expect("Invalid base64 in CRED_KEYSTORE_FILE_KEY");
+                assert!(
+                    key_raw.len() == 32,
+                    "CRED_KEYSTORE_FILE_KEY must be 32 bytes"
+                );
+                let mut key = [0u8; 32];
+                key.copy_from_slice(&key_raw);
+                KeystoreBackend::File { path, key }
+            }
+            _ => KeystoreBackend::Keyring,
         }
     }
-}
 
-/// Fetch a token from the active keystore backend.
-fn keystore_get(auth_ref: &str) -> Result<Option<String>> {
-    match resolve_keystore() {
-        KeystoreBackend::Memory => {
-            let store = MEMORY_KEYSTORE.get_or_init(|| std::sync::Mutex::new(HashMap::new()));
-            let guard = store.lock().unwrap();
-            Ok(guard.get(auth_ref).cloned())
-        }
-        KeystoreBackend::File { path, key } => keystore_file_read(&path, &key, auth_ref),
-        KeystoreBackend::Keyring => {
-            let entry = Entry::new("cred-target", auth_ref)?;
-            match entry.get_password() {
-                Ok(pw) => Ok(Some(pw)),
-                Err(_) => Ok(None),
+    static MEMORY_KEYSTORE: OnceLock<std::sync::Mutex<HashMap<String, String>>> = OnceLock::new();
+
+    /// Store a token in the active keystore backend.
+    pub fn set(auth_ref: &str, token: &str) -> Result<()> {
+        match resolve_keystore() {
+            KeystoreBackend::Memory => {
+                let store = MEMORY_KEYSTORE.get_or_init(|| std::sync::Mutex::new(HashMap::new()));
+                let mut guard = store.lock().unwrap();
+                guard.insert(auth_ref.to_string(), token.to_string());
+                Ok(())
+            }
+            KeystoreBackend::File { path, key } => {
+                keystore_file_write(&path, &key, auth_ref, token)
+            }
+            KeystoreBackend::Keyring => {
+                let entry = Entry::new("cred-target", auth_ref)?;
+                entry.set_password(token)?;
+                Ok(())
             }
         }
     }
-}
 
-/// Remove a token from the active keystore backend.
-fn keystore_remove(auth_ref: &str) -> Result<()> {
-    match resolve_keystore() {
-        KeystoreBackend::Memory => {
-            let store = MEMORY_KEYSTORE.get_or_init(|| std::sync::Mutex::new(HashMap::new()));
-            let mut guard = store.lock().unwrap();
-            guard.remove(auth_ref);
-            Ok(())
-        }
-        KeystoreBackend::File { path, key } => {
-            keystore_file_delete(&path, &key, auth_ref)?;
-            Ok(())
-        }
-        KeystoreBackend::Keyring => {
-            let entry = Entry::new("cred-target", auth_ref)?;
-            let _ = entry.set_password("");
-            Ok(())
+    /// Fetch a token from the active keystore backend.
+    pub fn get(auth_ref: &str) -> Result<Option<String>> {
+        match resolve_keystore() {
+            KeystoreBackend::Memory => {
+                let store = MEMORY_KEYSTORE.get_or_init(|| std::sync::Mutex::new(HashMap::new()));
+                let guard = store.lock().unwrap();
+                Ok(guard.get(auth_ref).cloned())
+            }
+            KeystoreBackend::File { path, key } => keystore_file_read(&path, &key, auth_ref),
+            KeystoreBackend::Keyring => {
+                let entry = Entry::new("cred-target", auth_ref)?;
+                match entry.get_password() {
+                    Ok(pw) => Ok(Some(pw)),
+                    Err(_) => Ok(None),
+                }
+            }
         }
     }
-}
 
-/// On-disk encrypted keystore blob.
-#[derive(Serialize, Deserialize)]
-struct EncKeystore {
-    nonce: String,
-    ciphertext: String,
-}
-
-/// Read a token from the file-based keystore.
-fn keystore_file_read(path: &Path, key: &[u8; 32], auth_ref: &str) -> Result<Option<String>> {
-    if !path.exists() {
-        return Ok(None);
+    /// Remove a token from the active keystore backend.
+    pub fn remove(auth_ref: &str) -> Result<()> {
+        match resolve_keystore() {
+            KeystoreBackend::Memory => {
+                let store = MEMORY_KEYSTORE.get_or_init(|| std::sync::Mutex::new(HashMap::new()));
+                let mut guard = store.lock().unwrap();
+                guard.remove(auth_ref);
+                Ok(())
+            }
+            KeystoreBackend::File { path, key } => {
+                keystore_file_delete(&path, &key, auth_ref)?;
+                Ok(())
+            }
+            KeystoreBackend::Keyring => {
+                let entry = Entry::new("cred-target", auth_ref)?;
+                let _ = entry.set_password("");
+                Ok(())
+            }
+        }
     }
-    let raw = fs::read(path)?;
-    let enc: EncKeystore = serde_json::from_slice(&raw)?;
-    let nonce_bytes = BASE64.decode(enc.nonce)?;
-    let cipher_bytes = BASE64.decode(enc.ciphertext)?;
-    let cipher = ChaCha20Poly1305::new(Key::from_slice(key));
-    if nonce_bytes.len() != 12 {
-        anyhow::bail!("Invalid nonce length in keystore");
-    }
-    let nonce = Nonce::from_slice(&nonce_bytes);
-    let plaintext = cipher
-        .decrypt(nonce, cipher_bytes.as_ref())
-        .map_err(|e| anyhow::anyhow!("Failed to decrypt keystore: {}", e))?;
-    let mut map: HashMap<String, String> = serde_json::from_slice(&plaintext)?;
-    Ok(map.remove(auth_ref))
-}
 
-/// Write/update a token in the file-based keystore.
-fn keystore_file_write(path: &Path, key: &[u8; 32], auth_ref: &str, token: &str) -> Result<()> {
-    let mut map = if path.exists() {
-        keystore_file_load_all(path, key)?
-    } else {
-        HashMap::new()
-    };
-    map.insert(auth_ref.to_string(), token.to_string());
-    keystore_file_save_all(path, key, &map)
-}
-
-/// Delete a token from the file-based keystore.
-fn keystore_file_delete(path: &Path, key: &[u8; 32], auth_ref: &str) -> Result<()> {
-    if !path.exists() {
-        return Ok(());
+    /// On-disk encrypted keystore blob.
+    #[derive(Serialize, Deserialize)]
+    struct EncKeystore {
+        nonce: String,
+        ciphertext: String,
     }
-    let mut map = keystore_file_load_all(path, key)?;
-    map.remove(auth_ref);
-    keystore_file_save_all(path, key, &map)
-}
 
-/// Load the full file-based keystore into memory.
-fn keystore_file_load_all(path: &Path, key: &[u8; 32]) -> Result<HashMap<String, String>> {
-    let raw = fs::read(path)?;
-    let enc: EncKeystore = serde_json::from_slice(&raw)?;
-    let nonce_bytes = BASE64.decode(enc.nonce)?;
-    let cipher_bytes = BASE64.decode(enc.ciphertext)?;
-    let cipher = ChaCha20Poly1305::new(Key::from_slice(key));
-    if nonce_bytes.len() != 12 {
-        anyhow::bail!("Invalid nonce length in keystore");
+    /// Read a token from the file-based keystore.
+    fn keystore_file_read(path: &Path, key: &[u8; 32], auth_ref: &str) -> Result<Option<String>> {
+        if !path.exists() {
+            return Ok(None);
+        }
+        let raw = fs::read(path)?;
+        let enc: EncKeystore = serde_json::from_slice(&raw)?;
+        let nonce_bytes = BASE64.decode(enc.nonce)?;
+        let cipher_bytes = BASE64.decode(enc.ciphertext)?;
+        let cipher = ChaCha20Poly1305::new(Key::from_slice(key));
+        if nonce_bytes.len() != 12 {
+            anyhow::bail!("Invalid nonce length in keystore");
+        }
+        let nonce = Nonce::from_slice(&nonce_bytes);
+        let plaintext = cipher
+            .decrypt(nonce, cipher_bytes.as_ref())
+            .map_err(|e| anyhow::anyhow!("Failed to decrypt keystore: {}", e))?;
+        let mut map: HashMap<String, String> = serde_json::from_slice(&plaintext)?;
+        Ok(map.remove(auth_ref))
     }
-    let nonce = Nonce::from_slice(&nonce_bytes);
-    let plaintext = cipher
-        .decrypt(nonce, cipher_bytes.as_ref())
-        .map_err(|e| anyhow::anyhow!("Failed to decrypt keystore: {}", e))?;
-    let map: HashMap<String, String> = serde_json::from_slice(&plaintext)?;
-    Ok(map)
-}
 
-/// Save the full file-based keystore map back to disk.
-fn keystore_file_save_all(path: &Path, key: &[u8; 32], map: &HashMap<String, String>) -> Result<()> {
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent)?;
+    /// Write/update a token in the file-based keystore.
+    fn keystore_file_write(path: &Path, key: &[u8; 32], auth_ref: &str, token: &str) -> Result<()> {
+        let mut map = if path.exists() {
+            keystore_file_load_all(path, key)?
+        } else {
+            HashMap::new()
+        };
+        map.insert(auth_ref.to_string(), token.to_string());
+        keystore_file_save_all(path, key, &map)
     }
-    let plaintext = serde_json::to_vec(map)?;
-    let cipher = ChaCha20Poly1305::new(Key::from_slice(key));
-    let mut nonce = [0u8; 12];
-    rand::rng().fill(&mut nonce);
-    let nonce_ga = Nonce::from_slice(&nonce);
-    let ciphertext = cipher
-        .encrypt(nonce_ga, plaintext.as_ref())
-        .map_err(|e| anyhow::anyhow!("Failed to encrypt keystore: {}", e))?;
-    let enc = EncKeystore {
-        nonce: BASE64.encode(nonce),
-        ciphertext: BASE64.encode(ciphertext),
-    };
-    let data = serde_json::to_vec_pretty(&enc)?;
-    fs::write(path, data)?;
-    Ok(())
+
+    /// Delete a token from the file-based keystore.
+    fn keystore_file_delete(path: &Path, key: &[u8; 32], auth_ref: &str) -> Result<()> {
+        if !path.exists() {
+            return Ok(());
+        }
+        let mut map = keystore_file_load_all(path, key)?;
+        map.remove(auth_ref);
+        keystore_file_save_all(path, key, &map)
+    }
+
+    /// Load the full file-based keystore into memory.
+    fn keystore_file_load_all(path: &Path, key: &[u8; 32]) -> Result<HashMap<String, String>> {
+        let raw = fs::read(path)?;
+        let enc: EncKeystore = serde_json::from_slice(&raw)?;
+        let nonce_bytes = BASE64.decode(enc.nonce)?;
+        let cipher_bytes = BASE64.decode(enc.ciphertext)?;
+        let cipher = ChaCha20Poly1305::new(Key::from_slice(key));
+        if nonce_bytes.len() != 12 {
+            anyhow::bail!("Invalid nonce length in keystore");
+        }
+        let nonce = Nonce::from_slice(&nonce_bytes);
+        let plaintext = cipher
+            .decrypt(nonce, cipher_bytes.as_ref())
+            .map_err(|e| anyhow::anyhow!("Failed to decrypt keystore: {}", e))?;
+        let map: HashMap<String, String> = serde_json::from_slice(&plaintext)?;
+        Ok(map)
+    }
+
+    /// Save the full file-based keystore map back to disk.
+    fn keystore_file_save_all(
+        path: &Path,
+        key: &[u8; 32],
+        map: &HashMap<String, String>,
+    ) -> Result<()> {
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent)?;
+        }
+        let plaintext = serde_json::to_vec(map)?;
+        let cipher = ChaCha20Poly1305::new(Key::from_slice(key));
+        let mut nonce = [0u8; 12];
+        rand::rng().fill(&mut nonce);
+        let nonce_ga = Nonce::from_slice(&nonce);
+        let ciphertext = cipher
+            .encrypt(nonce_ga, plaintext.as_ref())
+            .map_err(|e| anyhow::anyhow!("Failed to encrypt keystore: {}", e))?;
+        let enc = EncKeystore {
+            nonce: BASE64.encode(nonce),
+            ciphertext: BASE64.encode(ciphertext),
+        };
+        let data = serde_json::to_vec_pretty(&enc)?;
+        fs::write(path, data)?;
+        Ok(())
+    }
 }
 
 #[cfg(test)]
@@ -471,22 +513,29 @@ mod tests {
 
     #[test]
     fn test_parse_value_coercion() {
-        assert_eq!(parse_value("true"), Value::Boolean(true));
-        assert_eq!(parse_value("false"), Value::Boolean(false));
-        assert_eq!(parse_value("42"), Value::Integer(42));
-        assert_eq!(parse_value("3.14"), Value::Float(3.14));
-        assert_eq!(parse_value("text"), Value::String("text".to_string()));
+        assert_eq!(toml_path::parse_value("true"), Value::Boolean(true));
+        assert_eq!(toml_path::parse_value("false"), Value::Boolean(false));
+        assert_eq!(toml_path::parse_value("42"), Value::Integer(42));
+        assert_eq!(toml_path::parse_value("3.14"), Value::Float(3.14));
+        assert_eq!(
+            toml_path::parse_value("text"),
+            Value::String("text".to_string())
+        );
     }
 
     #[test]
     fn test_set_get_unset_path() {
         let mut root = Value::Table(toml::map::Map::new());
-        set_path(&mut root, &["preferences", "default_target"], Value::String("github".into()));
-        let got = get_path(&root, &["preferences", "default_target"]);
+        toml_path::set_path(
+            &mut root,
+            &["preferences", "default_target"],
+            Value::String("github".into()),
+        );
+        let got = toml_path::get_path(&root, &["preferences", "default_target"]);
         assert_eq!(got, Some(&Value::String("github".into())));
 
-        unset_path(&mut root, &["preferences", "default_target"]);
-        let got = get_path(&root, &["preferences", "default_target"]);
+        toml_path::unset_path(&mut root, &["preferences", "default_target"]);
+        let got = toml_path::get_path(&root, &["preferences", "default_target"]);
         assert!(got.is_none());
     }
 

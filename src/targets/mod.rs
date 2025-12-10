@@ -7,9 +7,9 @@ mod github;
 #[cfg(not(feature = "github"))]
 compile_error!("No targets enabled. Enable feature \"github\".");
 
-use std::collections::HashMap;
 use anyhow::Result;
 use clap::ValueEnum;
+use std::collections::HashMap;
 use std::fmt;
 
 /// Supported remote targets (feature-gated).
@@ -40,30 +40,57 @@ pub struct PushOptions {
 pub trait TargetAdapter {
     /// Human-readable target name.
     fn name(&self) -> &str;
-    
+
     /// Push secrets to the target. Default errors out for non-hosting targets.
-    async fn push(&self, _secrets: &HashMap<String, String>, _auth_token: &str, _options: &PushOptions) -> Result<()> {
-        anyhow::bail!("Target '{}' is not a hosting platform; you cannot push secrets to it.", self.name());
+    async fn push(
+        &self,
+        _secrets: &HashMap<String, String>,
+        _auth_token: &str,
+        _options: &PushOptions,
+    ) -> Result<()> {
+        anyhow::bail!(
+            "Target '{}' is not a hosting platform; you cannot push secrets to it.",
+            self.name()
+        );
     }
 
     /// Delete secrets from the target. Default errors out for non-hosting targets.
-    async fn delete(&self, _keys: &[String], _auth_token: &str, _options: &PushOptions) -> Result<()> {
-        anyhow::bail!("Target '{}' is not a hosting platform; you cannot prune secrets from it.", self.name());
+    async fn delete(
+        &self,
+        _keys: &[String],
+        _auth_token: &str,
+        _options: &PushOptions,
+    ) -> Result<()> {
+        anyhow::bail!(
+            "Target '{}' is not a hosting platform; you cannot prune secrets from it.",
+            self.name()
+        );
     }
-    
+
     #[allow(dead_code)]
     /// Optionally generate a new API key/token for an environment.
     async fn generate(&self, _env: &str, _auth_token: &str) -> Result<(String, String)> {
-        anyhow::bail!("Target '{}' does not support API key generation.", self.name());
+        anyhow::bail!(
+            "Target '{}' does not support API key generation.",
+            self.name()
+        );
     }
 
     /// Revoke a specific secret/key value at the target.
-    async fn revoke_secret(&self, _key_name: &str, _key_value: &str, _auth_token: &str) -> Result<()> {
-        anyhow::bail!("Target '{}' does not support API key revocation.", self.name());
+    async fn revoke_secret(
+        &self,
+        _key_name: &str,
+        _key_value: &str,
+        _auth_token: &str,
+    ) -> Result<()> {
+        anyhow::bail!(
+            "Target '{}' does not support API key revocation.",
+            self.name()
+        );
     }
 
     /// Revoke the authentication token used for this target (if supported).
-    async fn revoke_auth_token(&self, _auth_token: &str) -> Result<()> { 
+    async fn revoke_auth_token(&self, _auth_token: &str) -> Result<()> {
         Ok(()) // Default to ok (allows local logout)
     }
 }
@@ -82,7 +109,12 @@ impl TargetAdapter for TargetWrapper {
         }
     }
 
-    async fn push(&self, secrets: &HashMap<String, String>, auth_token: &str, options: &PushOptions) -> Result<()> {
+    async fn push(
+        &self,
+        secrets: &HashMap<String, String>,
+        auth_token: &str,
+        options: &PushOptions,
+    ) -> Result<()> {
         match self {
             #[cfg(feature = "github")]
             Self::Github(p) => p.push(secrets, auth_token, options).await,
@@ -131,7 +163,9 @@ mod tests {
 
     struct MockTarget;
     impl TargetAdapter for MockTarget {
-        fn name(&self) -> &str { "mock_target" }
+        fn name(&self) -> &str {
+            "mock_target"
+        }
         async fn generate(&self, _env: &str, _token: &str) -> Result<(String, String)> {
             Ok(("KEY".to_string(), "VAL".to_string()))
         }
@@ -152,11 +186,21 @@ mod tests {
 
         let push_result = p.push(&secrets, "token", &options).await;
         assert!(push_result.is_err());
-        assert!(push_result.unwrap_err().to_string().contains("not a hosting platform"));
+        assert!(
+            push_result
+                .unwrap_err()
+                .to_string()
+                .contains("not a hosting platform")
+        );
 
         let delete_result = p.delete(&[], "token", &options).await;
         assert!(delete_result.is_err());
-        assert!(delete_result.unwrap_err().to_string().contains("not a hosting platform"));
+        assert!(
+            delete_result
+                .unwrap_err()
+                .to_string()
+                .contains("not a hosting platform")
+        );
     }
 
     #[tokio::test]

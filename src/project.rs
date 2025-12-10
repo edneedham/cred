@@ -1,16 +1,17 @@
 //! Project discovery, git detection, repo binding, and project status helpers.
+use anyhow::anyhow;
+use anyhow::{Context, Result, bail};
+use base64::{Engine, engine::general_purpose::STANDARD as BASE64};
+use keyring::Entry;
+use rand::RngCore;
 use serde::{Deserialize, Serialize};
 use std::env;
 use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
-use anyhow::{bail, Context, Result};
-use anyhow::anyhow;
-use keyring::Entry;
-use rand::RngCore;
-use uuid::Uuid;
-use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
 use std::process::Command;
+use uuid::Uuid;
+use crate::error::{RepoBindingError, RepoBindingErrorKind};
 
 use crate::vault;
 
@@ -55,30 +56,6 @@ pub struct ProjectStatusData {
     pub ready_for_push: bool,
 }
 
-#[derive(Debug, Clone, Copy)]
-pub enum RepoBindingErrorKind {
-    User,
-    Git,
-}
-
-#[derive(Debug)]
-pub struct RepoBindingError {
-    pub kind: RepoBindingErrorKind,
-    pub error: anyhow::Error,
-}
-
-impl std::fmt::Display for RepoBindingError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.error)
-    }
-}
-
-impl std::error::Error for RepoBindingError {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        self.error.source()
-    }
-}
-
 impl Project {
     /// Locate the nearest `.cred/` ancestor and return its paths.
     pub fn find() -> Result<Self> {
@@ -101,8 +78,10 @@ impl Project {
         if !self.config_path.exists() {
             return Ok(ProjectConfig::default());
         }
-        let content = fs::read_to_string(&self.config_path).context("Failed to read project.toml")?;
-        let config: ProjectConfig = toml::from_str(&content).context("Failed to parse project.toml")?;
+        let content =
+            fs::read_to_string(&self.config_path).context("Failed to read project.toml")?;
+        let config: ProjectConfig =
+            toml::from_str(&content).context("Failed to parse project.toml")?;
         Ok(config)
     }
 
@@ -121,19 +100,25 @@ impl Project {
             return Ok(key);
         }
         let config = self.load_config()?;
-        let project_id = config.id.ok_or_else(|| anyhow::anyhow!("Project ID missing in project.toml"))?;
+        let project_id = config
+            .id
+            .ok_or_else(|| anyhow::anyhow!("Project ID missing in project.toml"))?;
         let entry = Entry::new("cred-cli", &project_id.to_string())?;
 
-        let key_b64 = entry.get_password().context("Encryption key not found in System Credential Store.")?;
+        let key_b64 = entry
+            .get_password()
+            .context("Encryption key not found in System Credential Store.")?;
 
-        let key_vec = BASE64.decode(key_b64).context("Corrupted key in credential store")?;
+        let key_vec = BASE64
+            .decode(key_b64)
+            .context("Corrupted key in credential store")?;
 
         let mut key = [0u8; 32];
         if key_vec.len() != 32 {
             anyhow::bail!("Invalid key length in credential store");
         }
         key.copy_from_slice(&key_vec);
-        
+
         Ok(key)
     }
 
@@ -176,11 +161,14 @@ pub fn init_at(root: &Path) -> Result<()> {
         .map(|p| format!("git_repo = \"{}\"\n", p))
         .unwrap_or_default();
 
-    let project_toml = format!(r#"# Cred Project Configuration
+    let project_toml = format!(
+        r#"# Cred Project Configuration
 name = "my-project"
 version = "0.1.0"
 id = "{}"
-{}{}"#, project_id, git_root_line, git_repo_line);
+{}{}"#,
+        project_id, git_root_line, git_repo_line
+    );
     fs::write(cred_dir.join("project.toml"), project_toml)?;
 
     let mut key = [0u8; 32];
@@ -188,10 +176,12 @@ id = "{}"
 
     // Service: "cred-cli", User: project_id
     let entry = Entry::new("cred-cli", &project_id.to_string())?;
-    
+
     // Keyring stores strings, so we base64 encode the raw key
     let key_b64 = BASE64.encode(key);
-    entry.set_password(&key_b64).context("Failed to save key to the System Credential Store")?;
+    entry
+        .set_password(&key_b64)
+        .context("Failed to save key to the System Credential Store")?;
 
     key.fill(0);
 
@@ -205,7 +195,10 @@ id = "{}"
     update_gitignore(root)?;
 
     println!("Initialized new cred project at {}", cred_dir.display());
-    println!("🔑 Encryption key generated and stored in the System Credential Store (ID: {})", project_id);
+    println!(
+        "🔑 Encryption key generated and stored in the System Credential Store (ID: {})",
+        project_id
+    );
     Ok(())
 }
 
@@ -357,7 +350,9 @@ fn update_gitignore(root: &Path) -> Result<()> {
     let gitignore = root.join(".gitignore");
     let entry = "\n.cred/\n";
     let mut file = fs::OpenOptions::new()
-        .write(true).append(true).create(true)
+        .write(true)
+        .append(true)
+        .create(true)
         .open(&gitignore)?;
 
     if let Ok(content) = fs::read_to_string(&gitignore) {
