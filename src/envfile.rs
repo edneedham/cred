@@ -1,7 +1,7 @@
 //! Helpers for importing/exporting .env-style files to and from the vault.
 use crate::error::AppError;
 use crate::vault::Vault;
-use anyhow::{anyhow, Context};
+use anyhow::{Context, anyhow};
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -134,4 +134,3 @@ fn tmp_path(path: &Path) -> PathBuf {
     tmp.set_file_name(format!("{}.tmp", file_name));
     tmp
 }
-
