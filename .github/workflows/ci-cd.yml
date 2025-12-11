@@ -116,7 +116,7 @@ jobs:
                 CARGO_REGISTRY_TOKEN: ${{ secrets.CRATES_IO_TOKEN }}
               run: |
                 set -euo pipefail
-                ERSION=$(grep '^version' Cargo.toml | head -1 | cut -d'"' -f2)
+                VERSION=$(grep '^version' Cargo.toml | head -1 | cut -d'"' -f2)
                 echo "Publishing version: $VERSION"
 
                 # Skip if this exact version is already on crates.io
