@@ -23,8 +23,6 @@
 -   A bidirectional secrets sync tool
 -   A runtime secret injector for applications
 
-It is a **developer-side deployment tool** for managing and pushing secrets safely.
-
 ## Who is this for
 
 -   Open-source maintainers
@@ -42,7 +40,7 @@ Managing secrets across projects, targets, and sources is a mess and a chore.
 
 ### **1. A Matrix Vault per Project**
 
-Your secrets live inside `.cred/vault.enc` as an encrypted flat key/value store.
+Your secrets live inside `.cred/vault.enc` as an encrypted store with per-secret metadata (format, timestamps, description).
 
 ### **2. A global target configuration store**
 
