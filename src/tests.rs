@@ -370,21 +370,73 @@ mod tests {
 
     // ==================== Vault v2 Schema Tests ====================
 
-    // Format auto-detection: multiline content is detected.
+    // Format auto-detection: PEM content is detected.
+    #[test]
+    fn test_format_auto_detection_pem() {
+        let pem_key = "-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBg...\n-----END PRIVATE KEY-----";
+        assert_eq!(vault::Vault::detect_format(pem_key), SecretFormat::Pem);
+
+        let pem_cert =
+            "-----BEGIN CERTIFICATE-----\nMIIDXTCCAkWgAwIBAgIJAJC1...\n-----END CERTIFICATE-----";
+        assert_eq!(vault::Vault::detect_format(pem_cert), SecretFormat::Pem);
+
+        let pem_rsa =
+            "-----BEGIN RSA PRIVATE KEY-----\nMIIEpAIBAAKCAQEA...\n-----END RSA PRIVATE KEY-----";
+        assert_eq!(vault::Vault::detect_format(pem_rsa), SecretFormat::Pem);
+    }
+
+    // Format auto-detection: JSON must actually parse.
+    #[test]
+    fn test_format_auto_detection_json() {
+        // Valid JSON object
+        let json_obj = r#"{"api_key": "sk-xxx", "org": "acme"}"#;
+        assert_eq!(vault::Vault::detect_format(json_obj), SecretFormat::Json);
+
+        // Valid JSON array
+        let json_arr = r#"["secret1", "secret2", "secret3"]"#;
+        assert_eq!(vault::Vault::detect_format(json_arr), SecretFormat::Json);
+
+        // Invalid JSON that looks like JSON → Raw (not Json)
+        let fake_json = r#"{not valid json}"#;
+        assert_eq!(vault::Vault::detect_format(fake_json), SecretFormat::Raw);
+
+        // Curly braces but not JSON → Raw
+        let not_json = "{abc}";
+        assert_eq!(vault::Vault::detect_format(not_json), SecretFormat::Raw);
+    }
+
+    // Format auto-detection: base64 must be strictly valid.
+    #[test]
+    fn test_format_auto_detection_base64() {
+        // Valid base64 (length divisible by 4, decodes successfully)
+        let b64 = "SGVsbG8gV29ybGQhIFRoaXMgaXMgYSB0ZXN0Lg==";
+        assert_eq!(vault::Vault::detect_format(b64), SecretFormat::Base64);
+
+        // Short strings → Raw (not base64)
+        let short = "abc123";
+        assert_eq!(vault::Vault::detect_format(short), SecretFormat::Raw);
+
+        // Length not divisible by 4 → Raw
+        let bad_len = "SGVsbG8gV29ybGQhIFRoaXM=X";
+        assert_eq!(vault::Vault::detect_format(bad_len), SecretFormat::Raw);
+
+        // API keys that look base64-ish but aren't → Raw
+        let aws_key = "AKIAIOSFODNN7EXAMPLE";
+        assert_eq!(vault::Vault::detect_format(aws_key), SecretFormat::Raw);
+
+        // Contains invalid chars → Raw
+        let with_dash = "SGVsbG8tV29ybGQ=";
+        assert_eq!(vault::Vault::detect_format(with_dash), SecretFormat::Raw);
+    }
+
+    // Format auto-detection: multiline content (non-PEM) is detected.
     #[test]
     fn test_format_auto_detection_multiline() {
-        let multiline = "-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBg...\n-----END PRIVATE KEY-----";
+        let multiline = "line one\nline two\nline three";
         assert_eq!(
             vault::Vault::detect_format(multiline),
             SecretFormat::Multiline
         );
-    }
-
-    // Format auto-detection: JSON-like content is detected.
-    #[test]
-    fn test_format_auto_detection_json() {
-        let json_val = r#"{"api_key": "sk-xxx", "org": "acme"}"#;
-        assert_eq!(vault::Vault::detect_format(json_val), SecretFormat::Json);
     }
 
     // Format auto-detection: simple strings are raw.
@@ -395,6 +447,11 @@ mod tests {
             SecretFormat::Raw
         );
         assert_eq!(vault::Vault::detect_format(""), SecretFormat::Raw);
+        // Tokens with dashes/underscores are raw, not base64
+        assert_eq!(
+            vault::Vault::detect_format("sk-proj-abc123xyz"),
+            SecretFormat::Raw
+        );
     }
 
     // SecretEntry metadata is preserved through save/load cycle.
@@ -562,6 +619,8 @@ mod tests {
             "multiline".parse::<SecretFormat>().unwrap(),
             SecretFormat::Multiline
         );
+        assert_eq!("pem".parse::<SecretFormat>().unwrap(), SecretFormat::Pem);
+        assert_eq!("PEM".parse::<SecretFormat>().unwrap(), SecretFormat::Pem); // case insensitive
         assert_eq!(
             "base64".parse::<SecretFormat>().unwrap(),
             SecretFormat::Base64
@@ -574,6 +633,7 @@ mod tests {
         // Display
         assert_eq!(SecretFormat::Raw.to_string(), "raw");
         assert_eq!(SecretFormat::Multiline.to_string(), "multiline");
+        assert_eq!(SecretFormat::Pem.to_string(), "pem");
         assert_eq!(SecretFormat::Base64.to_string(), "base64");
         assert_eq!(SecretFormat::Json.to_string(), "json");
     }

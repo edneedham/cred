@@ -1,5 +1,17 @@
 # Changelog
 
+## v0.3.1
+
+### Smart Format Detection
+
+-   **PEM**: Auto-detected for certificates and keys (`-----BEGIN ...`)
+-   **JSON**: Objects `{...}` and arrays `[...]`
+-   **Base64**: Single-line base64-encoded content
+-   **Multiline**: Generic multi-line text
+-   **Raw**: Single-line text (default)
+
+Format is now optional — secrets are classified automatically on save.
+
 ## v0.3.0
 
 ### Vault Schema v2
@@ -16,7 +28,6 @@
 -   `cred secret list --json` returns metadata for all secrets
 -   `cred secret list` shows descriptions inline in plain text output
 -   `cred secret remove` now shows secret age (e.g., "3 days old") when deleting
--   Format auto-detection: multiline content and JSON are detected automatically
 
 ### Internal
 

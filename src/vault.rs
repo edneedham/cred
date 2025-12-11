@@ -37,8 +37,10 @@ pub enum SecretFormat {
     /// Single-line text (default)
     #[default]
     Raw,
-    /// Multi-line content (PEM keys, certificates, etc.)
+    /// Multi-line content (generic)
     Multiline,
+    /// PEM-encoded keys, certificates, etc.
+    Pem,
     /// Base64-encoded binary data
     Base64,
     /// JSON structured data
@@ -50,6 +52,7 @@ impl std::fmt::Display for SecretFormat {
         match self {
             SecretFormat::Raw => write!(f, "raw"),
             SecretFormat::Multiline => write!(f, "multiline"),
+            SecretFormat::Pem => write!(f, "pem"),
             SecretFormat::Base64 => write!(f, "base64"),
             SecretFormat::Json => write!(f, "json"),
         }
@@ -63,10 +66,11 @@ impl std::str::FromStr for SecretFormat {
         match s.to_lowercase().as_str() {
             "raw" => Ok(SecretFormat::Raw),
             "multiline" => Ok(SecretFormat::Multiline),
+            "pem" => Ok(SecretFormat::Pem),
             "base64" => Ok(SecretFormat::Base64),
             "json" => Ok(SecretFormat::Json),
             _ => Err(format!(
-                "Invalid format '{}'. Valid options: raw, multiline, base64, json",
+                "Invalid format '{}'. Valid options: raw, multiline, pem, base64, json",
                 s
             )),
         }
@@ -202,15 +206,92 @@ impl Vault {
     }
 
     /// Auto-detect format based on value content.
+    ///
+    /// Guiding principles:
+    /// - Never guess aggressively; if in doubt → Raw or Multiline
+    /// - PEM wins over everything (explicit structure)
+    /// - JSON must actually parse
+    /// - Base64 must be strictly valid (not just valid alphabet)
+    /// - Multiline means literal newlines only
+    /// - Structural detection only, no semantic inference
+    ///
+    /// Detection priority:
+    /// 1. PEM — starts with `-----BEGIN ` (highest certainty)
+    /// 2. JSON — must successfully parse as JSON
+    /// 3. Base64 — must be strictly valid base64
+    /// 4. Multiline — contains literal newlines
+    /// 5. Raw — default (safe fallback)
     pub fn detect_format(value: &str) -> SecretFormat {
-        if value.contains('\n') {
-            SecretFormat::Multiline
-        } else if value.starts_with('{') && value.ends_with('}') {
-            // Simple JSON object heuristic
-            SecretFormat::Json
-        } else {
-            SecretFormat::Raw
+        let trimmed = value.trim();
+
+        // PEM detection — explicit structural marker, highest priority
+        if trimmed.starts_with("-----BEGIN ") {
+            return SecretFormat::Pem;
         }
+
+        // JSON detection — must actually parse, not just look like JSON
+        if (trimmed.starts_with('{') && trimmed.ends_with('}'))
+            || (trimmed.starts_with('[') && trimmed.ends_with(']'))
+        {
+            if serde_json::from_str::<serde_json::Value>(trimmed).is_ok() {
+                return SecretFormat::Json;
+            }
+        }
+
+        // Base64 detection — strict validation only
+        if !trimmed.contains('\n') && Self::is_valid_base64(trimmed) {
+            return SecretFormat::Base64;
+        }
+
+        // Multiline — literal newlines only (not escaped \n)
+        if value.contains('\n') {
+            return SecretFormat::Multiline;
+        }
+
+        // Default: Raw (safe fallback)
+        SecretFormat::Raw
+    }
+
+    /// Strict base64 validation.
+    ///
+    /// Requirements:
+    /// - Minimum length (avoid false positives on short strings)
+    /// - Length divisible by 4 (base64 requirement)
+    /// - Valid padding (0-2 `=` chars at end only)
+    /// - Actually decodes successfully
+    fn is_valid_base64(s: &str) -> bool {
+        // Too short — likely not base64
+        if s.len() < 24 {
+            return false;
+        }
+
+        // Base64 output length must be divisible by 4
+        if s.len() % 4 != 0 {
+            return false;
+        }
+
+        // Check character validity (base64 alphabet only)
+        let valid_chars = s
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '+' || c == '/' || c == '=');
+
+        if !valid_chars {
+            return false;
+        }
+
+        // Padding must be at the end only, max 2 chars
+        let padding_count = s.chars().rev().take_while(|&c| c == '=').count();
+        if padding_count > 2 {
+            return false;
+        }
+
+        // No padding in the middle
+        if s.trim_end_matches('=').contains('=') {
+            return false;
+        }
+
+        // Final check: must actually decode
+        BASE64.decode(s).is_ok()
     }
 
     /// Encrypt and persist the current secrets to `vault.enc` (always as v2).

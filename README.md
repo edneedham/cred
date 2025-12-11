@@ -11,7 +11,7 @@
 
 `cred` stores encrypted secrets locally and safely pushes them to CI/CD platforms on demand.
 
-⚠️ **Status: Early Preview (v0.3.0)**
+⚠️ **Status: Early Preview (v0.3.1)**
 
 `cred` is currently in active development. The on-disk format, CLI surface, and security model may change between minor versions. Do not rely on it as your sole secrets backup yet.
 
@@ -181,9 +181,15 @@ Add secrets to the encrypted local vault:
 Add metadata when storing secrets:
 
 `cred secret set API_KEY "sk-xxx" --description "OpenAI production key"`
-`cred secret set CERT_PEM "-----BEGIN..." --format multiline -d "TLS certificate"`
+`cred secret set CERT_PEM "-----BEGIN..." -d "TLS certificate"`
 
-Available formats: `raw` (default), `multiline`, `base64`, `json`. Format is auto-detected if omitted.
+Available formats: `raw`, `multiline`, `pem`, `base64`, `json`. Format is auto-detected if omitted:
+
+-   **PEM** — certificates and keys (`-----BEGIN ...`)
+-   **JSON** — objects `{...}` and arrays `[...]`
+-   **Base64** — single-line base64-encoded content
+-   **Multiline** — generic multi-line text
+-   **Raw** — single-line text (default)
 
 List all stored keys:
 
