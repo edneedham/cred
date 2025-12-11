@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.2.1
+
+-   Re-release of v0.2.0
+-   Add homebrew workflow and update release pipeline
+
 ## v0.2.0
 
 -   Added `cred import` to load `.env` files into the vault with non-destructive defaults and optional `--overwrite`.
