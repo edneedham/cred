@@ -126,18 +126,24 @@ jobs:
                   path: tap
 
             - name: Set up Homebrew
-              working-directory: tap
               run: brew update
+
+            - name: Install tap locally
+              run: |
+                  # Link the checked-out tap into Homebrew's tap directory
+                  TAP_DIR="$(brew --prefix)/Library/Taps/edneedham"
+                  mkdir -p "$TAP_DIR"
+                  ln -s "$GITHUB_WORKSPACE/tap" "$TAP_DIR/homebrew-cred"
+                  brew tap --force edneedham/cred
 
             - name: Build bottle
               id: bottle
-              working-directory: tap
               run: |
                   VERSION="${{ needs.update-formula.outputs.version }}"
                   ROOT_URL="https://github.com/${TAP_REPO}/releases/download/${VERSION}"
 
-                  brew install --build-bottle ./Formula/${FORMULA_NAME}.rb
-                  brew bottle --root-url="${ROOT_URL}" ./Formula/${FORMULA_NAME}.rb
+                  brew install --build-bottle edneedham/cred/${FORMULA_NAME}
+                  brew bottle --root-url="${ROOT_URL}" edneedham/cred/${FORMULA_NAME}
 
                   # Find the bottle file
                   BOTTLE_FILE=$(ls ${FORMULA_NAME}--*.bottle.tar.gz 2>/dev/null | head -1)
@@ -154,8 +160,8 @@ jobs:
               with:
                   name: bottle-${{ matrix.arch }}
                   path: |
-                      tap/${{ env.FORMULA_NAME }}--*.bottle.tar.gz
-                      tap/${{ env.FORMULA_NAME }}--*.bottle.json
+                      ${{ env.FORMULA_NAME }}--*.bottle.tar.gz
+                      ${{ env.FORMULA_NAME }}--*.bottle.json
 
     publish-bottles:
         needs: [update-formula, build-bottles]
