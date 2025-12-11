@@ -2,6 +2,7 @@
 //! Parses args, routes to subcommands, and handles uniform error/exit code reporting.
 mod cli;
 mod config;
+mod envfile;
 mod error;
 mod io;
 mod project;
@@ -247,6 +248,84 @@ async fn run(cli: Cli, flags: &CliFlags) -> Result<(), AppError> {
                         print_out(flags, "✓ Removed from local vault.");
                     }
                 }
+            }
+        }
+
+        Commands::Import(args) => {
+            let proj = project::Project::find()?;
+            let master_key = proj.get_master_key()?;
+            let mut vault = vault::Vault::load(&proj.vault_path, master_key)?;
+
+            let path = std::path::Path::new(&args.path);
+            let entries = envfile::parse_env_file(path)?;
+            let stats =
+                envfile::import_entries(&entries, &mut vault, args.overwrite, flags.dry_run);
+
+            if !flags.dry_run {
+                vault.save()?;
+            }
+
+            if flags.json {
+                let payload = serde_json::json!({
+                    "api_version": "1",
+                    "status": "ok",
+                    "data": {
+                        "path": args.path,
+                        "added": stats.added,
+                        "overwritten": stats.overwritten,
+                        "skipped": stats.skipped,
+                        "dry_run": flags.dry_run
+                    }
+                });
+                print_json(&payload);
+            } else if flags.dry_run {
+                print_out(
+                    flags,
+                    &format!(
+                        "(dry-run) Would import from {} (add {}, overwrite {}, skip {}).",
+                        args.path, stats.added, stats.overwritten, stats.skipped
+                    ),
+                );
+            } else {
+                print_out(
+                    flags,
+                    &format!(
+                        "✓ Imported {} (added {}, overwritten {}, skipped {}).",
+                        args.path, stats.added, stats.overwritten, stats.skipped
+                    ),
+                );
+            }
+        }
+
+        Commands::Export(args) => {
+            let proj = project::Project::find()?;
+            let master_key = proj.get_master_key()?;
+            let vault = vault::Vault::load(&proj.vault_path, master_key)?;
+
+            let path = std::path::Path::new(&args.path);
+            let count = envfile::export_env_file(&vault, path, args.force, flags.dry_run)?;
+
+            if flags.json {
+                let payload = serde_json::json!({
+                    "api_version": "1",
+                    "status": "ok",
+                    "data": {
+                        "path": args.path,
+                        "exported": count,
+                        "dry_run": flags.dry_run
+                    }
+                });
+                print_json(&payload);
+            } else if flags.dry_run {
+                print_out(
+                    flags,
+                    &format!("(dry-run) Would export {} keys to {}.", count, args.path),
+                );
+            } else {
+                print_out(
+                    flags,
+                    &format!("✓ Exported {} keys to {}.", count, args.path),
+                );
             }
         }
 

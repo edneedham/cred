@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod tests {
-    use crate::{project, config, vault, targets};
+    use crate::{project, config, vault, targets, envfile, error};
     use targets::TargetAdapter;
     use tempfile::tempdir;
     use std::fs;
@@ -201,6 +201,85 @@ mod tests {
         assert_eq!(parsed.version, 1);
         assert!(!parsed.nonce.is_empty());
         assert!(!parsed.ciphertext.is_empty());
+    }
+
+    #[test]
+    fn test_env_import_skips_without_overwrite() {
+        let dir = tempdir().unwrap();
+        let vault_path = dir.path().join("vault.enc");
+        let key = get_test_key();
+
+        let mut v = vault::Vault::load(&vault_path, key).unwrap();
+        v.set("EXISTING", "old");
+        v.save().unwrap();
+
+        let env_path = dir.path().join("sample.env");
+        fs::write(&env_path, "EXISTING=new\nNEW=value\n").unwrap();
+
+        let entries = envfile::parse_env_file(&env_path).unwrap();
+        let stats = envfile::import_entries(&entries, &mut v, false, false);
+        v.save().unwrap();
+
+        assert_eq!(stats.added, 1);
+        assert_eq!(stats.skipped, 1);
+        assert_eq!(stats.overwritten, 0);
+
+        let reloaded = vault::Vault::load(&vault_path, key).unwrap();
+        assert_eq!(reloaded.get("EXISTING"), Some(&"old".to_string()));
+        assert_eq!(reloaded.get("NEW"), Some(&"value".to_string()));
+    }
+
+    #[test]
+    fn test_env_import_overwrites_with_flag() {
+        let dir = tempdir().unwrap();
+        let vault_path = dir.path().join("vault.enc");
+        let key = get_test_key();
+
+        let mut v = vault::Vault::load(&vault_path, key).unwrap();
+        v.set("EXISTING", "old");
+        v.save().unwrap();
+
+        let env_path = dir.path().join("overwrite.env");
+        fs::write(&env_path, "EXISTING=new\n").unwrap();
+
+        let entries = envfile::parse_env_file(&env_path).unwrap();
+        let stats = envfile::import_entries(&entries, &mut v, true, false);
+        v.save().unwrap();
+
+        assert_eq!(stats.added, 0);
+        assert_eq!(stats.skipped, 0);
+        assert_eq!(stats.overwritten, 1);
+
+        let reloaded = vault::Vault::load(&vault_path, key).unwrap();
+        assert_eq!(reloaded.get("EXISTING"), Some(&"new".to_string()));
+    }
+
+    #[test]
+    fn test_env_export_guard_and_content() {
+        let dir = tempdir().unwrap();
+        let vault_path = dir.path().join("vault.enc");
+        let key = get_test_key();
+
+        let mut v = vault::Vault::load(&vault_path, key).unwrap();
+        v.set("B", "2");
+        v.set("A", "1");
+        v.save().unwrap();
+
+        let out_path = dir.path().join("env.out");
+        // existing file triggers guard
+        fs::write(&out_path, "OLD=1\n").unwrap();
+
+        let vault_view = vault::Vault::load(&vault_path, key).unwrap();
+        let err = envfile::export_env_file(&vault_view, &out_path, false, false).unwrap_err();
+        assert_eq!(err.code as i32, error::ExitCode::UserError as i32);
+        assert_eq!(fs::read_to_string(&out_path).unwrap(), "OLD=1\n");
+
+        // allow overwrite
+        let count = envfile::export_env_file(&vault_view, &out_path, true, false).unwrap();
+        assert_eq!(count, 2);
+
+        let content = fs::read_to_string(&out_path).unwrap();
+        assert_eq!(content, "A=1\nB=2\n");
     }
 
     // Dry-run ordering: diff/plans are deterministic and sorted.

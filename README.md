@@ -17,11 +17,11 @@
 
 ## What it is **not**
 
-- A hosted secrets manager
-- A multi-user access control system
-- A replacement for HashiCorp Vault or AWS Secrets Manager
-- A bidirectional secrets sync tool
-- A runtime secret injector for applications
+-   A hosted secrets manager
+-   A multi-user access control system
+-   A replacement for HashiCorp Vault or AWS Secrets Manager
+-   A bidirectional secrets sync tool
+-   A runtime secret injector for applications
 
 It is a **developer-side deployment tool** for managing and pushing secrets safely.
 
@@ -54,7 +54,7 @@ You manage secrets locally, but `cred` can upload them to specified targets.
 
 #### Supported targets:
 
-- GitHub
+-   GitHub
 
 ---
 
@@ -62,12 +62,16 @@ You manage secrets locally, but `cred` can upload them to specified targets.
 
 ### Homebrew (macOS)
 
-`brew tap edneedham/cred`
-`brew install edneedham/cred/cred`
+```bash
+brew tap edneedham/cred
+brew install edneedham/cred/cred
+```
 
 ### Quick install (shell)
 
-`curl -fsSL https://raw.githubusercontent.com/edneedham/cred/main/scripts/install.sh | sh -s`
+```bash
+curl -fsSL https://raw.githubusercontent.com/edneedham/cred/main/scripts/install.sh | sh -s
+```
 
 ### Install with Cargo:
 
@@ -81,15 +85,17 @@ Download the latest release for your platform from [GitHub Releases](https://git
 
 Available targets:
 
-- `cred-vX.Y.Z-aarch64-apple-darwin` - macOS Apple Silicon
-- `cred-vX.Y.Z-x86_64-apple-darwin` - macOS Intel
-- `cred-vX.Y.Z-x86_64-unknown-linux-gnu` - Linux x86_64
-- `cred-vX.Y.Z-x86_64-pc-windows-msvc.exe` - Windows
+-   `cred-vX.Y.Z-aarch64-apple-darwin` - macOS Apple Silicon
+-   `cred-vX.Y.Z-x86_64-apple-darwin` - macOS Intel
+-   `cred-vX.Y.Z-x86_64-unknown-linux-gnu` - Linux x86_64
+-   `cred-vX.Y.Z-x86_64-pc-windows-msvc.exe` - Windows
 
 Make the binary executable and move it to your PATH:
 
-`chmod +x cred-*`
-`sudo mv cred-* /usr/local/bin/cred`
+```bash
+chmod +x cred-*
+sudo mv cred-* /usr/local/bin/cred
+```
 
 Check installation:
 
@@ -103,22 +109,23 @@ cred --version
 
 It follows a simple workflow:
 
-- Initialize a project
+-   Initialize a project
 
-- Add a target
+-   Add a target
 
-- Store secrets locally
+-   Store secrets locally
 
-- Push secrets to the target
+-   Push secrets to the target
 
-- Inspect, update, or remove as needed
+-   Inspect, update, or remove as needed
 
 ### 1. Initialize a Project
 
 Run this once inside your project directory:
 
-`cred init`
-
+```bash
+cred init
+```
 
 This creates a local encrypted vault in the project and binds it to the current directory.
 
@@ -138,11 +145,9 @@ Check project health:
 
 `cred doctor`
 
-
 Inspect project status:
 
 `cred project status`
-
 
 Machine-readable:
 
@@ -154,18 +159,15 @@ Authenticate a deployment target:
 
 `cred target set github`
 
-
 You will be securely prompted for a token. The token is stored in your OS credential store, not in plaintext on disk.
 
 Non-interactive (CI):
 
 `cred target set github --token "$GITHUB_TOKEN" --non-interactive`
 
-
 List configured targets:
 
 `cred target list`
-
 
 Revoke a target:
 
@@ -178,91 +180,101 @@ Add secrets to the encrypted local vault:
 `cred secret set DATABASE_URL "postgres://user:pass@localhost:5432/db"`
 `cred secret set JWT_SECRET "super-secret"`
 
-
 List all stored keys:
 
 `cred secret list`
-
 
 Retrieve a value:
 
 `cred secret get JWT_SECRET`
 
-
 Remove a secret locally only:
 
 `cred secret remove JWT_SECRET`
 
-### 4. Dry Run (Preview Changes)
+### 4. Import from a .env file
+
+Import `KEY=VALUE` pairs from a .env file into the vault. Existing keys are skipped by default to keep imports non-destructive.
+
+`cred import .env`
+
+Overwrite existing keys if needed:
+
+`cred import .env --overwrite`
+
+Use `--dry-run` to see what would change without writing.
+
+### 5. Export vault to a .env file
+
+Write vault contents to a .env file (keys are sorted). Existing files are preserved unless forced.
+
+`cred export .env.backup`
+
+Overwrite an existing file explicitly:
+
+`cred export .env --force`
+
+Use `--dry-run` to preview how many keys would be written.
+
+### 6. Dry Run (Preview Changes)
 
 Before pushing anything remotely, preview what will change:
 
 `cred push github --dry-run`
 
-
 Preview specific keys:
 
 `cred push github DATABASE_URL JWT_SECRET --dry-run`
 
-
 Nothing is uploaded when --dry-run is used.
 
-### 5. Push Secrets to a Target
+### 7. Push Secrets to a Target
 
 Push all local secrets to GitHub:
 
 `cred push github`
 
-
 Push only specific keys:
 
 `cred push github DATABASE_URL JWT_SECRET`
-
 
 If not inside a Git repository, specify the repo explicitly:
 
 `cred push github --repo owner/repo`
 
-
 Non-interactive mode (CI):
 
 `cred push github --non-interactive`
-
 
 Machine-readable output:
 
 `cred push github --json`
 
-### 6. Update a Secret
+### 8. Update a Secret
 
 Update locally:
 
 `cred secret set JWT_SECRET "new-secret-value"`
 
-
 Preview:
 
 `cred push github --dry-run`
-
 
 Apply:
 
 `cred push github`
 
-
 Only changed keys are updated remotely.
 
-### 7. Prune (Delete Locally and Remotely)
+### 9. Prune (Delete Locally and Remotely)
 
 Remove a key everywhere:
 
 `cred prune github JWT_SECRET --yes`
 
-
 Preview a prune:
 
 `cred prune github JWT_SECRET --dry-run`
-
 
 Prune all known keys from a target:
 
@@ -270,29 +282,25 @@ Prune all known keys from a target:
 
 ⚠️ **Destructive operations require --yes unless in --dry-run.**
 
-### 8. Global Configuration
+### 10. Global Configuration
 
 View configuration:
 
 `cred config list`
 
-
 Get a value:
 
 `cred config get preferences.default_target`
-
 
 Set a value:
 
 `cred config set preferences.default_target github`
 
-
 Unset a value:
 
 `cred config unset preferences.default_target`
 
-
-### 9. AI / Automation Friendly Usage
+### 11. AI / Automation Friendly Usage
 
 All commands support:
 
@@ -305,7 +313,6 @@ All commands support:
 Example automation pattern:
 
 `cred push github --non-interactive --json`
-
 
 Typical Workflow
 
@@ -321,7 +328,7 @@ Typical Workflow
 
 CI Example
 
-```bash 
+```bash
 cred target set github \
   --token "$CRED_GITHUB_TOKEN" \
   --non-interactive
@@ -350,12 +357,11 @@ Notes:
 
 ---
 
-
 ## License
 
 Licensed under either of:
 
-- Apache License, Version 2.0 ([LICENSE-APACHE](LICENSE-APACHE) or http://www.apache.org/licenses/LICENSE-2.0)
-- MIT License ([LICENSE-MIT](LICENSE-MIT) or http://opensource.org/licenses/MIT)
+-   Apache License, Version 2.0 ([LICENSE-APACHE](LICENSE-APACHE) or http://www.apache.org/licenses/LICENSE-2.0)
+-   MIT License ([LICENSE-MIT](LICENSE-MIT) or http://opensource.org/licenses/MIT)
 
 at your choice.

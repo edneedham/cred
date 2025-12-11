@@ -55,6 +55,12 @@ pub enum Commands {
         action: SecretAction,
     },
 
+    /// Import secrets from a .env file into the local vault
+    Import(ImportArgs),
+
+    /// Export vault secrets to a .env file
+    Export(ExportArgs),
+
     /// Upload (Push) secrets to a remote hosting target (e.g. GitHub)
     Push(PushArgs),
 
@@ -163,4 +169,22 @@ pub enum SecretAction {
         #[arg(long)]
         target: Target,
     },
+}
+
+#[derive(Args, Debug)]
+pub struct ImportArgs {
+    /// Path to a .env file to import
+    pub path: String,
+    /// Overwrite existing keys instead of skipping
+    #[arg(long)]
+    pub overwrite: bool,
+}
+
+#[derive(Args, Debug)]
+pub struct ExportArgs {
+    /// Path to write the exported .env file
+    pub path: String,
+    /// Overwrite the output file if it exists
+    #[arg(long)]
+    pub force: bool,
 }
