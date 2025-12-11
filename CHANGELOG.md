@@ -1,5 +1,28 @@
 # Changelog
 
+## v0.3.0
+
+### Vault Schema v2
+
+-   **Breaking**: Vault schema upgraded to v2 with per-secret metadata
+-   Existing v1 vaults are automatically migrated on first load
+-   Each secret now stores: `value`, `format`, `hash`, `created_at`, `updated_at`, `description`
+
+### New Features
+
+-   `cred secret set` now accepts `--description` (`-d`) and `--format` (`-f`) flags
+-   `cred secret describe KEY "text"` command to update descriptions
+-   `cred secret get --json` includes full metadata (format, timestamps, description)
+-   `cred secret list --json` returns metadata for all secrets
+-   `cred secret list` shows descriptions inline in plain text output
+-   `cred secret remove` now shows secret age (e.g., "3 days old") when deleting
+-   Format auto-detection: multiline content and JSON are detected automatically
+
+### Internal
+
+-   Added `chrono` dependency for timestamp handling
+-   New vault API: `get_entry()`, `remove_entry()`, `list_entries()`, `set_with_metadata()`, `set_description()`
+
 ## v0.2.1
 
 -   Re-release of v0.2.0

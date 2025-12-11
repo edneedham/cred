@@ -93,7 +93,8 @@ pub fn export_env_file(
         )));
     }
 
-    let mut entries: Vec<_> = vault.list().iter().collect();
+    let secrets = vault.list();
+    let mut entries: Vec<_> = secrets.iter().collect();
     entries.sort_by(|a, b| a.0.cmp(b.0));
 
     let mut body = String::new();

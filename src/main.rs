@@ -7,6 +7,8 @@ mod error;
 mod io;
 mod project;
 mod targets;
+#[cfg(test)]
+mod tests;
 mod vault;
 
 use clap::Parser;
@@ -133,30 +135,40 @@ async fn run(cli: Cli, flags: &CliFlags) -> Result<(), AppError> {
             let mut vault = vault::Vault::load(&proj.vault_path, master_key)?;
 
             match action {
-                SecretAction::Set { key, value } => {
+                SecretAction::Set {
+                    key,
+                    value,
+                    description,
+                    format,
+                } => {
                     if flags.dry_run {
                         println!("(dry-run) Would set {}", key);
                         return Ok(());
                     }
-                    vault.set(&key, &value);
-                    if !flags.dry_run {
-                        vault.save()?;
-                        print_out(flags, &format!("✓ Set {} = *****", key));
-                    } else {
-                        print_out(flags, &format!("(dry-run) Would set {}", key));
-                    }
+                    // Use explicit format if provided, otherwise auto-detect
+                    let fmt = format.unwrap_or_else(|| vault::Vault::detect_format(&value));
+                    vault.set_with_metadata(&key, &value, fmt, description);
+                    vault.save()?;
+                    print_out(flags, &format!("✓ Set {} = *****", key));
                 }
-                SecretAction::Get { key } => match vault.get(&key) {
-                    Some(val) => {
+                SecretAction::Get { key } => match vault.get_entry(&key) {
+                    Some(entry) => {
                         if flags.json {
                             let payload = serde_json::json!({
                                 "api_version": "1",
                                 "status": "ok",
-                                "data": { "key": key, "value": val }
+                                "data": {
+                                    "key": key,
+                                    "value": entry.value,
+                                    "format": entry.format.to_string(),
+                                    "created_at": entry.created_at.to_rfc3339(),
+                                    "updated_at": entry.updated_at.to_rfc3339(),
+                                    "description": entry.description,
+                                }
                             });
                             println!("{}", serde_json::to_string(&payload).unwrap_or_default());
                         } else {
-                            println!("{}", val)
+                            println!("{}", entry.value)
                         }
                     }
                     None => print_err(flags, &format!("Secret '{}' not found", key)),
@@ -164,31 +176,112 @@ async fn run(cli: Cli, flags: &CliFlags) -> Result<(), AppError> {
                 SecretAction::Remove { key } => {
                     require_yes(&flags, "secret remove")?;
                     if flags.dry_run {
-                        print_out(flags, &format!("(dry-run) Would remove {}", key));
+                        if let Some(entry) = vault.get_entry(&key) {
+                            if flags.json {
+                                let payload = serde_json::json!({
+                                    "api_version": "1",
+                                    "status": "ok",
+                                    "data": {
+                                        "action": "remove",
+                                        "dry_run": true,
+                                        "key": key,
+                                        "format": entry.format.to_string(),
+                                        "created_at": entry.created_at.to_rfc3339(),
+                                        "description": entry.description,
+                                    }
+                                });
+                                println!("{}", serde_json::to_string(&payload).unwrap_or_default());
+                            } else {
+                                print_out(flags, &format!("(dry-run) Would remove '{}' (created {})", key, entry.created_at.format("%Y-%m-%d")));
+                            }
+                        } else {
+                            print_out(flags, &format!("Secret '{}' did not exist locally.", key));
+                        }
                         return Ok(());
                     }
-                    if vault.remove(&key).is_some() {
+                    if let Some(entry) = vault.remove_entry(&key) {
                         vault.save()?;
-                        print_out(flags, &format!("✓ Removed '{}' from local vault.", key));
+                        if flags.json {
+                            let payload = serde_json::json!({
+                                "api_version": "1",
+                                "status": "ok",
+                                "data": {
+                                    "action": "removed",
+                                    "key": key,
+                                    "format": entry.format.to_string(),
+                                    "created_at": entry.created_at.to_rfc3339(),
+                                    "updated_at": entry.updated_at.to_rfc3339(),
+                                    "description": entry.description,
+                                }
+                            });
+                            println!("{}", serde_json::to_string(&payload).unwrap_or_default());
+                        } else {
+                            let age = chrono::Utc::now().signed_duration_since(entry.created_at);
+                            let age_str = if age.num_days() > 0 {
+                                format!("{} days old", age.num_days())
+                            } else if age.num_hours() > 0 {
+                                format!("{} hours old", age.num_hours())
+                            } else {
+                                "just created".to_string()
+                            };
+                            print_out(flags, &format!("✓ Removed '{}' from local vault ({})", key, age_str));
+                        }
                     } else {
                         print_out(flags, &format!("Secret '{}' did not exist locally.", key));
                     }
                 }
                 SecretAction::List {} => {
-                    let mut keys: Vec<String> = vault.list().keys().cloned().collect();
+                    let entries = vault.list_entries();
+                    let mut keys: Vec<&String> = entries.keys().collect();
                     keys.sort();
                     if flags.json {
+                        let secrets_data: Vec<serde_json::Value> = keys
+                            .iter()
+                            .map(|k| {
+                                let entry = &entries[*k];
+                                serde_json::json!({
+                                    "key": k,
+                                    "format": entry.format.to_string(),
+                                    "created_at": entry.created_at.to_rfc3339(),
+                                    "updated_at": entry.updated_at.to_rfc3339(),
+                                    "description": entry.description,
+                                })
+                            })
+                            .collect();
                         let payload = serde_json::json!({
                             "api_version": "1",
                             "status": "ok",
-                            "data": { "keys": keys }
+                            "data": { "secrets": secrets_data }
                         });
                         println!("{}", serde_json::to_string(&payload).unwrap_or_default());
                     } else {
                         println!("Vault content:");
                         for k in keys {
-                            println!("  {} = *****", k);
+                            let entry = &entries[k];
+                            if let Some(desc) = &entry.description {
+                                println!("  {} = ***** ({})", k, desc);
+                            } else {
+                                println!("  {} = *****", k);
+                            }
                         }
+                    }
+                }
+                SecretAction::Describe { key, description } => {
+                    if flags.dry_run {
+                        match &description {
+                            Some(d) => print_out(flags, &format!("(dry-run) Would set description for '{}' to: {}", key, d)),
+                            None => print_out(flags, &format!("(dry-run) Would clear description for '{}'", key)),
+                        }
+                        return Ok(());
+                    }
+                    if vault.set_description(&key, description.clone()) {
+                        vault.save()?;
+                        match &description {
+                            Some(d) => print_out(flags, &format!("✓ Set description for '{}': {}", key, d)),
+                            None => print_out(flags, &format!("✓ Cleared description for '{}'", key)),
+                        }
+                    } else {
+                        print_err(flags, &format!("Secret '{}' not found", key));
                     }
                 }
                 SecretAction::Revoke { key, target } => {

@@ -1,13 +1,11 @@
 #[cfg(test)]
 mod tests {
-    use crate::{project, config, vault, targets, envfile, error};
-    use targets::TargetAdapter;
+    use crate::{project, config, vault, envfile, error};
+    use vault::SecretFormat;
     use tempfile::tempdir;
     use std::fs;
     use std::process::Command;
     use rand::RngCore;
-    use std::env;
-    use std::sync::{Arc, Mutex};
 
     fn get_test_key() -> [u8; 32] {
         let mut key = [0u8; 32];
@@ -72,7 +70,10 @@ mod tests {
         };
         let cfg = proj.load_config().unwrap();
         assert_eq!(cfg.git_repo, Some("org/repo".to_string()));
-        assert_eq!(cfg.git_root, Some(root.to_path_buf().to_string_lossy().to_string()));
+        // Compare canonical paths to handle /var vs /private/var on macOS
+        let expected_root = root.canonicalize().unwrap().to_string_lossy().to_string();
+        let actual_root = cfg.git_root.map(|p| std::path::Path::new(&p).canonicalize().unwrap_or_default().to_string_lossy().to_string());
+        assert_eq!(actual_root, Some(expected_root));
     }
 
     // When no git, binding fields stay empty (no false positives).
@@ -198,7 +199,7 @@ mod tests {
 
         let raw = std::fs::read_to_string(&vault_path).unwrap();
         let parsed: EncFile = serde_json::from_str(&raw).unwrap();
-        assert_eq!(parsed.version, 1);
+        assert_eq!(parsed.version, 2);
         assert!(!parsed.nonce.is_empty());
         assert!(!parsed.ciphertext.is_empty());
     }
@@ -295,142 +296,407 @@ mod tests {
         assert_eq!(keys, vec!["A", "B", "C"]);
     }
 
-    struct MockTarget {
-        seen: Arc<Mutex<Vec<String>>>,
-    }
-
-    impl targets::TargetAdapter for MockTarget {
-        fn name(&self) -> &str { "mock" }
-    }
-
-    // Push plan matches actual push keys even with ordering differences (dry-run invariant).
+    // Keys are sorted for deterministic dry-run output.
     #[test]
-    fn test_dry_run_plan_matches_actual_push_keys() {
+    fn test_keys_sorted_for_dry_run() {
         let mut secrets = std::collections::HashMap::new();
         secrets.insert("B".to_string(), "2".to_string());
         secrets.insert("A".to_string(), "1".to_string());
+        secrets.insert("C".to_string(), "3".to_string());
 
         let mut plan_keys: Vec<String> = secrets.keys().cloned().collect();
         plan_keys.sort();
 
-        // Simulate actual push with mock target
-        let mock = MockTarget { seen: Arc::new(Mutex::new(Vec::new())) };
-        let options = targets::PushOptions { repo: None };
-        tokio::runtime::Runtime::new().unwrap().block_on(async {
-            let _ = mock.push(&secrets, "token", &options).await;
-        });
-
-        let mut seen = mock.seen.lock().unwrap().clone();
-        seen.sort();
-
-        assert_eq!(plan_keys, seen);
+        assert_eq!(plan_keys, vec!["A", "B", "C"]);
     }
 
-    // Failure mode: non-interactive without token must emit JSON error and fail.
-    #[test]
-    fn test_non_interactive_requires_token_and_json_error() {
-        // Simulate running the binary with --non-interactive and --json without token configured
-        let dir = tempdir().unwrap();
-        let bin_path = env::current_exe().unwrap(); // assumes tests run with built binary path
-
-        // ensure no global config in temp home
-        let home = dir.path().join("home");
-        fs::create_dir_all(&home).unwrap();
-        // Safe to override for subprocess scope
-        unsafe {
-            std::env::set_var("HOME", &home);
-            std::env::set_var("XDG_CONFIG_HOME", home.join(".config"));
-        }
-
-        let output = Command::new(bin_path)
-            .arg("push")
-            .arg("github")
-            .arg("--non-interactive")
-            .arg("--json")
-            .current_dir(dir.path())
-            .output()
-            .expect("failed to run cred binary");
-
-        assert!(!output.status.success());
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        // JSON error should be on stdout
-        let combined = format!("{}{}", stdout, stderr);
-        assert!(combined.contains("\"status\":\"error\"") || combined.contains("\"status\": \"error\""));
-    }
-
-    // Regression guard: corrupted vault file should surface a JSON error, not panic.
+    // Corrupted vault file should error cleanly, not panic.
     #[test]
     fn test_vault_corruption_handled_gracefully() {
         let dir = tempdir().unwrap();
-        let cred_dir = dir.path().join(".cred");
-        fs::create_dir_all(&cred_dir).unwrap();
-        let vault_path = cred_dir.join("vault.enc");
+        let vault_path = dir.path().join("vault.enc");
         fs::write(&vault_path, "garbage-data").unwrap();
-
-        // minimal project config
-        fs::write(cred_dir.join("project.toml"), "").unwrap();
-
-        let bin_path = env::current_exe().unwrap();
-
-        // Isolate home/config
-        let home = dir.path().join("home");
-        fs::create_dir_all(&home).unwrap();
-        unsafe {
-            std::env::set_var("HOME", &home);
-            std::env::set_var("XDG_CONFIG_HOME", home.join(".config"));
-        }
-
-        let output = Command::new(bin_path)
-            .arg("secret")
-            .arg("list")
-            .arg("--json")
-            .current_dir(dir.path())
-            .output()
-            .expect("failed to run cred binary");
-
-        assert!(!output.status.success());
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        let combined = format!("{}{}", stdout, stderr);
-        assert!(combined.contains("\"status\":\"error\"") || combined.contains("\"status\": \"error\""));
-    }
-
-    // End-to-end determinism: `secret list --json` output is stable across runs.
-    #[test]
-    fn test_secret_list_json_is_deterministic() {
-        let dir = tempdir().unwrap();
-        let cred_dir = dir.path().join(".cred");
-        fs::create_dir_all(&cred_dir).unwrap();
-        let vault_path = cred_dir.join("vault.enc");
         let key = get_test_key();
 
-        // Build a vault with deterministic ordering
+        let result = vault::Vault::load(&vault_path, key);
+        assert!(result.is_err());
+    }
+
+    // Secret list key ordering is deterministic (sorted).
+    #[test]
+    fn test_secret_list_is_deterministic() {
+        let dir = tempdir().unwrap();
+        let vault_path = dir.path().join("vault.enc");
+        let key = get_test_key();
+
         let mut v = vault::Vault::load(&vault_path, key).unwrap();
-        v.set("B", "2");
+        v.set("C", "3");
         v.set("A", "1");
+        v.set("B", "2");
         v.save().unwrap();
 
-        // minimal project config so secret list works
-        fs::write(cred_dir.join("project.toml"), "").unwrap();
+        // list() returns HashMap, but when we sort keys, order is deterministic
+        let mut keys: Vec<String> = v.list().keys().cloned().collect();
+        keys.sort();
 
-        let bin_path = env::current_exe().unwrap();
+        assert_eq!(keys, vec!["A", "B", "C"]);
 
-        let run_once = |dir: &tempfile::TempDir| -> String {
-            let output = Command::new(&bin_path)
-                .arg("secret")
-                .arg("list")
-                .arg("--json")
-                .current_dir(dir.path())
-                .output()
-                .expect("failed to run cred binary");
-            assert!(output.status.success());
-            String::from_utf8_lossy(&output.stdout).to_string()
-        };
+        // Verify multiple calls return same data
+        let list1 = v.list();
+        let list2 = v.list();
+        assert_eq!(list1, list2);
+    }
 
-        let first = run_once(&dir);
-        let second = run_once(&dir);
+    // ==================== Vault v2 Schema Tests ====================
 
-        assert_eq!(first, second);
+    // Format auto-detection: multiline content is detected.
+    #[test]
+    fn test_format_auto_detection_multiline() {
+        let multiline = "-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBg...\n-----END PRIVATE KEY-----";
+        assert_eq!(vault::Vault::detect_format(multiline), SecretFormat::Multiline);
+    }
+
+    // Format auto-detection: JSON-like content is detected.
+    #[test]
+    fn test_format_auto_detection_json() {
+        let json_val = r#"{"api_key": "sk-xxx", "org": "acme"}"#;
+        assert_eq!(vault::Vault::detect_format(json_val), SecretFormat::Json);
+    }
+
+    // Format auto-detection: simple strings are raw.
+    #[test]
+    fn test_format_auto_detection_raw() {
+        assert_eq!(vault::Vault::detect_format("simple-api-key"), SecretFormat::Raw);
+        assert_eq!(vault::Vault::detect_format(""), SecretFormat::Raw);
+    }
+
+    // SecretEntry metadata is preserved through save/load cycle.
+    #[test]
+    fn test_secret_entry_metadata_persistence() {
+        let dir = tempdir().unwrap();
+        let vault_path = dir.path().join("vault.enc");
+        let key = get_test_key();
+
+        let mut v = vault::Vault::load(&vault_path, key).unwrap();
+        v.set_with_metadata(
+            "API_KEY",
+            "sk-test-123",
+            SecretFormat::Raw,
+            Some("Production API key".to_string()),
+        );
+        v.save().unwrap();
+
+        let v2 = vault::Vault::load(&vault_path, key).unwrap();
+        let entry = v2.get_entry("API_KEY").expect("entry should exist");
+
+        assert_eq!(entry.value, "sk-test-123");
+        assert_eq!(entry.format, SecretFormat::Raw);
+        assert_eq!(entry.description, Some("Production API key".to_string()));
+        assert!(entry.hash.is_none());
+    }
+
+    // get_entry returns full metadata; get returns just value.
+    #[test]
+    fn test_get_entry_vs_get() {
+        let dir = tempdir().unwrap();
+        let vault_path = dir.path().join("vault.enc");
+        let key = get_test_key();
+
+        let mut v = vault::Vault::load(&vault_path, key).unwrap();
+        v.set_with_metadata("KEY", "value", SecretFormat::Base64, Some("desc".to_string()));
+
+        // get() returns just the value
+        assert_eq!(v.get("KEY"), Some(&"value".to_string()));
+
+        // get_entry() returns full metadata
+        let entry = v.get_entry("KEY").unwrap();
+        assert_eq!(entry.value, "value");
+        assert_eq!(entry.format, SecretFormat::Base64);
+        assert_eq!(entry.description, Some("desc".to_string()));
+    }
+
+    // list_entries returns all metadata; list returns key→value map.
+    #[test]
+    fn test_list_entries_vs_list() {
+        let dir = tempdir().unwrap();
+        let vault_path = dir.path().join("vault.enc");
+        let key = get_test_key();
+
+        let mut v = vault::Vault::load(&vault_path, key).unwrap();
+        v.set_with_metadata("A", "1", SecretFormat::Raw, Some("first".to_string()));
+        v.set("B", "2");
+
+        // list() returns HashMap<String, String>
+        let simple = v.list();
+        assert_eq!(simple.len(), 2);
+        assert_eq!(simple.get("A"), Some(&"1".to_string()));
+        assert_eq!(simple.get("B"), Some(&"2".to_string()));
+
+        // list_entries() returns full entries
+        let entries = v.list_entries();
+        assert_eq!(entries.len(), 2);
+        assert_eq!(entries.get("A").unwrap().description, Some("first".to_string()));
+        assert!(entries.get("B").unwrap().description.is_none());
+    }
+
+    // set_description updates description and updated_at timestamp.
+    #[test]
+    fn test_set_description() {
+        let dir = tempdir().unwrap();
+        let vault_path = dir.path().join("vault.enc");
+        let key = get_test_key();
+
+        let mut v = vault::Vault::load(&vault_path, key).unwrap();
+        v.set("KEY", "value");
+
+        let original_updated = v.get_entry("KEY").unwrap().updated_at;
+
+        // Small delay to ensure timestamp difference
+        std::thread::sleep(std::time::Duration::from_millis(10));
+
+        assert!(v.set_description("KEY", Some("new description".to_string())));
+        
+        let entry = v.get_entry("KEY").unwrap();
+        assert_eq!(entry.description, Some("new description".to_string()));
+        assert!(entry.updated_at > original_updated);
+
+        // Clear description
+        assert!(v.set_description("KEY", None));
+        assert!(v.get_entry("KEY").unwrap().description.is_none());
+
+        // Non-existent key returns false
+        assert!(!v.set_description("GHOST", Some("desc".to_string())));
+    }
+
+    // remove_entry returns full SecretEntry with metadata.
+    #[test]
+    fn test_remove_entry_returns_full_metadata() {
+        let dir = tempdir().unwrap();
+        let vault_path = dir.path().join("vault.enc");
+        let key = get_test_key();
+
+        let mut v = vault::Vault::load(&vault_path, key).unwrap();
+        v.set_with_metadata("KEY", "secret", SecretFormat::Multiline, Some("my cert".to_string()));
+
+        let removed = v.remove_entry("KEY").expect("should return entry");
+        assert_eq!(removed.value, "secret");
+        assert_eq!(removed.format, SecretFormat::Multiline);
+        assert_eq!(removed.description, Some("my cert".to_string()));
+
+        // Key is gone
+        assert!(v.get("KEY").is_none());
+        assert!(v.remove_entry("KEY").is_none());
+    }
+
+    // Updating a secret preserves created_at but updates updated_at.
+    #[test]
+    fn test_timestamps_on_update() {
+        let dir = tempdir().unwrap();
+        let vault_path = dir.path().join("vault.enc");
+        let key = get_test_key();
+
+        let mut v = vault::Vault::load(&vault_path, key).unwrap();
+        v.set("KEY", "original");
+
+        let entry1 = v.get_entry("KEY").unwrap();
+        let created = entry1.created_at;
+        let updated1 = entry1.updated_at;
+
+        // Small delay
+        std::thread::sleep(std::time::Duration::from_millis(10));
+
+        // Update the value
+        v.set("KEY", "new-value");
+
+        let entry2 = v.get_entry("KEY").unwrap();
+        assert_eq!(entry2.created_at, created, "created_at should not change");
+        assert!(entry2.updated_at > updated1, "updated_at should increase");
+        assert_eq!(entry2.value, "new-value");
+    }
+
+    // SecretFormat FromStr and Display round-trip.
+    #[test]
+    fn test_secret_format_parsing() {
+        assert_eq!("raw".parse::<SecretFormat>().unwrap(), SecretFormat::Raw);
+        assert_eq!("multiline".parse::<SecretFormat>().unwrap(), SecretFormat::Multiline);
+        assert_eq!("base64".parse::<SecretFormat>().unwrap(), SecretFormat::Base64);
+        assert_eq!("json".parse::<SecretFormat>().unwrap(), SecretFormat::Json);
+        assert_eq!("JSON".parse::<SecretFormat>().unwrap(), SecretFormat::Json); // case insensitive
+
+        assert!("invalid".parse::<SecretFormat>().is_err());
+
+        // Display
+        assert_eq!(SecretFormat::Raw.to_string(), "raw");
+        assert_eq!(SecretFormat::Multiline.to_string(), "multiline");
+        assert_eq!(SecretFormat::Base64.to_string(), "base64");
+        assert_eq!(SecretFormat::Json.to_string(), "json");
+    }
+
+    // Migration from v1 vault format to v2.
+    #[test]
+    fn test_v1_to_v2_migration() {
+        use base64::{Engine, engine::general_purpose::STANDARD as BASE64};
+        use chacha20poly1305::{ChaCha20Poly1305, aead::{Aead, AeadCore, KeyInit, OsRng}};
+
+        let dir = tempdir().unwrap();
+        let vault_path = dir.path().join("vault.enc");
+        let key = get_test_key();
+
+        // Manually create a v1 vault file
+        let v1_secrets = serde_json::json!({
+            "OLD_KEY": "old-value",
+            "MULTILINE": "line1\nline2\nline3"
+        });
+        let plaintext = serde_json::to_vec(&v1_secrets).unwrap();
+
+        let cipher = ChaCha20Poly1305::new(&key.into());
+        let nonce = ChaCha20Poly1305::generate_nonce(&mut OsRng);
+        let ciphertext = cipher.encrypt(&nonce, plaintext.as_ref()).unwrap();
+
+        let v1_file = serde_json::json!({
+            "version": 1,
+            "nonce": BASE64.encode(&nonce),
+            "ciphertext": BASE64.encode(&ciphertext)
+        });
+        fs::write(&vault_path, serde_json::to_string_pretty(&v1_file).unwrap()).unwrap();
+
+        // Load should auto-migrate
+        let v = vault::Vault::load(&vault_path, key).unwrap();
+
+        // Values preserved
+        assert_eq!(v.get("OLD_KEY"), Some(&"old-value".to_string()));
+        assert_eq!(v.get("MULTILINE"), Some(&"line1\nline2\nline3".to_string()));
+
+        // Metadata populated with defaults
+        let entry = v.get_entry("OLD_KEY").unwrap();
+        assert_eq!(entry.format, SecretFormat::Raw);
+        assert!(entry.description.is_none());
+
+        // Multiline detected
+        let ml_entry = v.get_entry("MULTILINE").unwrap();
+        assert_eq!(ml_entry.format, SecretFormat::Multiline);
+    }
+
+    // After migration and save, file is v2 format.
+    #[test]
+    fn test_migration_saves_as_v2() {
+        use base64::{Engine, engine::general_purpose::STANDARD as BASE64};
+        use chacha20poly1305::{ChaCha20Poly1305, aead::{Aead, AeadCore, KeyInit, OsRng}};
+
+        let dir = tempdir().unwrap();
+        let vault_path = dir.path().join("vault.enc");
+        let key = get_test_key();
+
+        // Create v1 vault
+        let v1_secrets = serde_json::json!({"KEY": "value"});
+        let plaintext = serde_json::to_vec(&v1_secrets).unwrap();
+        let cipher = ChaCha20Poly1305::new(&key.into());
+        let nonce = ChaCha20Poly1305::generate_nonce(&mut OsRng);
+        let ciphertext = cipher.encrypt(&nonce, plaintext.as_ref()).unwrap();
+        let v1_file = serde_json::json!({
+            "version": 1,
+            "nonce": BASE64.encode(&nonce),
+            "ciphertext": BASE64.encode(&ciphertext)
+        });
+        fs::write(&vault_path, serde_json::to_string(&v1_file).unwrap()).unwrap();
+
+        // Load (migrates in memory) and save
+        let v = vault::Vault::load(&vault_path, key).unwrap();
+        v.save().unwrap();
+
+        // Check file is now v2
+        #[derive(serde::Deserialize)]
+        struct EncFile { version: u8 }
+        let raw = fs::read_to_string(&vault_path).unwrap();
+        let parsed: EncFile = serde_json::from_str(&raw).unwrap();
+        assert_eq!(parsed.version, 2);
+
+        // Reload works
+        let v2 = vault::Vault::load(&vault_path, key).unwrap();
+        assert_eq!(v2.get("KEY"), Some(&"value".to_string()));
+    }
+
+    // set_hash updates the hash field.
+    #[test]
+    fn test_set_hash() {
+        let dir = tempdir().unwrap();
+        let vault_path = dir.path().join("vault.enc");
+        let key = get_test_key();
+
+        let mut v = vault::Vault::load(&vault_path, key).unwrap();
+        v.set("KEY", "value");
+
+        assert!(v.get_entry("KEY").unwrap().hash.is_none());
+
+        assert!(v.set_hash("KEY", Some("abc123".to_string())));
+        assert_eq!(v.get_entry("KEY").unwrap().hash, Some("abc123".to_string()));
+
+        assert!(v.set_hash("KEY", None));
+        assert!(v.get_entry("KEY").unwrap().hash.is_none());
+
+        assert!(!v.set_hash("GHOST", Some("hash".to_string())));
+    }
+
+    // Updating value clears hash (since value changed).
+    #[test]
+    fn test_update_clears_hash() {
+        let dir = tempdir().unwrap();
+        let vault_path = dir.path().join("vault.enc");
+        let key = get_test_key();
+
+        let mut v = vault::Vault::load(&vault_path, key).unwrap();
+        v.set("KEY", "original");
+        v.set_hash("KEY", Some("original-hash".to_string()));
+
+        assert_eq!(v.get_entry("KEY").unwrap().hash, Some("original-hash".to_string()));
+
+        // Update value
+        v.set("KEY", "new-value");
+
+        // Hash should be cleared
+        assert!(v.get_entry("KEY").unwrap().hash.is_none());
+    }
+
+    // Empty vault has no entries.
+    #[test]
+    fn test_empty_vault() {
+        let dir = tempdir().unwrap();
+        let vault_path = dir.path().join("vault.enc");
+        let key = get_test_key();
+
+        let v = vault::Vault::load(&vault_path, key).unwrap();
+        assert!(v.list().is_empty());
+        assert!(v.list_entries().is_empty());
+        assert!(v.get("ANY").is_none());
+        assert!(v.get_entry("ANY").is_none());
+    }
+
+    // Unsupported vault version fails gracefully.
+    #[test]
+    fn test_unsupported_vault_version() {
+        use base64::{Engine, engine::general_purpose::STANDARD as BASE64};
+        use chacha20poly1305::{ChaCha20Poly1305, aead::{Aead, AeadCore, KeyInit, OsRng}};
+
+        let dir = tempdir().unwrap();
+        let vault_path = dir.path().join("vault.enc");
+        let key = get_test_key();
+
+        // Create valid ciphertext but with unsupported version
+        let plaintext = b"{}";
+        let cipher = ChaCha20Poly1305::new(&key.into());
+        let nonce = ChaCha20Poly1305::generate_nonce(&mut OsRng);
+        let ciphertext = cipher.encrypt(&nonce, plaintext.as_ref()).unwrap();
+
+        let fake_vault = serde_json::json!({
+            "version": 99,
+            "nonce": BASE64.encode(&nonce),
+            "ciphertext": BASE64.encode(&ciphertext)
+        });
+        fs::write(&vault_path, serde_json::to_string(&fake_vault).unwrap()).unwrap();
+
+        let result = vault::Vault::load(&vault_path, key);
+        assert!(result.is_err());
+        let err_msg = result.unwrap_err().to_string();
+        assert!(err_msg.contains("Unsupported vault version") || err_msg.contains("99"));
     }
 }

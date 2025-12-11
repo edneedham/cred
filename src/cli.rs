@@ -2,6 +2,7 @@
 //! Parsed once in `main` and dispatched to command handlers.
 
 use crate::targets::Target;
+use crate::vault::SecretFormat;
 use clap::{Args, Parser, Subcommand};
 
 #[derive(Debug, Clone, Copy)]
@@ -151,14 +152,29 @@ pub struct SetTargetArgs {
 
 #[derive(Subcommand, Debug)]
 pub enum SecretAction {
+    /// Set a secret value (with optional metadata)
     Set {
         key: String,
         value: String,
+        /// Optional description for the secret
+        #[arg(long, short = 'd')]
+        description: Option<String>,
+        /// Format hint: raw, multiline, base64, json (auto-detected if omitted)
+        #[arg(long, short = 'f')]
+        format: Option<SecretFormat>,
     },
+    /// Get a secret value
     Get {
         key: String,
     },
+    /// List all secrets
     List {},
+    /// Set or update a secret's description
+    Describe {
+        key: String,
+        /// The description text (omit to clear)
+        description: Option<String>,
+    },
     /// Remove from Local Vault ONLY (Use 'prune' for remote removal)
     Remove {
         key: String,

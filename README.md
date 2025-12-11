@@ -11,7 +11,7 @@
 
 `cred` stores encrypted secrets locally and safely pushes them to CI/CD platforms on demand.
 
-⚠️ **Status: Early Preview (v0.2.1)**
+⚠️ **Status: Early Preview (v0.3.0)**
 
 `cred` is currently in active development. The on-disk format, CLI surface, and security model may change between minor versions. Do not rely on it as your sole secrets backup yet.
 
@@ -180,17 +180,61 @@ Add secrets to the encrypted local vault:
 `cred secret set DATABASE_URL "postgres://user:pass@localhost:5432/db"`
 `cred secret set JWT_SECRET "super-secret"`
 
+Add metadata when storing secrets:
+
+`cred secret set API_KEY "sk-xxx" --description "OpenAI production key"`
+`cred secret set CERT_PEM "-----BEGIN..." --format multiline -d "TLS certificate"`
+
+Available formats: `raw` (default), `multiline`, `base64`, `json`. Format is auto-detected if omitted.
+
 List all stored keys:
 
 `cred secret list`
+
+In plain text, descriptions are shown inline:
+
+```
+Vault content:
+  API_KEY = ***** (OpenAI production key)
+  JWT_SECRET = *****
+```
 
 Retrieve a value:
 
 `cred secret get JWT_SECRET`
 
+With `--json`, metadata is included:
+
+```json
+{
+    "data": {
+        "key": "JWT_SECRET",
+        "value": "super-secret",
+        "format": "raw",
+        "created_at": "2025-12-11T12:00:00Z",
+        "updated_at": "2025-12-11T12:00:00Z",
+        "description": null
+    }
+}
+```
+
+Update a secret's description:
+
+`cred secret describe API_KEY "Updated: rotating quarterly"`
+
+Clear a description:
+
+`cred secret describe API_KEY`
+
 Remove a secret locally only:
 
-`cred secret remove JWT_SECRET`
+`cred secret remove JWT_SECRET --yes`
+
+The removal output shows when the secret was created:
+
+```
+✓ Removed 'JWT_SECRET' from local vault (3 days old)
+```
 
 ### 4. Import from a .env file
 
