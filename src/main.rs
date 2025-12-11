@@ -192,7 +192,14 @@ async fn run(cli: Cli, flags: &CliFlags) -> Result<(), AppError> {
                                 });
                                 println!("{}", serde_json::to_string(&payload).unwrap_or_default());
                             } else {
-                                print_out(flags, &format!("(dry-run) Would remove '{}' (created {})", key, entry.created_at.format("%Y-%m-%d")));
+                                print_out(
+                                    flags,
+                                    &format!(
+                                        "(dry-run) Would remove '{}' (created {})",
+                                        key,
+                                        entry.created_at.format("%Y-%m-%d")
+                                    ),
+                                );
                             }
                         } else {
                             print_out(flags, &format!("Secret '{}' did not exist locally.", key));
@@ -224,7 +231,10 @@ async fn run(cli: Cli, flags: &CliFlags) -> Result<(), AppError> {
                             } else {
                                 "just created".to_string()
                             };
-                            print_out(flags, &format!("✓ Removed '{}' from local vault ({})", key, age_str));
+                            print_out(
+                                flags,
+                                &format!("✓ Removed '{}' from local vault ({})", key, age_str),
+                            );
                         }
                     } else {
                         print_out(flags, &format!("Secret '{}' did not exist locally.", key));
@@ -269,16 +279,26 @@ async fn run(cli: Cli, flags: &CliFlags) -> Result<(), AppError> {
                 SecretAction::Describe { key, description } => {
                     if flags.dry_run {
                         match &description {
-                            Some(d) => print_out(flags, &format!("(dry-run) Would set description for '{}' to: {}", key, d)),
-                            None => print_out(flags, &format!("(dry-run) Would clear description for '{}'", key)),
+                            Some(d) => print_out(
+                                flags,
+                                &format!("(dry-run) Would set description for '{}' to: {}", key, d),
+                            ),
+                            None => print_out(
+                                flags,
+                                &format!("(dry-run) Would clear description for '{}'", key),
+                            ),
                         }
                         return Ok(());
                     }
                     if vault.set_description(&key, description.clone()) {
                         vault.save()?;
                         match &description {
-                            Some(d) => print_out(flags, &format!("✓ Set description for '{}': {}", key, d)),
-                            None => print_out(flags, &format!("✓ Cleared description for '{}'", key)),
+                            Some(d) => {
+                                print_out(flags, &format!("✓ Set description for '{}': {}", key, d))
+                            }
+                            None => {
+                                print_out(flags, &format!("✓ Cleared description for '{}'", key))
+                            }
                         }
                     } else {
                         print_err(flags, &format!("Secret '{}' not found", key));

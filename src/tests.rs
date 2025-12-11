@@ -1,11 +1,11 @@
 #[cfg(test)]
 mod tests {
-    use crate::{project, config, vault, envfile, error};
-    use vault::SecretFormat;
-    use tempfile::tempdir;
+    use crate::{config, envfile, error, project, vault};
+    use rand::RngCore;
     use std::fs;
     use std::process::Command;
-    use rand::RngCore;
+    use tempfile::tempdir;
+    use vault::SecretFormat;
 
     fn get_test_key() -> [u8; 32] {
         let mut key = [0u8; 32];
@@ -42,7 +42,11 @@ mod tests {
         fs::write(&gitignore, "target/\n").unwrap();
 
         let entry = "\n.cred/\n";
-        let mut file = fs::OpenOptions::new().write(true).append(true).open(&gitignore).unwrap();
+        let mut file = fs::OpenOptions::new()
+            .write(true)
+            .append(true)
+            .open(&gitignore)
+            .unwrap();
         use std::io::Write;
         writeln!(file, "{}", entry).unwrap();
 
@@ -57,8 +61,16 @@ mod tests {
         let dir = tempdir().unwrap();
         let root = dir.path();
 
-        Command::new("git").args(["init"]).current_dir(root).output().unwrap();
-        Command::new("git").args(["remote", "add", "origin", "git@github.com:org/repo.git"]).current_dir(root).output().unwrap();
+        Command::new("git")
+            .args(["init"])
+            .current_dir(root)
+            .output()
+            .unwrap();
+        Command::new("git")
+            .args(["remote", "add", "origin", "git@github.com:org/repo.git"])
+            .current_dir(root)
+            .output()
+            .unwrap();
 
         let result = project::init_at(root);
         assert!(result.is_ok());
@@ -72,7 +84,13 @@ mod tests {
         assert_eq!(cfg.git_repo, Some("org/repo".to_string()));
         // Compare canonical paths to handle /var vs /private/var on macOS
         let expected_root = root.canonicalize().unwrap().to_string_lossy().to_string();
-        let actual_root = cfg.git_root.map(|p| std::path::Path::new(&p).canonicalize().unwrap_or_default().to_string_lossy().to_string());
+        let actual_root = cfg.git_root.map(|p| {
+            std::path::Path::new(&p)
+                .canonicalize()
+                .unwrap_or_default()
+                .to_string_lossy()
+                .to_string()
+        });
         assert_eq!(actual_root, Some(expected_root));
     }
 
@@ -102,7 +120,7 @@ mod tests {
 
         let path = config::ensure_config_at(&config_dir).unwrap();
         assert!(path.exists());
-        
+
         let content = fs::read_to_string(&path).unwrap();
         assert!(content.contains("[targets]"));
     }
@@ -123,7 +141,10 @@ mod tests {
         let v2 = vault::Vault::load(&vault_path, key).unwrap();
 
         assert_eq!(v2.get("API_URL_DEV"), Some(&"http://dev.local".to_string()));
-        assert_eq!(v2.get("API_URL_PROD"), Some(&"https://prod.com".to_string()));
+        assert_eq!(
+            v2.get("API_URL_PROD"),
+            Some(&"https://prod.com".to_string())
+        );
         assert_eq!(v2.get("DB_PASS"), Some(&"secret".to_string()));
     }
 
@@ -133,7 +154,7 @@ mod tests {
         let dir = tempdir().unwrap();
         let vault_path = dir.path().join("vault.enc");
         let key = get_test_key();
-        
+
         let mut v = vault::Vault::load(&vault_path, key).unwrap();
         v.set("KEY", "VAL");
         v.save().unwrap();
@@ -151,7 +172,7 @@ mod tests {
         let dir = tempdir().unwrap();
         let vault_path = dir.path().join("vault.enc");
         let key = get_test_key();
-        
+
         let mut v = vault::Vault::load(&vault_path, key).unwrap();
         v.set("A", "1");
         v.set("B", "2");
@@ -353,7 +374,10 @@ mod tests {
     #[test]
     fn test_format_auto_detection_multiline() {
         let multiline = "-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBg...\n-----END PRIVATE KEY-----";
-        assert_eq!(vault::Vault::detect_format(multiline), SecretFormat::Multiline);
+        assert_eq!(
+            vault::Vault::detect_format(multiline),
+            SecretFormat::Multiline
+        );
     }
 
     // Format auto-detection: JSON-like content is detected.
@@ -366,7 +390,10 @@ mod tests {
     // Format auto-detection: simple strings are raw.
     #[test]
     fn test_format_auto_detection_raw() {
-        assert_eq!(vault::Vault::detect_format("simple-api-key"), SecretFormat::Raw);
+        assert_eq!(
+            vault::Vault::detect_format("simple-api-key"),
+            SecretFormat::Raw
+        );
         assert_eq!(vault::Vault::detect_format(""), SecretFormat::Raw);
     }
 
@@ -403,7 +430,12 @@ mod tests {
         let key = get_test_key();
 
         let mut v = vault::Vault::load(&vault_path, key).unwrap();
-        v.set_with_metadata("KEY", "value", SecretFormat::Base64, Some("desc".to_string()));
+        v.set_with_metadata(
+            "KEY",
+            "value",
+            SecretFormat::Base64,
+            Some("desc".to_string()),
+        );
 
         // get() returns just the value
         assert_eq!(v.get("KEY"), Some(&"value".to_string()));
@@ -435,7 +467,10 @@ mod tests {
         // list_entries() returns full entries
         let entries = v.list_entries();
         assert_eq!(entries.len(), 2);
-        assert_eq!(entries.get("A").unwrap().description, Some("first".to_string()));
+        assert_eq!(
+            entries.get("A").unwrap().description,
+            Some("first".to_string())
+        );
         assert!(entries.get("B").unwrap().description.is_none());
     }
 
@@ -455,7 +490,7 @@ mod tests {
         std::thread::sleep(std::time::Duration::from_millis(10));
 
         assert!(v.set_description("KEY", Some("new description".to_string())));
-        
+
         let entry = v.get_entry("KEY").unwrap();
         assert_eq!(entry.description, Some("new description".to_string()));
         assert!(entry.updated_at > original_updated);
@@ -476,7 +511,12 @@ mod tests {
         let key = get_test_key();
 
         let mut v = vault::Vault::load(&vault_path, key).unwrap();
-        v.set_with_metadata("KEY", "secret", SecretFormat::Multiline, Some("my cert".to_string()));
+        v.set_with_metadata(
+            "KEY",
+            "secret",
+            SecretFormat::Multiline,
+            Some("my cert".to_string()),
+        );
 
         let removed = v.remove_entry("KEY").expect("should return entry");
         assert_eq!(removed.value, "secret");
@@ -518,8 +558,14 @@ mod tests {
     #[test]
     fn test_secret_format_parsing() {
         assert_eq!("raw".parse::<SecretFormat>().unwrap(), SecretFormat::Raw);
-        assert_eq!("multiline".parse::<SecretFormat>().unwrap(), SecretFormat::Multiline);
-        assert_eq!("base64".parse::<SecretFormat>().unwrap(), SecretFormat::Base64);
+        assert_eq!(
+            "multiline".parse::<SecretFormat>().unwrap(),
+            SecretFormat::Multiline
+        );
+        assert_eq!(
+            "base64".parse::<SecretFormat>().unwrap(),
+            SecretFormat::Base64
+        );
         assert_eq!("json".parse::<SecretFormat>().unwrap(), SecretFormat::Json);
         assert_eq!("JSON".parse::<SecretFormat>().unwrap(), SecretFormat::Json); // case insensitive
 
@@ -536,7 +582,10 @@ mod tests {
     #[test]
     fn test_v1_to_v2_migration() {
         use base64::{Engine, engine::general_purpose::STANDARD as BASE64};
-        use chacha20poly1305::{ChaCha20Poly1305, aead::{Aead, AeadCore, KeyInit, OsRng}};
+        use chacha20poly1305::{
+            ChaCha20Poly1305,
+            aead::{Aead, AeadCore, KeyInit, OsRng},
+        };
 
         let dir = tempdir().unwrap();
         let vault_path = dir.path().join("vault.enc");
@@ -581,7 +630,10 @@ mod tests {
     #[test]
     fn test_migration_saves_as_v2() {
         use base64::{Engine, engine::general_purpose::STANDARD as BASE64};
-        use chacha20poly1305::{ChaCha20Poly1305, aead::{Aead, AeadCore, KeyInit, OsRng}};
+        use chacha20poly1305::{
+            ChaCha20Poly1305,
+            aead::{Aead, AeadCore, KeyInit, OsRng},
+        };
 
         let dir = tempdir().unwrap();
         let vault_path = dir.path().join("vault.enc");
@@ -606,7 +658,9 @@ mod tests {
 
         // Check file is now v2
         #[derive(serde::Deserialize)]
-        struct EncFile { version: u8 }
+        struct EncFile {
+            version: u8,
+        }
         let raw = fs::read_to_string(&vault_path).unwrap();
         let parsed: EncFile = serde_json::from_str(&raw).unwrap();
         assert_eq!(parsed.version, 2);
@@ -648,7 +702,10 @@ mod tests {
         v.set("KEY", "original");
         v.set_hash("KEY", Some("original-hash".to_string()));
 
-        assert_eq!(v.get_entry("KEY").unwrap().hash, Some("original-hash".to_string()));
+        assert_eq!(
+            v.get_entry("KEY").unwrap().hash,
+            Some("original-hash".to_string())
+        );
 
         // Update value
         v.set("KEY", "new-value");
@@ -675,7 +732,10 @@ mod tests {
     #[test]
     fn test_unsupported_vault_version() {
         use base64::{Engine, engine::general_purpose::STANDARD as BASE64};
-        use chacha20poly1305::{ChaCha20Poly1305, aead::{Aead, AeadCore, KeyInit, OsRng}};
+        use chacha20poly1305::{
+            ChaCha20Poly1305,
+            aead::{Aead, AeadCore, KeyInit, OsRng},
+        };
 
         let dir = tempdir().unwrap();
         let vault_path = dir.path().join("vault.enc");

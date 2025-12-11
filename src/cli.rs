@@ -164,9 +164,7 @@ pub enum SecretAction {
         format: Option<SecretFormat>,
     },
     /// Get a secret value
-    Get {
-        key: String,
-    },
+    Get { key: String },
     /// List all secrets
     List {},
     /// Set or update a secret's description
@@ -176,9 +174,7 @@ pub enum SecretAction {
         description: Option<String>,
     },
     /// Remove from Local Vault ONLY (Use 'prune' for remote removal)
-    Remove {
-        key: String,
-    },
+    Remove { key: String },
     /// Revoke a generated secret at the source AND locally
     Revoke {
         key: String,
