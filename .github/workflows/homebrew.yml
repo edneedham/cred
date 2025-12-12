@@ -141,7 +141,11 @@ jobs:
                   ROOT_URL="https://github.com/${TAP_REPO}/releases/download/${VERSION}"
 
                   brew install --build-bottle edneedham/cred/${FORMULA_NAME}
-                  brew bottle --root-url="${ROOT_URL}" edneedham/cred/${FORMULA_NAME}
+                  brew bottle --json --root-url="${ROOT_URL}" edneedham/cred/${FORMULA_NAME}
+
+                  # Debug: list created files
+                  echo "Created files:"
+                  ls -la *.tar.gz *.json 2>/dev/null || echo "No bottle files in current directory"
 
                   # Find the bottle file
                   BOTTLE_FILE=$(ls ${FORMULA_NAME}--*.bottle*.tar.gz 2>/dev/null | head -1)
@@ -149,6 +153,7 @@ jobs:
 
                   # Extract SHA from JSON
                   JSON_FILE=$(ls ${FORMULA_NAME}--*.bottle*.json 2>/dev/null | head -1)
+                  echo "JSON file: ${JSON_FILE}"
                   BOTTLE_SHA=$(cat "$JSON_FILE" | ruby -rjson -e 'j=JSON.parse(STDIN.read); j["bottles"].each{|k,v| puts v["sha256"]}')
                   echo "bottle_sha=${BOTTLE_SHA}" >> "$GITHUB_OUTPUT"
                   echo "Bottle SHA: ${BOTTLE_SHA}"
