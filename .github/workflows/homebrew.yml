@@ -1,8 +1,6 @@
 name: Homebrew Tap Update
 
 on:
-    release:
-        types: [published]
     workflow_dispatch:
         inputs:
             tag:
@@ -146,11 +144,11 @@ jobs:
                   brew bottle --root-url="${ROOT_URL}" edneedham/cred/${FORMULA_NAME}
 
                   # Find the bottle file
-                  BOTTLE_FILE=$(ls ${FORMULA_NAME}--*.bottle.tar.gz 2>/dev/null | head -1)
+                  BOTTLE_FILE=$(ls ${FORMULA_NAME}--*.bottle*.tar.gz 2>/dev/null | head -1)
                   echo "bottle_file=${BOTTLE_FILE}" >> "$GITHUB_OUTPUT"
 
                   # Extract SHA from JSON
-                  JSON_FILE=$(ls ${FORMULA_NAME}--*.bottle.json 2>/dev/null | head -1)
+                  JSON_FILE=$(ls ${FORMULA_NAME}--*.bottle*.json 2>/dev/null | head -1)
                   BOTTLE_SHA=$(cat "$JSON_FILE" | ruby -rjson -e 'j=JSON.parse(STDIN.read); j["bottles"].each{|k,v| puts v["sha256"]}')
                   echo "bottle_sha=${BOTTLE_SHA}" >> "$GITHUB_OUTPUT"
                   echo "Bottle SHA: ${BOTTLE_SHA}"
@@ -160,8 +158,8 @@ jobs:
               with:
                   name: bottle-${{ matrix.arch }}
                   path: |
-                      ${{ env.FORMULA_NAME }}--*.bottle.tar.gz
-                      ${{ env.FORMULA_NAME }}--*.bottle.json
+                      ${{ env.FORMULA_NAME }}--*.bottle*.tar.gz
+                      ${{ env.FORMULA_NAME }}--*.bottle*.json
 
     publish-bottles:
         needs: [update-formula, build-bottles]

@@ -176,11 +176,13 @@ Revoke a target:
 Add secrets to the encrypted local vault:
 
 `cred secret set DATABASE_URL "postgres://user:pass@localhost:5432/db"`
+
 `cred secret set JWT_SECRET "super-secret"`
 
 Add metadata when storing secrets:
 
 `cred secret set API_KEY "sk-xxx" --description "OpenAI production key"`
+
 `cred secret set CERT_PEM "-----BEGIN..." -d "TLS certificate"`
 
 Available formats: `raw`, `multiline`, `pem`, `base64`, `json`. Format is auto-detected if omitted:
