@@ -40,7 +40,11 @@ jobs:
             - uses: dtolnay/rust-toolchain@stable
             - uses: Swatinem/rust-cache@v2
             - name: End-to-end tests
-              run: cargo test --locked --all-features --test e2e_github
+              env:
+                RUN_E2E: '1'
+                GITHUB_PAT: ${{ secrets.E2E_GITHUB_TEST_TOKEN }}
+                E2E_GITHUB_REPO: ${{ vars.E2E_GITHUB_REPO }}
+              run: cargo test --locked --all-features tests::e2e_github
 
     build-binaries:
         name: Build ${{ matrix.target }}

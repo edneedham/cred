@@ -1,9 +1,9 @@
-use anyhow::{Result, bail};
-use cred::{
+use crate::{
     project,
     targets::{self, TargetAdapter},
     vault,
 };
+use anyhow::{Result, bail};
 use reqwest::Client;
 use std::collections::HashMap;
 use std::env;
