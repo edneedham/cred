@@ -47,6 +47,7 @@ pub struct ProjectStatusData {
     pub project_name: Option<String>,
     pub vault_exists: bool,
     pub vault_accessible: bool,
+    pub dirty_count: usize,
     pub git_detected: bool,
     pub git_root: Option<String>,
     pub git_bound: bool,
@@ -270,6 +271,7 @@ pub fn project_status_payload(data: &ProjectStatusData) -> serde_json::Value {
             "project_name": data.project_name,
             "vault_exists": data.vault_exists,
             "vault_accessible": data.vault_accessible,
+            "dirty_count": data.dirty_count,
             "git_detected": data.git_detected,
             "git_root": data.git_root,
             "git_bound": data.git_bound,
@@ -416,6 +418,7 @@ mod tests {
             project_name: Some("myapp".to_string()),
             vault_exists: true,
             vault_accessible: true,
+            dirty_count: 2,
             git_detected: true,
             git_root: Some("/path".to_string()),
             git_bound: true,
@@ -432,6 +435,7 @@ mod tests {
             assert!(data_val.get("is_project").unwrap().as_bool().unwrap());
             assert_eq!(data_val.get("project_name").unwrap(), "myapp");
             assert_eq!(data_val.get("git_remote_current").unwrap(), "org/repo");
+            assert_eq!(data_val.get("dirty_count").unwrap(), 2);
         } else {
             panic!("Payload is not an object");
         }

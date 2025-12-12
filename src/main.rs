@@ -255,6 +255,7 @@ async fn run(cli: Cli, flags: &CliFlags) -> Result<(), AppError> {
                                     "created_at": entry.created_at.to_rfc3339(),
                                     "updated_at": entry.updated_at.to_rfc3339(),
                                     "description": entry.description,
+                                    "modified": vault.is_dirty(k),
                                 })
                             })
                             .collect();
@@ -268,10 +269,12 @@ async fn run(cli: Cli, flags: &CliFlags) -> Result<(), AppError> {
                         println!("Vault content:");
                         for k in keys {
                             let entry = &entries[k];
+                            let modified_marker =
+                                if vault.is_dirty(k) { " [modified]" } else { "" };
                             if let Some(desc) = &entry.description {
-                                println!("  {} = ***** ({})", k, desc);
+                                println!("  {} = ***** ({}){}", k, desc, modified_marker);
                             } else {
-                                println!("  {} = *****", k);
+                                println!("  {} = *****{}", k, modified_marker);
                             }
                         }
                     }
@@ -512,14 +515,18 @@ async fn run(cli: Cli, flags: &CliFlags) -> Result<(), AppError> {
             }
 
             if flags.dry_run {
-                let creates: Vec<String> = Vec::new();
-                let mut updates: Vec<String> = Vec::new();
-                // With no remote read, we conservatively treat all as updates (or creates)
-                // Deterministic ordering: sort keys
+                // Separate dirty (modified) from unchanged secrets
+                let mut dirty: Vec<String> = Vec::new();
+                let mut unchanged: Vec<String> = Vec::new();
                 let mut keys: Vec<String> = filtered.keys().cloned().collect();
                 keys.sort();
-                // If we had a way to diff remote, we could split create/update; here we label as updates
-                updates.extend(keys);
+                for k in keys {
+                    if vault.is_dirty(&k) {
+                        dirty.push(k);
+                    } else {
+                        unchanged.push(k);
+                    }
+                }
 
                 if flags.json {
                     let payload = serde_json::json!({
@@ -528,8 +535,8 @@ async fn run(cli: Cli, flags: &CliFlags) -> Result<(), AppError> {
                         "data": {
                             "target": format!("{}", args.target),
                             "repo": repo,
-                            "will_create": creates,
-                            "will_update": updates,
+                            "will_push": dirty.clone(),
+                            "unchanged": unchanged.clone(),
                             "will_delete": Vec::<String>::new()
                         }
                     });
@@ -540,7 +547,12 @@ async fn run(cli: Cli, flags: &CliFlags) -> Result<(), AppError> {
                     if let Some(r) = repo.as_ref() {
                         print_out(flags, &format!("Repo: {}", r));
                     }
-                    print_out(flags, &format!("Will update: {:?}", updates));
+                    if !dirty.is_empty() {
+                        print_out(flags, &format!("Modified (will push): {:?}", dirty));
+                    }
+                    if !unchanged.is_empty() {
+                        print_out(flags, &format!("Unchanged (will push): {:?}", unchanged));
+                    }
                 }
                 return Ok(());
             }
@@ -711,6 +723,7 @@ async fn run(cli: Cli, flags: &CliFlags) -> Result<(), AppError> {
                     let mut project_name: Option<String> = None;
                     let mut vault_exists = false;
                     let mut vault_accessible = false;
+                    let mut dirty_count: usize = 0;
                     let mut git_detected = false;
                     let mut git_root: Option<String> = None;
                     let mut git_remote_current: Option<String> = None;
@@ -738,6 +751,7 @@ async fn run(cli: Cli, flags: &CliFlags) -> Result<(), AppError> {
                                 if let Ok(v) = vault::Vault::load(&p.vault_path, master_key) {
                                     let _ = v.list(); // access to ensure decrypt succeeded
                                     vault_accessible = true;
+                                    dirty_count = v.dirty_keys().len();
                                 }
                             }
                         }
@@ -767,6 +781,7 @@ async fn run(cli: Cli, flags: &CliFlags) -> Result<(), AppError> {
                             project_name,
                             vault_exists,
                             vault_accessible,
+                            dirty_count,
                             git_detected,
                             git_root,
                             git_bound,
@@ -783,6 +798,7 @@ async fn run(cli: Cli, flags: &CliFlags) -> Result<(), AppError> {
                         println!("  project_name: {:?}", project_name);
                         println!("  vault_exists: {}", vault_exists);
                         println!("  vault_accessible: {}", vault_accessible);
+                        println!("  dirty_count: {}", dirty_count);
                         println!("  git_detected: {}", git_detected);
                         println!("  git_root: {:?}", git_root);
                         println!("  git_bound: {}", git_bound);

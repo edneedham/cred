@@ -1,5 +1,21 @@
 # Changelog
 
+## v0.3.2
+
+### Value Hashing Infrastructure
+
+-   **SHA-256 hashing**: Each secret's value hash is computed and stored on save
+-   Foundation for future features: undo, batch operations, merge conflict detection
+-   Detects migrated v1 secrets that lack hashes (shown as modified until re-saved)
+
+### Internal
+
+-   Added `sha2` dependency for SHA-256 hashing
+-   New vault API: `is_dirty()`, `dirty_keys()` for change detection
+-   `cred secret list --json` includes `"modified"` field
+-   `cred push --dry-run` distinguishes modified vs unchanged secrets
+-   `cred project status` includes `dirty_count`
+
 ## v0.3.1
 
 ### Smart Format Detection

@@ -14,6 +14,7 @@ use chacha20poly1305::{
 };
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -294,11 +295,23 @@ impl Vault {
         BASE64.decode(s).is_ok()
     }
 
+    fn compute_hash(value: &str) -> String {
+        let mut hasher = Sha256::new();
+        hasher.update(value.as_bytes());
+        format!("{:x}", hasher.finalize())
+    }
+
     /// Encrypt and persist the current secrets to `vault.enc` (always as v2).
+    /// Computes and stores value hashes for change detection.
     pub fn save(&self) -> Result<()> {
+        // Clone secrest and compute hashes before persisting
+        let mut secrets = self.secrets.clone();
+        for entry in secrets.values_mut() {
+            entry.hash = Some(Self::compute_hash(&entry.value));
+        }
         let payload = VaultPayloadV2 {
             version: CURRENT_VERSION,
-            secrets: self.secrets.clone(),
+            secrets,
         };
         let plaintext = serde_json::to_vec(&payload)?;
 
@@ -317,6 +330,29 @@ impl Vault {
         let json = serde_json::to_string_pretty(&file_data)?;
         fs::write(&self.path, json).context("Failed to write to vault.enc")?;
         Ok(())
+    }
+
+    /// Check if a secret's value has changed since last save.
+    pub fn is_dirty(&self, key: &str) -> bool {
+        match self.secrets.get(key) {
+            Some(entry) => match &entry.hash {
+                Some(h) => Self::compute_hash(&entry.value) != *h,
+                None => true,
+            },
+            None => false,
+        }
+    }
+
+    /// Get all keys that have changed since last save.
+    pub fn dirty_keys(&self) -> Vec<&str> {
+        self.secrets
+            .iter()
+            .filter(|(_, entry)| match &entry.hash {
+                Some(h) => Self::compute_hash(&entry.value) != *h,
+                None => true,
+            })
+            .map(|(k, _)| k.as_str())
+            .collect()
     }
 
     /// Insert or overwrite a secret key/value in memory (not persisted until `save`).

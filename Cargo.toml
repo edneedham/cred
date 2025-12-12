@@ -1,6 +1,6 @@
 [package]
 name = "cred"
-version = "0.3.1"
+version = "0.3.2"
 edition = "2024"
 description = "A command-line tool to manage secrets and environment variables locally and remotely."
 readme = "README.md"
@@ -30,6 +30,7 @@ toml = "0.9.8"
 uuid = { version = "1.19.0", features = ["v4", "serde"] }
 zeroize = { version = "1.8.2", features = ["derive"] }
 chrono = { version = "0.4.42", features = ["serde"] }
+sha2 = "0.10.9"
 
 [dev-dependencies]
 tempfile = "3.23.0"
