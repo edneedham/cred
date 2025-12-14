@@ -46,12 +46,20 @@ pub struct TargetConfig {
     pub default: Option<bool>,
 }
 
+/// Source-specific configuration (auth reference for credential generation).
+#[derive(Serialize, Deserialize, Debug, Default)]
+pub struct SourceConfig {
+    pub auth_ref: Option<String>,
+}
+
 /// Root of the global configuration file.
 #[derive(Serialize, Deserialize, Debug, Default)]
 pub struct GlobalConfig {
     pub cred: CredMeta,
     pub machine: Option<Machine>,
     pub preferences: Preferences,
+    #[serde(default)]
+    pub sources: HashMap<String, SourceConfig>,
     pub targets: HashMap<String, TargetConfig>,
 }
 
@@ -261,6 +269,7 @@ fn default_config() -> GlobalConfig {
             confirm_destructive: Some(true),
             color_output: Some(true),
         },
+        sources: HashMap::new(),
         targets: HashMap::new(),
     }
 }
@@ -306,6 +315,53 @@ pub fn remove_target_token(target: &str) -> Result<()> {
         println!("✓ Removed authentication for '{}'", target);
     } else {
         println!("Target '{}' was not configured.", target);
+    }
+    Ok(())
+}
+
+// ---------- Source Token Management ----------
+
+/// Persist a source token reference in config and store the token via keystore backend.
+pub fn set_source_token(source: &str, token: &str) -> Result<()> {
+    let mut config = load()?;
+    let auth_ref = format!("cred:source:{}:default", source);
+    config
+        .sources
+        .entry(source.to_string())
+        .or_default()
+        .auth_ref = Some(auth_ref.clone());
+
+    let config_path = ensure_global_config_exists()?;
+    let toml_string = toml::to_string_pretty(&config)?;
+    fs::write(&config_path, toml_string)?;
+
+    keystore::set(&auth_ref, token)?;
+    Ok(())
+}
+
+/// Retrieve a source token from the configured keystore backend.
+pub fn get_source_token(source: &str) -> Result<Option<String>> {
+    let config = load()?;
+    let auth_ref = match config.sources.get(source).and_then(|s| s.auth_ref.as_ref()) {
+        Some(r) => r.clone(),
+        None => return Ok(None),
+    };
+    keystore::get(&auth_ref)
+}
+
+/// Remove a source token reference and delete the stored secret if present.
+pub fn remove_source_token(source: &str) -> Result<()> {
+    let mut config = load()?;
+    if let Some(scfg) = config.sources.remove(source) {
+        if let Some(auth_ref) = scfg.auth_ref {
+            keystore::remove(&auth_ref)?;
+        }
+        let config_path = ensure_global_config_exists()?;
+        let toml_string = toml::to_string_pretty(&config)?;
+        fs::write(&config_path, toml_string)?;
+        println!("✓ Removed source authentication for '{}'", source);
+    } else {
+        println!("Source '{}' was not configured.", source);
     }
     Ok(())
 }

@@ -467,6 +467,7 @@ mod tests {
             "sk-test-123",
             SecretFormat::Raw,
             Some("Production API key".to_string()),
+            None,
         );
         v.save().unwrap();
 
@@ -495,6 +496,7 @@ mod tests {
             "value",
             SecretFormat::Base64,
             Some("desc".to_string()),
+            None,
         );
 
         // get() returns just the value
@@ -515,7 +517,7 @@ mod tests {
         let key = get_test_key();
 
         let mut v = vault::Vault::load(&vault_path, key).unwrap();
-        v.set_with_metadata("A", "1", SecretFormat::Raw, Some("first".to_string()));
+        v.set_with_metadata("A", "1", SecretFormat::Raw, Some("first".to_string()), None);
         v.set("B", "2");
 
         // list() returns HashMap<String, String>
@@ -576,6 +578,7 @@ mod tests {
             "secret",
             SecretFormat::Multiline,
             Some("my cert".to_string()),
+            None,
         );
 
         let removed = v.remove_entry("KEY").expect("should return entry");

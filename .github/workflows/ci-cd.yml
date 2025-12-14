@@ -39,12 +39,18 @@ jobs:
             - uses: actions/checkout@v4
             - uses: dtolnay/rust-toolchain@stable
             - uses: Swatinem/rust-cache@v2
-            - name: End-to-end tests
+            - name: End-to-end tests (GitHub target)
               env:
                 RUN_E2E: '1'
                 GITHUB_PAT: ${{ secrets.E2E_GITHUB_TEST_TOKEN }}
                 E2E_GITHUB_REPO: ${{ vars.E2E_GITHUB_REPO }}
-              run: cargo test --locked --all-features tests::e2e_github
+              run: cargo test --locked --all-features tests::e2e_github::
+            - name: End-to-end tests (GitHub source)
+              env:
+                RUN_E2E: '1'
+                GITHUB_PAT: ${{ secrets.E2E_GITHUB_TEST_TOKEN }}
+                GITHUB_OAUTH_CLIENT_ID: ${{ vars.GITHUB_OAUTH_CLIENT_ID }}
+              run: cargo test --locked --all-features tests::e2e_github_source::
 
     build-binaries:
         name: Build ${{ matrix.target }}

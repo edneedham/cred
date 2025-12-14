@@ -6,17 +6,19 @@ mod envfile;
 mod error;
 mod io;
 mod project;
+mod sources;
 mod targets;
 #[cfg(test)]
 mod tests;
 mod vault;
 
 use clap::Parser;
-use cli::{Cli, CliFlags, Commands, SecretAction, SetTargetArgs};
+use cli::{Cli, CliFlags, Commands, SecretAction, SetTargetArgs, SourceAction};
 use error::{AppError, ExitCode};
 use io::{print_err, print_json, print_out, print_plain_err, read_token_securely, require_yes};
 use keyring::Entry;
 use project::{ProjectStatusData, resolve_repo_binding};
+use sources::SourceAdapter;
 use std::process;
 use targets::TargetAdapter;
 use zeroize::Zeroize;
@@ -76,6 +78,14 @@ async fn run(cli: Cli, flags: &CliFlags) -> Result<(), AppError> {
                 });
                 print_json(&payload);
             }
+        }
+
+        Commands::Status => {
+            handle_status(flags).await?;
+        }
+
+        Commands::Source { action } => {
+            handle_source_action(action, flags).await?;
         }
 
         Commands::Target { action } => match action {
@@ -147,7 +157,7 @@ async fn run(cli: Cli, flags: &CliFlags) -> Result<(), AppError> {
                     }
                     // Use explicit format if provided, otherwise auto-detect
                     let fmt = format.unwrap_or_else(|| vault::Vault::detect_format(&value));
-                    vault.set_with_metadata(&key, &value, fmt, description);
+                    vault.set_with_metadata(&key, &value, fmt, description, None);
                     vault.save()?;
                     print_out(flags, &format!("✓ Set {} = *****", key));
                 }
@@ -887,6 +897,255 @@ fn handle_target_set(args: SetTargetArgs, flags: &CliFlags) -> Result<(), AppErr
     println!("Target '{}' authenticated successfully.", args.name);
 
     token.zeroize();
+    Ok(())
+}
+
+/// Handle the top-level `status` command with enhanced output.
+async fn handle_status(flags: &CliFlags) -> Result<(), AppError> {
+    let mut sources_configured: Vec<String> = Vec::new();
+    let mut targets_configured: Vec<String> = Vec::new();
+    let mut secrets_info: Vec<serde_json::Value> = Vec::new();
+    let mut vault_count: usize = 0;
+    let mut is_project = false;
+
+    // Load global config for sources/targets
+    if let Ok(gc) = config::load() {
+        sources_configured = gc.sources.keys().cloned().collect();
+        sources_configured.sort();
+        targets_configured = gc.targets.keys().cloned().collect();
+        targets_configured.sort();
+    }
+
+    // Load project and vault info
+    if let Ok(p) = project::Project::find() {
+        is_project = true;
+        if p.vault_path.exists() {
+            if let Ok(master_key) = p.get_master_key() {
+                if let Ok(v) = vault::Vault::load(&p.vault_path, master_key) {
+                    let entries = v.list_entries();
+                    vault_count = entries.len();
+
+                    let mut keys: Vec<&String> = entries.keys().collect();
+                    keys.sort();
+
+                    for key in keys {
+                        let entry = &entries[key];
+                        let source = entry.source.as_deref().unwrap_or("unknown");
+                        let modified = v.is_dirty(key);
+
+                        secrets_info.push(serde_json::json!({
+                            "key": key,
+                            "source": source,
+                            "modified": modified,
+                        }));
+                    }
+                }
+            }
+        }
+    }
+
+    if flags.json {
+        let payload = serde_json::json!({
+            "api_version": "1",
+            "status": "ok",
+            "data": {
+                "is_project": is_project,
+                "vault_count": vault_count,
+                "secrets": secrets_info,
+                "sources": sources_configured,
+                "targets": targets_configured,
+            }
+        });
+        print_json(&payload);
+    } else {
+        if !is_project {
+            println!("Not in a cred project. Run 'cred init' to initialize.");
+            return Ok(());
+        }
+
+        println!("Vault: {} secrets", vault_count);
+        println!();
+
+        if secrets_info.is_empty() {
+            println!("  (no secrets)");
+        } else {
+            for secret in &secrets_info {
+                let key = secret["key"].as_str().unwrap_or("");
+                let source = secret["source"].as_str().unwrap_or("unknown");
+                let modified = secret["modified"].as_bool().unwrap_or(false);
+
+                let modified_marker = if modified { " [modified]" } else { "" };
+                // TODO: Add target push status when we track pushed_to metadata
+                println!("  {:<20} [{}]{}", key, source, modified_marker);
+            }
+        }
+
+        println!();
+        if sources_configured.is_empty() {
+            println!("Sources: (none configured)");
+        } else {
+            println!(
+                "Sources: {}",
+                sources_configured
+                    .iter()
+                    .map(|s| format!("{} ✓", s))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            );
+        }
+
+        if targets_configured.is_empty() {
+            println!("Targets: (none configured)");
+        } else {
+            println!(
+                "Targets: {}",
+                targets_configured
+                    .iter()
+                    .map(|t| format!("{} ✓", t))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            );
+        }
+    }
+
+    Ok(())
+}
+
+/// Handle source subcommands (add, list, revoke, generate).
+async fn handle_source_action(action: SourceAction, flags: &CliFlags) -> Result<(), AppError> {
+    match action {
+        SourceAction::Add(args) => {
+            if flags.dry_run {
+                print_out(flags, "(dry-run) Source add skipped");
+                return Ok(());
+            }
+
+            let source_name = args.name.to_string();
+
+            // If token is provided directly, use it
+            if let Some(token) = args.token {
+                config::set_source_token(&source_name, &token).map_err(AppError::auth)?;
+                print_out(
+                    flags,
+                    &format!("Source '{}' authenticated successfully.", source_name),
+                );
+                return Ok(());
+            }
+
+            // Otherwise, use device flow for GitHub or prompt for token
+            if matches!(args.name, sources::Source::Github) && !flags.non_interactive {
+                print_out(flags, "Starting GitHub device flow authentication...");
+                print_out(flags, "");
+
+                // Initiate device flow
+                let scopes = vec!["repo".to_string(), "read:org".to_string()];
+                let (state, device_code) =
+                    sources::github::GithubSource::initiate_device_flow(None, &scopes)
+                        .await
+                        .map_err(|e| AppError::auth(e))?;
+
+                print_out(flags, &format!("Please visit: {}", state.verification_uri));
+                print_out(flags, &format!("Enter code: {}", state.user_code));
+                print_out(flags, "");
+                print_out(flags, "Waiting for authorization...");
+
+                // Poll for token
+                let token = sources::github::GithubSource::complete_device_flow(
+                    None,
+                    &device_code,
+                    5, // 5 second initial interval
+                    state.expires_in,
+                )
+                .await
+                .map_err(|e| AppError::auth(e))?;
+
+                // Store the token
+                config::set_source_token(&source_name, &token).map_err(AppError::auth)?;
+
+                // Validate and show user
+                if let Some(source_impl) = sources::get(args.name) {
+                    let _ = source_impl.validate_auth(&token).await;
+                }
+
+                print_out(
+                    flags,
+                    &format!("Source '{}' authenticated successfully.", source_name),
+                );
+            } else {
+                // Fallback to manual token entry
+                let mut token = read_token_securely(None, flags)?;
+                config::set_source_token(&source_name, &token).map_err(AppError::auth)?;
+                print_out(
+                    flags,
+                    &format!("Source '{}' authenticated successfully.", source_name),
+                );
+                token.zeroize();
+            }
+        }
+
+        SourceAction::List => {
+            let cfg = config::load()?;
+            let mut names: Vec<String> = cfg.sources.keys().cloned().collect();
+            names.sort();
+
+            if flags.json {
+                let payload = serde_json::json!({
+                    "api_version": "1",
+                    "status": "ok",
+                    "data": { "sources": names }
+                });
+                print_json(&payload);
+            } else {
+                if names.is_empty() {
+                    println!("No sources configured.");
+                    println!("Run 'cred source add <source>' to authenticate with a source.");
+                } else {
+                    println!("Configured Sources:");
+                    for name in names {
+                        println!("- {}", name);
+                    }
+                }
+            }
+        }
+
+        SourceAction::Revoke { name } => {
+            require_yes(flags, "source revoke")?;
+            if flags.dry_run {
+                print_out(flags, "(dry-run) Source revoke skipped");
+                return Ok(());
+            }
+
+            config::remove_source_token(&name.to_string())?;
+        }
+
+        SourceAction::Generate(args) => {
+            if flags.dry_run {
+                print_out(
+                    flags,
+                    &format!(
+                        "(dry-run) Would generate '{}' from source '{}'",
+                        args.key_name, args.source
+                    ),
+                );
+                return Ok(());
+            }
+
+            // For now, GitHub doesn't support programmatic PAT generation
+            // The device flow IS the generation mechanism
+            print_err(
+                flags,
+                &format!(
+                    "Source '{}' does not support programmatic credential generation.",
+                    args.source
+                ),
+            );
+            print_out(
+                flags,
+                "Use 'cred source add github' to authenticate via device flow.",
+            );
+        }
+    }
+
     Ok(())
 }
 

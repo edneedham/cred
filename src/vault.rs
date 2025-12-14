@@ -90,6 +90,9 @@ pub struct SecretEntry {
     pub updated_at: DateTime<Utc>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
+    /// Origin source of the secret (e.g., "github", "manual")
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source: Option<String>,
 }
 
 impl Zeroize for SecretEntry {
@@ -97,6 +100,7 @@ impl Zeroize for SecretEntry {
         self.value.zeroize();
         self.hash.zeroize();
         self.description.zeroize();
+        self.source.zeroize();
     }
 }
 
@@ -191,6 +195,7 @@ impl Vault {
                     created_at: now,
                     updated_at: now,
                     description: None,
+                    source: None, // Unknown origin for migrated secrets
                 };
                 (k, entry)
             })
@@ -356,7 +361,7 @@ impl Vault {
     }
 
     /// Insert or overwrite a secret key/value in memory (not persisted until `save`).
-    /// Automatically detects format and updates timestamps.
+    /// Automatically detects format and updates timestamps. Source defaults to "manual".
     pub fn set(&mut self, key: &str, value: &str) {
         let now = Utc::now();
         let format = Self::detect_format(value);
@@ -368,6 +373,7 @@ impl Vault {
                 entry.updated_at = now;
                 // Clear hash since value changed; will be recomputed if needed
                 entry.hash = None;
+                // Preserve existing source on update
             }
             None => {
                 self.secrets.insert(
@@ -379,6 +385,7 @@ impl Vault {
                         created_at: now,
                         updated_at: now,
                         description: None,
+                        source: Some("manual".to_string()),
                     },
                 );
             }
@@ -392,6 +399,7 @@ impl Vault {
         value: &str,
         format: SecretFormat,
         description: Option<String>,
+        source: Option<String>,
     ) {
         let now = Utc::now();
 
@@ -402,6 +410,10 @@ impl Vault {
                 entry.description = description;
                 entry.updated_at = now;
                 entry.hash = None;
+                // Update source if provided, otherwise preserve existing
+                if source.is_some() {
+                    entry.source = source;
+                }
             }
             None => {
                 self.secrets.insert(
@@ -413,6 +425,7 @@ impl Vault {
                         created_at: now,
                         updated_at: now,
                         description,
+                        source: source.or_else(|| Some("manual".to_string())),
                     },
                 );
             }

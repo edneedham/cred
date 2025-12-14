@@ -1,6 +1,7 @@
 //! CLI argument and command definitions for cred.
 //! Parsed once in `main` and dispatched to command handlers.
 
+use crate::sources::Source;
 use crate::targets::Target;
 use crate::vault::SecretFormat;
 use clap::{Args, Parser, Subcommand};
@@ -44,7 +45,16 @@ pub enum Commands {
     /// Run health checks (use --json for machine output)
     Doctor,
 
-    /// Manage global target authentication
+    /// Show project and vault status (sources, secrets, targets)
+    Status,
+
+    /// Manage credential sources (where secrets come from)
+    Source {
+        #[command(subcommand)]
+        action: SourceAction,
+    },
+
+    /// Manage global target authentication (where secrets go to)
     Target {
         #[command(subcommand)]
         action: TargetAction,
@@ -133,12 +143,12 @@ pub enum ProjectAction {
 
 #[derive(Subcommand, Debug)]
 pub enum TargetAction {
+    /// Authenticate with a target (store token)
     Set(SetTargetArgs),
+    /// List configured targets
     List,
     /// Revoke a target's authentication token (Logout)
-    Revoke {
-        name: Target,
-    },
+    Revoke { name: Target },
 }
 
 #[derive(Args, Debug)]
@@ -148,6 +158,49 @@ pub struct SetTargetArgs {
     /// Auth token (will prompt if omitted)
     #[arg(long)]
     pub token: Option<String>,
+}
+
+#[derive(Subcommand, Debug)]
+pub enum SourceAction {
+    /// Authenticate with a source (via device flow or token)
+    Add(AddSourceArgs),
+    /// List configured sources
+    List,
+    /// Revoke a source's authentication
+    Revoke { name: Source },
+    /// Generate a new credential from a source and store it locally
+    Generate(GenerateSourceArgs),
+}
+
+#[derive(Args, Debug)]
+pub struct AddSourceArgs {
+    /// The source to authenticate with
+    pub name: Source,
+
+    /// Auth token (will prompt or use device flow if omitted)
+    #[arg(long)]
+    pub token: Option<String>,
+
+    /// Use device flow for OAuth authorization (default for GitHub)
+    #[arg(long)]
+    pub device_flow: bool,
+}
+
+#[derive(Args, Debug)]
+pub struct GenerateSourceArgs {
+    /// The source to generate a credential from
+    pub source: Source,
+
+    /// The key name to store the generated credential under
+    pub key_name: String,
+
+    /// Scopes/permissions for the generated credential
+    #[arg(long, short = 's')]
+    pub scopes: Vec<String>,
+
+    /// Description for the secret
+    #[arg(long, short = 'd')]
+    pub description: Option<String>,
 }
 
 #[derive(Subcommand, Debug)]
