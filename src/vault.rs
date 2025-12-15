@@ -90,9 +90,12 @@ pub struct SecretEntry {
     pub updated_at: DateTime<Utc>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
-    /// Origin source of the secret (e.g., "github", "manual")
+    /// Origin source of the secret (e.g., "resend", "manual")
     #[serde(skip_serializing_if = "Option::is_none")]
     pub source: Option<String>,
+    /// Remote ID at the source (for revocation)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source_id: Option<String>,
 }
 
 impl Zeroize for SecretEntry {
@@ -101,6 +104,7 @@ impl Zeroize for SecretEntry {
         self.hash.zeroize();
         self.description.zeroize();
         self.source.zeroize();
+        self.source_id.zeroize();
     }
 }
 
@@ -196,6 +200,7 @@ impl Vault {
                     updated_at: now,
                     description: None,
                     source: None, // Unknown origin for migrated secrets
+                    source_id: None,
                 };
                 (k, entry)
             })
@@ -373,7 +378,7 @@ impl Vault {
                 entry.updated_at = now;
                 // Clear hash since value changed; will be recomputed if needed
                 entry.hash = None;
-                // Preserve existing source on update
+                // Preserve existing source and source_id on update
             }
             None => {
                 self.secrets.insert(
@@ -386,6 +391,7 @@ impl Vault {
                         updated_at: now,
                         description: None,
                         source: Some("manual".to_string()),
+                        source_id: None,
                     },
                 );
             }
@@ -400,6 +406,7 @@ impl Vault {
         format: SecretFormat,
         description: Option<String>,
         source: Option<String>,
+        source_id: Option<String>,
     ) {
         let now = Utc::now();
 
@@ -414,6 +421,10 @@ impl Vault {
                 if source.is_some() {
                     entry.source = source;
                 }
+                // Update source_id if provided
+                if source_id.is_some() {
+                    entry.source_id = source_id;
+                }
             }
             None => {
                 self.secrets.insert(
@@ -426,6 +437,7 @@ impl Vault {
                         updated_at: now,
                         description,
                         source: source.or_else(|| Some("manual".to_string())),
+                        source_id,
                     },
                 );
             }

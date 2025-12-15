@@ -153,23 +153,37 @@ pub enum TargetAction {
 
 #[derive(Args, Debug)]
 pub struct SetTargetArgs {
+    /// The target to authenticate with
     pub name: Target,
 
-    /// Auth token (will prompt if omitted)
+    /// Auth token (will prompt if omitted). Use a fine-grained PAT with minimal scopes.
     #[arg(long)]
     pub token: Option<String>,
 }
 
 #[derive(Subcommand, Debug)]
 pub enum SourceAction {
-    /// Authenticate with a source (via device flow or token)
+    /// Authenticate with a source (store master API key)
     Add(AddSourceArgs),
     /// List configured sources
     List,
-    /// Revoke a source's authentication
+    /// Revoke a source's authentication (removes stored master key)
     Revoke { name: Source },
     /// Generate a new credential from a source and store it locally
     Generate(GenerateSourceArgs),
+    /// List API keys at the source
+    Keys { source: Source },
+    /// Delete a generated credential at the source AND from local vault
+    Delete(DeleteSourceKeyArgs),
+}
+
+#[derive(Args, Debug)]
+pub struct DeleteSourceKeyArgs {
+    /// The source where the key was generated
+    pub source: Source,
+
+    /// The vault key name of the credential to delete
+    pub key_name: String,
 }
 
 #[derive(Args, Debug)]
@@ -177,13 +191,9 @@ pub struct AddSourceArgs {
     /// The source to authenticate with
     pub name: Source,
 
-    /// Auth token (will prompt or use device flow if omitted)
+    /// Auth token (will prompt if omitted)
     #[arg(long)]
     pub token: Option<String>,
-
-    /// Use device flow for OAuth authorization (default for GitHub)
-    #[arg(long)]
-    pub device_flow: bool,
 }
 
 #[derive(Args, Debug)]
@@ -194,9 +204,9 @@ pub struct GenerateSourceArgs {
     /// The key name to store the generated credential under
     pub key_name: String,
 
-    /// Scopes/permissions for the generated credential
-    #[arg(long, short = 's')]
-    pub scopes: Vec<String>,
+    /// Permission level: "full_access" or "sending_access" (Resend)
+    #[arg(long, short = 'p')]
+    pub permission: Option<String>,
 
     /// Description for the secret
     #[arg(long, short = 'd')]

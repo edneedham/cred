@@ -11,7 +11,7 @@
 
 `cred` stores encrypted secrets locally and safely pushes them to CI/CD platforms on demand.
 
-⚠️ **Status: Early Preview (v0.3.2)**
+⚠️ **Status: Early Preview (v0.4.0)**
 
 `cred` is currently in active development. The on-disk format, CLI surface, and security model may change between minor versions. Do not rely on it as your sole secrets backup yet.
 
@@ -40,19 +40,30 @@ Managing secrets across projects, targets, and sources is a mess and a chore.
 
 ### **1. A Matrix Vault per Project**
 
-Your secrets live inside `.cred/vault.enc` as an encrypted store with per-secret metadata (format, timestamps, description).
+Your secrets live inside `.cred/vault.enc` as an encrypted store with per-secret metadata (format, timestamps, description, source).
 
-### **2. A global target configuration store**
+### **2. Sources and Targets**
 
-Metadata and preferences live in `~/.config/cred/global.toml`, while target tokens are stored securely in the OS credential store (keyring). Nothing sensitive is written to the TOML.
+`cred` distinguishes between **sources** (where credentials come from) and **targets** (where secrets are pushed to):
 
-### **3. Target-agnostic secret pushing**
+-   **Sources**: Platforms that can programmatically generate credentials (e.g., Resend API keys)
+-   **Targets**: Platforms where you push secrets for deployment (e.g., GitHub Actions secrets)
+
+### **3. A global configuration store**
+
+Metadata and preferences live in `~/.config/cred/global.toml`, while source and target tokens are stored securely in the OS credential store (keyring). Nothing sensitive is written to the TOML.
+
+### **4. Target-agnostic secret pushing**
 
 You manage secrets locally, but `cred` can upload them to specified targets.
 
+#### Supported sources:
+
+-   Resend (API key generation)
+
 #### Supported targets:
 
--   GitHub
+-   GitHub (Actions secrets)
 
 ---
 
@@ -109,9 +120,11 @@ It follows a simple workflow:
 
 -   Initialize a project
 
--   Add a target
+-   (Optional) Add a source for credential generation
 
--   Store secrets locally
+-   Add a target for secret deployment
+
+-   Store secrets locally (manually or from a source)
 
 -   Push secrets to the target
 
@@ -151,13 +164,81 @@ Machine-readable:
 
 `cred project status --json`
 
-### 2. Add a Target (e.g. GitHub)
+Or use the top-level status command for a hub-and-spoke view:
 
-Authenticate a deployment target:
+`cred status`
+
+```
+Vault: 3 secrets
+
+  RESEND_API_KEY       [resend]
+  DATABASE_URL         [manual]
+  JWT_SECRET           [manual] [modified]
+
+Sources: resend ✓
+Targets: github ✓
+```
+
+### 2. (Optional) Add a Source (e.g. Resend)
+
+Sources are platforms that can **programmatically generate credentials**. Unlike targets (which only receive secrets), sources create new API keys on demand.
+
+**Add your master API key:**
+
+`cred source add resend --token "$RESEND_API_KEY"`
+
+Or interactively (will prompt for token):
+
+`cred source add resend`
+
+**Generate a new API key from the source:**
+
+```bash
+cred source generate resend RESEND_EMAIL_KEY --permission sending_access -d "Email service key"
+```
+
+This creates a new API key via Resend's API and stores it in your vault with `source: resend` metadata.
+
+**Permission levels** (Resend-specific):
+
+-   `full_access` — Can create, delete, get, and update any resource
+-   `sending_access` — Can only send emails (recommended for most use cases)
+
+**List API keys at the source:**
+
+`cred source keys resend`
+
+**Delete a generated key** (removes from source AND local vault):
+
+`cred source delete resend RESEND_EMAIL_KEY --yes`
+
+**List configured sources:**
+
+`cred source list`
+
+**Revoke source authentication** (deletes all generated keys and removes master key):
+
+`cred source revoke resend --yes`
+
+This will:
+
+1. Delete all API keys generated from this source at Resend
+2. Remove them from the local vault
+3. Remove the stored master key
+
+#### Why Sources Use Master Keys
+
+Sources authenticate with a master API key that has permission to create additional keys. The generated keys can have narrower scopes (e.g., `sending_access` only), following the principle of least privilege.
+
+### 3. Add a Target (e.g. GitHub)
+
+Targets are platforms where you push secrets for deployment. Authenticate a deployment target:
 
 `cred target set github`
 
 You will be securely prompted for a token. The token is stored in your OS credential store, not in plaintext on disk.
+
+**For GitHub targets**, create a fine-grained Personal Access Token at https://github.com/settings/tokens with only the `Actions secrets` permission for your repository.
 
 Non-interactive (CI):
 
@@ -169,9 +250,13 @@ List configured targets:
 
 Revoke a target:
 
-`cred target revoke github`
+`cred target revoke github --yes`
 
-### 3. Store Secrets Locally
+#### Why Targets Use Simple Tokens
+
+Targets need **minimal permissions** — just enough to write secrets. This follows the principle of least privilege.
+
+### 4. Store Secrets Locally
 
 Add secrets to the encrypted local vault:
 
@@ -242,7 +327,7 @@ The removal output shows when the secret was created:
 ✓ Removed 'JWT_SECRET' from local vault (3 days old)
 ```
 
-### 4. Import from a .env file
+### 5. Import from a .env file
 
 Import `KEY=VALUE` pairs from a .env file into the vault. Existing keys are skipped by default to keep imports non-destructive.
 
@@ -254,7 +339,7 @@ Overwrite existing keys if needed:
 
 Use `--dry-run` to see what would change without writing.
 
-### 5. Export vault to a .env file
+### 6. Export vault to a .env file
 
 Write vault contents to a .env file (keys are sorted). Existing files are preserved unless forced.
 
@@ -266,7 +351,7 @@ Overwrite an existing file explicitly:
 
 Use `--dry-run` to preview how many keys would be written.
 
-### 6. Dry Run (Preview Changes)
+### 7. Dry Run (Preview Changes)
 
 Before pushing anything remotely, preview what will change:
 
@@ -278,7 +363,7 @@ Preview specific keys:
 
 Nothing is uploaded when --dry-run is used.
 
-### 7. Push Secrets to a Target
+### 8. Push Secrets to a Target
 
 Push all local secrets to GitHub:
 
@@ -300,7 +385,7 @@ Machine-readable output:
 
 `cred push github --json`
 
-### 8. Update a Secret
+### 9. Update a Secret
 
 Update locally:
 
@@ -316,7 +401,7 @@ Apply:
 
 Only changed keys are updated remotely.
 
-### 9. Prune (Delete Locally and Remotely)
+### 10. Prune (Delete from Remote)
 
 Remove a key everywhere:
 
@@ -332,7 +417,7 @@ Prune all known keys from a target:
 
 ⚠️ **Destructive operations require --yes unless in --dry-run.**
 
-### 10. Global Configuration
+### 11. Global Configuration
 
 View configuration:
 
@@ -350,7 +435,7 @@ Unset a value:
 
 `cred config unset preferences.default_target`
 
-### 11. AI / Automation Friendly Usage
+### 12. AI / Automation Friendly Usage
 
 All commands support:
 
@@ -366,15 +451,31 @@ Example automation pattern:
 
 Typical Workflow
 
-`cred init`
-`cred target set github`
-`# displays an auth token prompt...`
+```bash
+cred init
+cred target set github
+# Enter fine-grained PAT with Actions secrets permission...
 
-`cred secret set DATABASE_URL postgres://...`
-`cred secret set JWT_SECRET super-secret`
+cred secret set DATABASE_URL postgres://...
+cred secret set JWT_SECRET super-secret
 
-`cred push github --dry-run`
-`cred push github`
+cred push github --dry-run
+cred push github
+```
+
+With Sources (Credential Generation):
+
+```bash
+cred init
+cred source add resend --token "$RESEND_MASTER_KEY"
+cred target set github          # Fine-grained PAT
+
+# Generate a new API key from Resend and store in vault
+cred source generate resend RESEND_API_KEY --permission sending_access
+
+cred status                     # Shows sources, secrets, targets
+cred push github                # Push to GitHub Actions
+```
 
 CI Example
 
@@ -390,7 +491,7 @@ Safety Guarantees
 
 Secrets are encrypted at rest.
 
-Target tokens are stored in the OS credential store.
+Source and target tokens are stored in the OS credential store.
 
 No secrets are written to plaintext files unless explicitly exported.
 

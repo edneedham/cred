@@ -94,7 +94,7 @@ async fn run(cli: Cli, flags: &CliFlags) -> Result<(), AppError> {
                     print_out(flags, "(dry-run) Target set skipped");
                     return Ok(());
                 }
-                handle_target_set(args, &flags)?;
+                handle_target_set(args, flags)?;
             }
             cli::TargetAction::List => {
                 let cfg = config::load()?;
@@ -157,7 +157,7 @@ async fn run(cli: Cli, flags: &CliFlags) -> Result<(), AppError> {
                     }
                     // Use explicit format if provided, otherwise auto-detect
                     let fmt = format.unwrap_or_else(|| vault::Vault::detect_format(&value));
-                    vault.set_with_metadata(&key, &value, fmt, description, None);
+                    vault.set_with_metadata(&key, &value, fmt, description, None, None);
                     vault.save()?;
                     print_out(flags, &format!("✓ Set {} = *****", key));
                 }
@@ -890,12 +890,27 @@ async fn run(cli: Cli, flags: &CliFlags) -> Result<(), AppError> {
 }
 
 /// Handle `target set`, persisting the token securely and zeroizing it afterward.
+/// Targets use simple token-based auth (fine-grained PAT via --token or prompt).
 fn handle_target_set(args: SetTargetArgs, flags: &CliFlags) -> Result<(), AppError> {
-    let mut token = read_token_securely(args.token, flags)?;
+    let target_name = args.name.to_string();
 
-    config::set_target_token(&args.name.to_string(), &token).map_err(AppError::auth)?;
-    println!("Target '{}' authenticated successfully.", args.name);
+    // If token is provided directly, use it
+    if let Some(token) = args.token {
+        config::set_target_token(&target_name, &token).map_err(AppError::auth)?;
+        print_out(
+            flags,
+            &format!("Target '{}' authenticated successfully.", args.name),
+        );
+        return Ok(());
+    }
 
+    // Otherwise prompt for token
+    let mut token = read_token_securely(None, flags)?;
+    config::set_target_token(&target_name, &token).map_err(AppError::auth)?;
+    print_out(
+        flags,
+        &format!("Target '{}' authenticated successfully.", args.name),
+    );
     token.zeroize();
     Ok(())
 }
@@ -1032,55 +1047,28 @@ async fn handle_source_action(action: SourceAction, flags: &CliFlags) -> Result<
                 return Ok(());
             }
 
-            // Otherwise, use device flow for GitHub or prompt for token
-            if matches!(args.name, sources::Source::Github) && !flags.non_interactive {
-                print_out(flags, "Starting GitHub device flow authentication...");
-                print_out(flags, "");
+            // Prompt for token interactively
+            let mut token = read_token_securely(None, flags)?;
+            config::set_source_token(&source_name, &token).map_err(AppError::auth)?;
 
-                // Initiate device flow
-                let scopes = vec!["repo".to_string(), "read:org".to_string()];
-                let (state, device_code) =
-                    sources::github::GithubSource::initiate_device_flow(None, &scopes)
-                        .await
-                        .map_err(|e| AppError::auth(e))?;
-
-                print_out(flags, &format!("Please visit: {}", state.verification_uri));
-                print_out(flags, &format!("Enter code: {}", state.user_code));
-                print_out(flags, "");
-                print_out(flags, "Waiting for authorization...");
-
-                // Poll for token
-                let token = sources::github::GithubSource::complete_device_flow(
-                    None,
-                    &device_code,
-                    5, // 5 second initial interval
-                    state.expires_in,
-                )
-                .await
-                .map_err(|e| AppError::auth(e))?;
-
-                // Store the token
-                config::set_source_token(&source_name, &token).map_err(AppError::auth)?;
-
-                // Validate and show user
-                if let Some(source_impl) = sources::get(args.name) {
-                    let _ = source_impl.validate_auth(&token).await;
+            // Validate the token
+            if let Some(source_impl) = sources::get(args.name) {
+                match source_impl.validate_auth(&token).await {
+                    Ok(true) => {}
+                    Ok(false) => {
+                        print_err(flags, "Token validation failed - token may be invalid");
+                    }
+                    Err(e) => {
+                        print_err(flags, &format!("Could not validate token: {}", e));
+                    }
                 }
-
-                print_out(
-                    flags,
-                    &format!("Source '{}' authenticated successfully.", source_name),
-                );
-            } else {
-                // Fallback to manual token entry
-                let mut token = read_token_securely(None, flags)?;
-                config::set_source_token(&source_name, &token).map_err(AppError::auth)?;
-                print_out(
-                    flags,
-                    &format!("Source '{}' authenticated successfully.", source_name),
-                );
-                token.zeroize();
             }
+
+            print_out(
+                flags,
+                &format!("Source '{}' authenticated successfully.", source_name),
+            );
+            token.zeroize();
         }
 
         SourceAction::List => {
@@ -1110,12 +1098,133 @@ async fn handle_source_action(action: SourceAction, flags: &CliFlags) -> Result<
 
         SourceAction::Revoke { name } => {
             require_yes(flags, "source revoke")?;
+
+            let source_name = name.to_string();
+
+            // Get the auth token before we revoke it (needed to delete keys at source)
+            let auth_token = config::get_source_token(&source_name)?;
+
+            // Find vault entries from this source that have source_id (generated keys)
+            let mut keys_to_delete: Vec<(String, String)> = Vec::new();
+            if let Ok(proj) = project::Project::find() {
+                if let Ok(master_key) = proj.get_master_key() {
+                    if let Ok(v) = vault::Vault::load(&proj.vault_path, master_key) {
+                        for (key, entry) in v.list_entries() {
+                            if entry.source.as_deref() == Some(&source_name) {
+                                if let Some(id) = &entry.source_id {
+                                    keys_to_delete.push((key.clone(), id.clone()));
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
             if flags.dry_run {
-                print_out(flags, "(dry-run) Source revoke skipped");
+                if keys_to_delete.is_empty() {
+                    print_out(
+                        flags,
+                        &format!(
+                            "(dry-run) Would revoke source '{}' authentication",
+                            source_name
+                        ),
+                    );
+                } else {
+                    print_out(
+                        flags,
+                        &format!(
+                            "(dry-run) Would delete {} generated key(s) at {} and revoke authentication:",
+                            keys_to_delete.len(),
+                            source_name
+                        ),
+                    );
+                    for (key, id) in &keys_to_delete {
+                        print_out(flags, &format!("  - {} (id: {})", key, id));
+                    }
+                }
                 return Ok(());
             }
 
-            config::remove_source_token(&name.to_string())?;
+            // Delete generated keys at the source (if we have auth token)
+            let mut deleted_count = 0;
+            let mut failed_keys: Vec<String> = Vec::new();
+
+            if !keys_to_delete.is_empty() {
+                if let Some(ref token) = auth_token {
+                    if let Some(source_impl) = sources::get(name) {
+                        for (key, source_id) in &keys_to_delete {
+                            match source_impl.revoke(source_id, token).await {
+                                Ok(()) => {
+                                    deleted_count += 1;
+                                    if !flags.json {
+                                        println!("  ✓ Deleted '{}' at {}", key, source_name);
+                                    }
+                                }
+                                Err(e) => {
+                                    failed_keys.push(format!("{}: {}", key, e));
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    // No auth token - warn that keys may be orphaned
+                    print_err(
+                        flags,
+                        &format!(
+                            "Warning: {} generated key(s) may be orphaned at {} (no auth token to delete them)",
+                            keys_to_delete.len(),
+                            source_name
+                        ),
+                    );
+                }
+            }
+
+            // Remove from local vault
+            if let Ok(proj) = project::Project::find() {
+                if let Ok(master_key) = proj.get_master_key() {
+                    if let Ok(mut v) = vault::Vault::load(&proj.vault_path, master_key) {
+                        for (key, _) in &keys_to_delete {
+                            v.remove_entry(key);
+                        }
+                        let _ = v.save();
+                    }
+                }
+            }
+
+            // Remove the source authentication
+            config::remove_source_token(&source_name)?;
+
+            if flags.json {
+                let payload = serde_json::json!({
+                    "api_version": "1",
+                    "status": "ok",
+                    "data": {
+                        "source": source_name,
+                        "keys_deleted": deleted_count,
+                        "keys_failed": failed_keys,
+                        "message": "Source revoked"
+                    }
+                });
+                print_json(&payload);
+            } else {
+                if deleted_count > 0 {
+                    println!(
+                        "✓ Revoked source '{}' and deleted {} generated key(s)",
+                        source_name, deleted_count
+                    );
+                } else {
+                    println!("✓ Revoked source '{}'", source_name);
+                }
+                if !failed_keys.is_empty() {
+                    print_err(
+                        flags,
+                        &format!("Failed to delete {} key(s):", failed_keys.len()),
+                    );
+                    for msg in &failed_keys {
+                        print_err(flags, &format!("  - {}", msg));
+                    }
+                }
+            }
         }
 
         SourceAction::Generate(args) => {
@@ -1130,19 +1239,207 @@ async fn handle_source_action(action: SourceAction, flags: &CliFlags) -> Result<
                 return Ok(());
             }
 
-            // For now, GitHub doesn't support programmatic PAT generation
-            // The device flow IS the generation mechanism
-            print_err(
-                flags,
-                &format!(
-                    "Source '{}' does not support programmatic credential generation.",
-                    args.source
-                ),
+            let source_name = args.source.to_string();
+
+            // Get the source auth token
+            let auth_token = config::get_source_token(&source_name)?.ok_or_else(|| {
+                AppError::auth(anyhow::anyhow!(
+                    "Source '{}' not authenticated. Run 'cred source add {}'",
+                    source_name,
+                    source_name
+                ))
+            })?;
+
+            // Get the source adapter
+            let source_impl = sources::get(args.source).ok_or_else(|| {
+                AppError::user(anyhow::anyhow!("Unknown source: {}", source_name))
+            })?;
+
+            // Build generate options
+            let options = sources::GenerateOptions {
+                scopes: args.permission.map(|p| vec![p]).unwrap_or_default(),
+                expires_in_days: None,
+                description: args.description.clone(),
+            };
+
+            // Generate the credential
+            let credential = source_impl
+                .generate(&args.key_name, &auth_token, &options)
+                .await
+                .map_err(AppError::user)?;
+
+            // Store in vault with source metadata and remote ID
+            let proj = project::Project::find()?;
+            let master_key = proj.get_master_key()?;
+            let mut v = vault::Vault::load(&proj.vault_path, master_key)?;
+            let fmt = vault::Vault::detect_format(&credential.value);
+            v.set_with_metadata(
+                &args.key_name,
+                &credential.value,
+                fmt,
+                args.description,
+                Some(source_name.clone()),
+                credential.id.clone(),
             );
-            print_out(
-                flags,
-                "Use 'cred source add github' to authenticate via device flow.",
-            );
+            v.save()?;
+
+            if flags.json {
+                let payload = serde_json::json!({
+                    "api_version": "1",
+                    "status": "ok",
+                    "data": {
+                        "key": args.key_name,
+                        "source": source_name,
+                        "source_id": credential.id,
+                        "message": "Credential generated and stored"
+                    }
+                });
+                print_json(&payload);
+            } else {
+                println!(
+                    "✓ Generated '{}' from {} and stored in vault",
+                    args.key_name, source_name
+                );
+                if let Some(id) = &credential.id {
+                    println!("  Remote ID: {} (saved for revocation)", id);
+                }
+                println!("  Run 'cred push <target>' to deploy this secret");
+            }
+        }
+
+        SourceAction::Keys { source } => {
+            let source_name = source.to_string();
+
+            // Get the source auth token
+            let auth_token = config::get_source_token(&source_name)?.ok_or_else(|| {
+                AppError::auth(anyhow::anyhow!(
+                    "Source '{}' not authenticated. Run 'cred source add {}'",
+                    source_name,
+                    source_name
+                ))
+            })?;
+
+            // Get the source adapter
+            let source_impl = sources::get(source).ok_or_else(|| {
+                AppError::user(anyhow::anyhow!("Unknown source: {}", source_name))
+            })?;
+
+            // List keys at the source
+            let keys = source_impl
+                .list(&auth_token)
+                .await
+                .map_err(AppError::user)?;
+
+            if flags.json {
+                let payload = serde_json::json!({
+                    "api_version": "1",
+                    "status": "ok",
+                    "data": {
+                        "source": source_name,
+                        "keys": keys
+                    }
+                });
+                print_json(&payload);
+            } else {
+                if keys.is_empty() {
+                    println!("No API keys found at {}.", source_name);
+                } else {
+                    println!("API keys at {}:", source_name);
+                    for key in keys {
+                        println!("  - {}", key);
+                    }
+                }
+            }
+        }
+
+        SourceAction::Delete(args) => {
+            require_yes(flags, "source delete")?;
+
+            let source_name = args.source.to_string();
+
+            // Load vault and find the entry
+            let proj = project::Project::find()?;
+            let master_key = proj.get_master_key()?;
+            let mut v = vault::Vault::load(&proj.vault_path, master_key)?;
+
+            let entry = v.get_entry(&args.key_name).ok_or_else(|| {
+                AppError::user(anyhow::anyhow!(
+                    "Key '{}' not found in vault",
+                    args.key_name
+                ))
+            })?;
+
+            // Verify the key came from this source
+            if entry.source.as_deref() != Some(&source_name) {
+                return Err(AppError::user(anyhow::anyhow!(
+                    "Key '{}' was not generated from source '{}' (source: {:?})",
+                    args.key_name,
+                    source_name,
+                    entry.source
+                )));
+            }
+
+            // Get the source_id for revocation
+            let source_id = entry.source_id.clone().ok_or_else(|| {
+                AppError::user(anyhow::anyhow!(
+                    "Key '{}' has no source_id stored. Cannot delete at source.",
+                    args.key_name
+                ))
+            })?;
+
+            if flags.dry_run {
+                print_out(
+                    flags,
+                    &format!(
+                        "(dry-run) Would delete '{}' (id: {}) from {} and local vault",
+                        args.key_name, source_id, source_name
+                    ),
+                );
+                return Ok(());
+            }
+
+            // Get the source auth token
+            let auth_token = config::get_source_token(&source_name)?.ok_or_else(|| {
+                AppError::auth(anyhow::anyhow!(
+                    "Source '{}' not authenticated. Run 'cred source add {}'",
+                    source_name,
+                    source_name
+                ))
+            })?;
+
+            // Get the source adapter
+            let source_impl = sources::get(args.source).ok_or_else(|| {
+                AppError::user(anyhow::anyhow!("Unknown source: {}", source_name))
+            })?;
+
+            // Delete at the source
+            source_impl
+                .revoke(&source_id, &auth_token)
+                .await
+                .map_err(AppError::user)?;
+
+            // Remove from local vault
+            v.remove_entry(&args.key_name);
+            v.save()?;
+
+            if flags.json {
+                let payload = serde_json::json!({
+                    "api_version": "1",
+                    "status": "ok",
+                    "data": {
+                        "key": args.key_name,
+                        "source": source_name,
+                        "source_id": source_id,
+                        "message": "Credential deleted from source and local vault"
+                    }
+                });
+                print_json(&payload);
+            } else {
+                println!(
+                    "✓ Deleted '{}' from {} and local vault",
+                    args.key_name, source_name
+                );
+            }
         }
     }
 

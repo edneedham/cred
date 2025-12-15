@@ -1,5 +1,47 @@
 # Changelog
 
+## v0.4.0
+
+### Sources — Programmatic Credential Generation
+
+This release introduces **Sources**, a new architecture for programmatically generating credentials from external platforms. Unlike targets (where secrets are pushed), sources can create new API keys on demand.
+
+#### New Commands
+
+-   `cred source add <source>` — Authenticate with a source (store master API key)
+-   `cred source list` — List configured sources
+-   `cred source generate <source> <key>` — Generate a new API key and store in vault
+-   `cred source keys <source>` — List API keys at the source
+-   `cred source delete <source> <key>` — Delete a key at the source AND from vault
+-   `cred source revoke <source>` — Revoke authentication (also deletes all generated keys)
+-   `cred status` — New top-level command showing sources, secrets, and targets
+
+#### Resend Integration
+
+-   **First source**: Resend (email platform) with full API key lifecycle
+-   Generate keys with permission levels: `full_access` or `sending_access`
+-   List, delete, and revoke keys programmatically
+-   Keys are tracked with `source_id` for automated cleanup
+
+#### Vault Schema Extended
+
+-   **New fields**: `source` (origin of secret) and `source_id` (remote ID for revocation)
+-   Manual secrets default to `source: "manual"`
+-   Generated secrets track their origin and remote ID
+
+#### Architecture
+
+-   **Hub-and-spoke model**: Sources generate credentials → Vault stores them → Targets receive them
+-   Sources use master keys with broad permissions to create narrower-scoped credentials
+-   Targets use minimal-permission tokens (principle of least privilege)
+
+#### Internal
+
+-   New `SourceAdapter` trait with `generate`, `list`, `revoke`, `validate_auth` methods
+-   `GeneratedCredential` struct returns both value and remote ID
+-   Source tokens stored in OS keyring alongside target tokens
+-   12 new tests for source functionality
+
 ## v0.3.2
 
 ### Value Hashing Infrastructure
