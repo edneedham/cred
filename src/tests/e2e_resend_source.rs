@@ -85,8 +85,8 @@ async fn resend_source_generate_and_revoke() -> Result<()> {
     sleep(RATE_LIMIT_DELAY).await;
     source.revoke(key_id, &master_key).await?;
 
-    // Verify it's gone
-    sleep(RATE_LIMIT_DELAY).await;
+    // Verify it's gone - wait longer for eventual consistency
+    sleep(Duration::from_secs(2)).await;
     let keys_after = source.list(&master_key).await?;
     let still_found = keys_after.iter().any(|k| k.contains("cred-e2e-test-key"));
     assert!(!still_found, "Key should be deleted");
