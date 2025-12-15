@@ -40,9 +40,11 @@ jobs:
     update-formula:
         needs: gate
         if: |
-            github.event_name == 'release' ||
-            github.event_name == 'workflow_dispatch' ||
-            (github.event_name == 'workflow_run' && needs.gate.outputs.tag != '')
+            always() && (
+                github.event_name == 'release' ||
+                github.event_name == 'workflow_dispatch' ||
+                (github.event_name == 'workflow_run' && needs.gate.outputs.tag != '')
+            )
         env:
             TAP_REPO: edneedham/homebrew-cred
             FORMULA_NAME: cred
