@@ -1,5 +1,8 @@
 //! End-to-end tests for Resend as a source.
 //! Requires RUN_E2E=1 and RESEND_API_KEY to be set.
+//!
+//! Note: Resend has a rate limit of 2 requests/second.
+//! Tests include delays to avoid hitting this limit.
 
 use crate::{
     config,
@@ -8,7 +11,12 @@ use crate::{
 use anyhow::Result;
 use std::env;
 use std::fs;
+use std::time::Duration;
 use tempfile::tempdir;
+use tokio::time::sleep;
+
+/// Delay between API calls to respect Resend's rate limit (2 req/s).
+const RATE_LIMIT_DELAY: Duration = Duration::from_millis(600);
 
 // E2E: Validate a Resend API key via the source adapter.
 // Skips unless RUN_E2E=1 with RESEND_API_KEY provided.
@@ -19,6 +27,9 @@ async fn resend_source_validate_auth() -> Result<()> {
         return Ok(());
     }
     let token = env::var("RESEND_API_KEY").map_err(|_| anyhow::anyhow!("set RESEND_API_KEY"))?;
+
+    // Rate limit delay before API call
+    sleep(RATE_LIMIT_DELAY).await;
 
     let source = sources::get(sources::Source::Resend).expect("resend source");
     let valid = source.validate_auth(&token).await?;
@@ -48,6 +59,7 @@ async fn resend_source_generate_and_revoke() -> Result<()> {
         description: Some("cred-e2e-test-key".to_string()),
     };
 
+    sleep(RATE_LIMIT_DELAY).await;
     let credential = source.generate("TEST_KEY", &master_key, &options).await?;
 
     // Verify the token was returned (starts with re_)
@@ -64,14 +76,17 @@ async fn resend_source_generate_and_revoke() -> Result<()> {
     println!("Key ID: {}", key_id);
 
     // List keys and find our new one
+    sleep(RATE_LIMIT_DELAY).await;
     let keys = source.list(&master_key).await?;
     let found = keys.iter().any(|k| k.contains("cred-e2e-test-key"));
     assert!(found, "Generated key should appear in list");
 
     // Revoke/delete the key
+    sleep(RATE_LIMIT_DELAY).await;
     source.revoke(key_id, &master_key).await?;
 
     // Verify it's gone
+    sleep(RATE_LIMIT_DELAY).await;
     let keys_after = source.list(&master_key).await?;
     let still_found = keys_after.iter().any(|k| k.contains("cred-e2e-test-key"));
     assert!(!still_found, "Key should be deleted");
@@ -150,6 +165,9 @@ async fn resend_source_list_keys() -> Result<()> {
         return Ok(());
     }
     let token = env::var("RESEND_API_KEY").map_err(|_| anyhow::anyhow!("set RESEND_API_KEY"))?;
+
+    // Rate limit delay before API call
+    sleep(RATE_LIMIT_DELAY).await;
 
     let source = sources::get(sources::Source::Resend).expect("resend source");
     let keys = source.list(&token).await?;
