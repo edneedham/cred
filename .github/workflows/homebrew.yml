@@ -105,6 +105,7 @@ jobs:
 
     build-bottles:
         needs: update-formula
+        if: ${{ always() && needs.update-formula.result == 'success' }}
         env:
             TAP_REPO: edneedham/homebrew-cred
             FORMULA_NAME: cred
@@ -180,6 +181,7 @@ jobs:
 
     publish-bottles:
         needs: [update-formula, build-bottles]
+        if: ${{ always() && needs.build-bottles.result == 'success' }}
         env:
             TAP_REPO: edneedham/homebrew-cred
             FORMULA_NAME: cred
