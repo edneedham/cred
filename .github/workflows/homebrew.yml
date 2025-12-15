@@ -214,12 +214,12 @@ jobs:
                     --repo "${TAP_REPO}" \
                     --title "${FORMULA_NAME} ${VERSION}" \
                     --notes "Bottles for ${FORMULA_NAME} ${VERSION}" \
-                    ${FORMULA_NAME}--*.bottle.tar.gz \
+                    ${FORMULA_NAME}--*.bottle*.tar.gz \
                     2>/dev/null || \
                   gh release upload "${VERSION}" \
                     --repo "${TAP_REPO}" \
                     --clobber \
-                    ${FORMULA_NAME}--*.bottle.tar.gz
+                    ${FORMULA_NAME}--*.bottle*.tar.gz
 
             - name: Generate and insert bottle block
               working-directory: tap
