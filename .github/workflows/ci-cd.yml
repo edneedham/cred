@@ -44,12 +44,12 @@ jobs:
                 RUN_E2E: '1'
                 GITHUB_PAT: ${{ secrets.E2E_GITHUB_TEST_TOKEN }}
                 E2E_GITHUB_REPO: ${{ vars.E2E_GITHUB_REPO }}
-              run: cargo test --locked --all-features tests::e2e_github_target::
+              run: cargo test --locked --all-features tests::e2e_github_target
             - name: End-to-end tests (Resend source)
               env:
                 RUN_E2E: '1'
                 RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
-              run: cargo test --locked --all-features tests::e2e_resend_source::
+              run: cargo test --locked --all-features tests::e2e_resend_source
 
     build-binaries:
         name: Build ${{ matrix.target }}
