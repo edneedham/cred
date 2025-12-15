@@ -151,10 +151,20 @@ jobs:
                   BOTTLE_FILE=$(ls ${FORMULA_NAME}--*.bottle*.tar.gz 2>/dev/null | head -1)
                   echo "bottle_file=${BOTTLE_FILE}" >> "$GITHUB_OUTPUT"
 
-                  # Extract SHA from JSON
+                  # Extract SHA from JSON (new Homebrew JSON format)
                   JSON_FILE=$(ls ${FORMULA_NAME}--*.bottle*.json 2>/dev/null | head -1)
                   echo "JSON file: ${JSON_FILE}"
-                  BOTTLE_SHA=$(cat "$JSON_FILE" | ruby -rjson -e 'j=JSON.parse(STDIN.read); j["bottles"].each{|k,v| puts v["sha256"]}')
+                  echo "JSON contents:"
+                  cat "$JSON_FILE"
+                  BOTTLE_SHA=$(cat "$JSON_FILE" | ruby -rjson -e '
+                    j = JSON.parse(STDIN.read)
+                    # New format: {formula_name: {bottle: {tags: {arch: {sha256: ...}}}}}
+                    j.each do |name, data|
+                      if data["bottle"] && data["bottle"]["tags"]
+                        data["bottle"]["tags"].each { |arch, info| puts info["sha256"] }
+                      end
+                    end
+                  ')
                   echo "bottle_sha=${BOTTLE_SHA}" >> "$GITHUB_OUTPUT"
                   echo "Bottle SHA: ${BOTTLE_SHA}"
 
@@ -221,8 +231,13 @@ jobs:
                     if [ -f "$json" ]; then
                       ARCH_BLOCK=$(cat "$json" | ruby -rjson -e '
                         j = JSON.parse(STDIN.read)
-                        j["bottles"].each do |arch, info|
-                          puts "    sha256 cellar: :any_skip_relocation, #{arch}: \"#{info["sha256"]}\""
+                        # New format: {formula_name: {bottle: {tags: {arch: {sha256: ...}}}}}
+                        j.each do |name, data|
+                          if data["bottle"] && data["bottle"]["tags"]
+                            data["bottle"]["tags"].each do |arch, info|
+                              puts "    sha256 cellar: :any_skip_relocation, #{arch}: \"#{info["sha256"]}\""
+                            end
+                          end
                         end
                       ')
                       BOTTLE_BLOCK="${BOTTLE_BLOCK}${ARCH_BLOCK}\n"
