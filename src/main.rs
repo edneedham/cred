@@ -265,7 +265,6 @@ async fn run(cli: Cli, flags: &CliFlags) -> Result<(), AppError> {
                                     "created_at": entry.created_at.to_rfc3339(),
                                     "updated_at": entry.updated_at.to_rfc3339(),
                                     "description": entry.description,
-                                    "modified": vault.is_dirty(k),
                                 })
                             })
                             .collect();
@@ -279,12 +278,10 @@ async fn run(cli: Cli, flags: &CliFlags) -> Result<(), AppError> {
                         println!("Vault content:");
                         for k in keys {
                             let entry = &entries[k];
-                            let modified_marker =
-                                if vault.is_dirty(k) { " [modified]" } else { "" };
                             if let Some(desc) = &entry.description {
-                                println!("  {} = ***** ({}){}", k, desc, modified_marker);
+                                println!("  {} = ***** ({})", k, desc);
                             } else {
-                                println!("  {} = *****{}", k, modified_marker);
+                                println!("  {} = *****", k);
                             }
                         }
                     }
@@ -525,18 +522,8 @@ async fn run(cli: Cli, flags: &CliFlags) -> Result<(), AppError> {
             }
 
             if flags.dry_run {
-                // Separate dirty (modified) from unchanged secrets
-                let mut dirty: Vec<String> = Vec::new();
-                let mut unchanged: Vec<String> = Vec::new();
                 let mut keys: Vec<String> = filtered.keys().cloned().collect();
                 keys.sort();
-                for k in keys {
-                    if vault.is_dirty(&k) {
-                        dirty.push(k);
-                    } else {
-                        unchanged.push(k);
-                    }
-                }
 
                 if flags.json {
                     let payload = serde_json::json!({
@@ -545,8 +532,7 @@ async fn run(cli: Cli, flags: &CliFlags) -> Result<(), AppError> {
                         "data": {
                             "target": format!("{}", args.target),
                             "repo": repo,
-                            "will_push": dirty.clone(),
-                            "unchanged": unchanged.clone(),
+                            "will_push": keys,
                             "will_delete": Vec::<String>::new()
                         }
                     });
@@ -557,11 +543,8 @@ async fn run(cli: Cli, flags: &CliFlags) -> Result<(), AppError> {
                     if let Some(r) = repo.as_ref() {
                         print_out(flags, &format!("Repo: {}", r));
                     }
-                    if !dirty.is_empty() {
-                        print_out(flags, &format!("Modified (will push): {:?}", dirty));
-                    }
-                    if !unchanged.is_empty() {
-                        print_out(flags, &format!("Unchanged (will push): {:?}", unchanged));
+                    if !keys.is_empty() {
+                        print_out(flags, &format!("Will push: {:?}", keys));
                     }
                 }
                 return Ok(());
@@ -854,12 +837,10 @@ async fn handle_status(flags: &CliFlags) -> Result<(), AppError> {
                     for key in keys {
                         let entry = &entries[key];
                         let source = entry.source.as_deref().unwrap_or("unknown");
-                        let modified = v.is_dirty(key);
 
                         secrets_info.push(serde_json::json!({
                             "key": key,
                             "source": source,
-                            "modified": modified,
                         }));
                     }
                 }
@@ -901,10 +882,7 @@ async fn handle_status(flags: &CliFlags) -> Result<(), AppError> {
             for secret in &secrets_info {
                 let key = secret["key"].as_str().unwrap_or("");
                 let source = secret["source"].as_str().unwrap_or("unknown");
-                let modified = secret["modified"].as_bool().unwrap_or(false);
-
-                let modified_marker = if modified { " [modified]" } else { "" };
-                println!("  {:<20} [{}]{}", key, source, modified_marker);
+                println!("  {:<20} [{}]", key, source);
             }
         }
 

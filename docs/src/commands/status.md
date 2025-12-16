@@ -13,7 +13,7 @@ Vault: 3 secrets
 
   RESEND_API_KEY       [resend]
   DATABASE_URL         [manual]
-  JWT_SECRET           [manual] [modified]
+  JWT_SECRET           [manual]
 
 Sources: resend ✓
 Targets: github ✓
@@ -24,7 +24,6 @@ This shows:
 
 -   Number of secrets in vault
 -   Each secret's source (manual or generated)
--   Modified secrets (changed since last push)
 -   Configured sources and targets
 -   Git repository (if detected)
 

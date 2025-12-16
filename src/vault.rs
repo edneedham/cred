@@ -342,29 +342,6 @@ impl Vault {
         Ok(())
     }
 
-    /// Check if a secret's value has changed since last save.
-    pub fn is_dirty(&self, key: &str) -> bool {
-        match self.secrets.get(key) {
-            Some(entry) => match &entry.hash {
-                Some(h) => Self::compute_hash(&entry.value) != *h,
-                None => true,
-            },
-            None => false,
-        }
-    }
-
-    /// Get all keys that have changed since last save.
-    pub fn dirty_keys(&self) -> Vec<&str> {
-        self.secrets
-            .iter()
-            .filter(|(_, entry)| match &entry.hash {
-                Some(h) => Self::compute_hash(&entry.value) != *h,
-                None => true,
-            })
-            .map(|(k, _)| k.as_str())
-            .collect()
-    }
-
     /// Insert or overwrite a secret key/value in memory (not persisted until `save`).
     /// Automatically detects format and updates timestamps. Source defaults to "manual".
     pub fn set(&mut self, key: &str, value: &str) {

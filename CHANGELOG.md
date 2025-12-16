@@ -5,13 +5,19 @@
 ### Breaking Changes
 
 -   **Removed `cred project status`** — This command has been consolidated into `cred status`
+-   **Removed `[modified]` tracking** — The `modified` field has been removed from JSON output and the `[modified]` marker from CLI output (was never reachable in normal usage)
 -   JSON output for `cred status` now includes `git_repo` field
+-   JSON output for `cred push --dry-run` simplified: `will_push` now contains all keys (removed `unchanged` field)
 
 ### Enhanced Status Command
 
 -   `cred status` now shows detected Git repository (e.g., `Git: owner/repo`)
 -   JSON output includes `"git_repo": "owner/repo"` (or `null` if not in a git repo)
 -   Replaces the diagnostic-focused `cred project status` with a simpler, unified view
+
+### Internal
+
+-   Removed `is_dirty()` and `dirty_keys()` from vault (dead code)
 
 ### Documentation
 
@@ -75,7 +81,7 @@ This release introduces **Sources**, a new architecture for programmatically gen
 -   New vault API: `is_dirty()`, `dirty_keys()` for change detection
 -   `cred secret list --json` includes `"modified"` field
 -   `cred push --dry-run` distinguishes modified vs unchanged secrets
--   ~~`cred project status` includes `dirty_count`~~ (command removed in v0.5.0)
+-   `cred push --dry-run` distinguishes modified vs unchanged secrets (removed in v0.5.0)
 
 ## v0.3.1
 

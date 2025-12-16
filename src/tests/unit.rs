@@ -480,8 +480,6 @@ mod tests {
         assert_eq!(entry.description, Some("Production API key".to_string()));
         // Hash is computed on save
         assert!(entry.hash.is_some());
-        // Entry should not be dirty after load (hash matches value)
-        assert!(!v2.is_dirty("API_KEY"));
     }
 
     // get_entry returns full metadata; get returns just value.
