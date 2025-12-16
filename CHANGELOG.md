@@ -1,5 +1,24 @@
 # Changelog
 
+## v0.5.0
+
+### Breaking Changes
+
+-   **Removed `cred project status`** — This command has been consolidated into `cred status`
+-   JSON output for `cred status` now includes `git_repo` field
+
+### Enhanced Status Command
+
+-   `cred status` now shows detected Git repository (e.g., `Git: owner/repo`)
+-   JSON output includes `"git_repo": "owner/repo"` (or `null` if not in a git repo)
+-   Replaces the diagnostic-focused `cred project status` with a simpler, unified view
+
+### Documentation
+
+-   Reorganized command documentation structure
+-   Added dedicated pages for `status` and `doctor` commands
+-   Improved navigation in docs sidebar
+
 ## v0.4.0
 
 ### Sources — Programmatic Credential Generation
@@ -56,7 +75,7 @@ This release introduces **Sources**, a new architecture for programmatically gen
 -   New vault API: `is_dirty()`, `dirty_keys()` for change detection
 -   `cred secret list --json` includes `"modified"` field
 -   `cred push --dry-run` distinguishes modified vs unchanged secrets
--   `cred project status` includes `dirty_count`
+-   ~~`cred project status` includes `dirty_count`~~ (command removed in v0.5.0)
 
 ## v0.3.1
 

@@ -113,10 +113,12 @@ jobs:
             fail-fast: false
             matrix:
                 include:
-                    - os: macos-14
-                      arch: arm64_sequoia
-                    - os: macos-15
+                    - os: macos-13
                       arch: intel
+                    - os: macos-14
+                      arch: arm64_sonoma
+                    - os: macos-15
+                      arch: arm64_sequioa
         runs-on: ${{ matrix.os }}
         steps:
             - name: Checkout tap
@@ -201,6 +203,18 @@ jobs:
                   merge-multiple: true
                   path: tap/bottles
 
+            - name: Rename bottles to expected format
+              working-directory: tap/bottles
+              run: |
+                  # Homebrew expects: cred-0.4.0.arm64_sequoia.bottle.tar.gz
+                  # brew bottle creates: cred--0.4.0.arm64_sequoia.bottle.1.tar.gz
+                  for f in *.bottle.*.tar.gz; do
+                    newname=$(echo "$f" | sed 's/--/-/' | sed 's/\.bottle\.[0-9]*\.tar\.gz/.bottle.tar.gz/')
+                    mv "$f" "$newname"
+                    echo "Renamed: $f -> $newname"
+                  done
+                  ls -la
+
             - name: Create tap release and upload bottles
               env:
                   GH_TOKEN: ${{ secrets.TAP_PUSH_TOKEN }}
@@ -214,12 +228,12 @@ jobs:
                     --repo "${TAP_REPO}" \
                     --title "${FORMULA_NAME} ${VERSION}" \
                     --notes "Bottles for ${FORMULA_NAME} ${VERSION}" \
-                    ${FORMULA_NAME}--*.bottle*.tar.gz \
+                    ${FORMULA_NAME}-*.bottle.tar.gz \
                     2>/dev/null || \
                   gh release upload "${VERSION}" \
                     --repo "${TAP_REPO}" \
                     --clobber \
-                    ${FORMULA_NAME}--*.bottle*.tar.gz
+                    ${FORMULA_NAME}-*.bottle.tar.gz
 
             - name: Generate and insert bottle block
               working-directory: tap

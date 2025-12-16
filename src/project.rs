@@ -40,23 +40,6 @@ pub struct GitInfo {
     pub repo_slug: Option<String>, // owner/name if GitHub-like
 }
 
-/// High-level project status snapshot used for CLI reporting.
-#[derive(Debug, Clone)]
-pub struct ProjectStatusData {
-    pub is_project: bool,
-    pub project_name: Option<String>,
-    pub vault_exists: bool,
-    pub vault_accessible: bool,
-    pub dirty_count: usize,
-    pub git_detected: bool,
-    pub git_root: Option<String>,
-    pub git_bound: bool,
-    pub git_remote_current: Option<String>,
-    pub git_remote_bound: Option<String>,
-    pub targets_configured: Vec<String>,
-    pub ready_for_push: bool,
-}
-
 impl Project {
     /// Locate the nearest `.cred/` ancestor and return its paths.
     pub fn find() -> Result<Self> {
@@ -261,28 +244,6 @@ pub fn resolve_repo_binding(
     Ok(bound)
 }
 
-/// Build the JSON payload for `project status`.
-pub fn project_status_payload(data: &ProjectStatusData) -> serde_json::Value {
-    serde_json::json!({
-        "api_version": "1",
-        "status": "ok",
-        "data": {
-            "is_project": data.is_project,
-            "project_name": data.project_name,
-            "vault_exists": data.vault_exists,
-            "vault_accessible": data.vault_accessible,
-            "dirty_count": data.dirty_count,
-            "git_detected": data.git_detected,
-            "git_root": data.git_root,
-            "git_bound": data.git_bound,
-            "git_remote_current": data.git_remote_current,
-            "git_remote_bound": data.git_remote_bound,
-            "targets_configured": data.targets_configured,
-            "ready_for_push": data.ready_for_push
-        }
-    })
-}
-
 /// Normalize common GitHub remote forms to `owner/repo`.
 fn normalize_github_remote(remote: &str) -> Option<String> {
     let trimmed = remote.trim().trim_end_matches(".git");
@@ -409,35 +370,5 @@ mod tests {
         let res = resolve_repo_binding(detected, bound, provided, "push");
         assert!(res.is_err());
         assert!(matches!(res.unwrap_err().kind, RepoBindingErrorKind::Git));
-    }
-
-    #[test]
-    fn test_project_status_payload_schema() {
-        let data = ProjectStatusData {
-            is_project: true,
-            project_name: Some("myapp".to_string()),
-            vault_exists: true,
-            vault_accessible: true,
-            dirty_count: 2,
-            git_detected: true,
-            git_root: Some("/path".to_string()),
-            git_bound: true,
-            git_remote_current: Some("org/repo".to_string()),
-            git_remote_bound: Some("org/repo".to_string()),
-            targets_configured: vec!["github".to_string()],
-            ready_for_push: true,
-        };
-        let payload = project_status_payload(&data);
-        if let serde_json::Value::Object(map) = payload {
-            assert_eq!(map.get("api_version").unwrap(), "1");
-            assert_eq!(map.get("status").unwrap(), "ok");
-            let data_val = map.get("data").unwrap();
-            assert!(data_val.get("is_project").unwrap().as_bool().unwrap());
-            assert_eq!(data_val.get("project_name").unwrap(), "myapp");
-            assert_eq!(data_val.get("git_remote_current").unwrap(), "org/repo");
-            assert_eq!(data_val.get("dirty_count").unwrap(), 2);
-        } else {
-            panic!("Payload is not an object");
-        }
     }
 }

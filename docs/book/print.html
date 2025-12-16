@@ -1,0 +1,1184 @@
+<!DOCTYPE HTML>
+<html lang="en" class="light sidebar-visible" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>cred</title>
+        <meta name="robots" content="noindex">
+
+
+        <!-- Custom HTML head -->
+
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="favicon-de23e50b.svg">
+        <link rel="shortcut icon" href="favicon-8114d1fc.png">
+        <link rel="stylesheet" href="css/variables-8adf115d.css">
+        <link rel="stylesheet" href="css/general-2459343d.css">
+        <link rel="stylesheet" href="css/chrome-ae938929.css">
+        <link rel="stylesheet" href="css/print-9e4910d8.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="fonts/fonts-9644e21d.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" id="mdbook-highlight-css" href="highlight-493f70e1.css">
+        <link rel="stylesheet" id="mdbook-tomorrow-night-css" href="tomorrow-night-4c0ae647.css">
+        <link rel="stylesheet" id="mdbook-ayu-highlight-css" href="ayu-highlight-3fdfc3ac.css">
+
+        <!-- Custom theme stylesheets -->
+
+
+        <!-- Provide site root and default themes to javascript -->
+        <script>
+            const path_to_root = "";
+            const default_light_theme = "light";
+            const default_dark_theme = "navy";
+            window.path_to_searchindex_js = "searchindex-23b209b7.js";
+        </script>
+        <!-- Start loading toc.js asap -->
+        <script src="toc-5ea07a72.js"></script>
+    </head>
+    <body>
+    <div id="mdbook-help-container">
+        <div id="mdbook-help-popup">
+            <h2 class="mdbook-help-title">Keyboard shortcuts</h2>
+            <div>
+                <p>Press <kbd>←</kbd> or <kbd>→</kbd> to navigate between chapters</p>
+                <p>Press <kbd>S</kbd> or <kbd>/</kbd> to search in the book</p>
+                <p>Press <kbd>?</kbd> to show this help</p>
+                <p>Press <kbd>Esc</kbd> to hide this help</p>
+            </div>
+        </div>
+    </div>
+    <div id="mdbook-body-container">
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                let theme = localStorage.getItem('mdbook-theme');
+                let sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            const default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? default_dark_theme : default_light_theme;
+            let theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            const html = document.documentElement;
+            html.classList.remove('light')
+            html.classList.add(theme);
+            html.classList.add("js");
+        </script>
+
+        <input type="checkbox" id="mdbook-sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            let sidebar = null;
+            const sidebar_toggle = document.getElementById("mdbook-sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+                sidebar_toggle.checked = false;
+            }
+            if (sidebar === 'visible') {
+                sidebar_toggle.checked = true;
+            } else {
+                html.classList.remove('sidebar-visible');
+            }
+        </script>
+
+        <nav id="mdbook-sidebar" class="sidebar" aria-label="Table of contents">
+            <!-- populated by js -->
+            <mdbook-sidebar-scrollbox class="sidebar-scrollbox"></mdbook-sidebar-scrollbox>
+            <noscript>
+                <iframe class="sidebar-iframe-outer" src="toc.html"></iframe>
+            </noscript>
+            <div id="mdbook-sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <div id="mdbook-page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                <div id="mdbook-menu-bar-hover-placeholder"></div>
+                <div id="mdbook-menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="mdbook-sidebar-toggle" class="icon-button" for="mdbook-sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="mdbook-sidebar">
+                            <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M0 96C0 78.3 14.3 64 32 64H416c17.7 0 32 14.3 32 32s-14.3 32-32 32H32C14.3 128 0 113.7 0 96zM0 256c0-17.7 14.3-32 32-32H416c17.7 0 32 14.3 32 32s-14.3 32-32 32H32c-17.7 0-32-14.3-32-32zM448 416c0 17.7-14.3 32-32 32H32c-17.7 0-32-14.3-32-32s14.3-32 32-32H416c17.7 0 32 14.3 32 32z"/></svg></span>
+                        </label>
+                        <button id="mdbook-theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="mdbook-theme-list">
+                            <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 576 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M371.3 367.1c27.3-3.9 51.9-19.4 67.2-42.9L600.2 74.1c12.6-19.5 9.4-45.3-7.6-61.2S549.7-4.4 531.1 9.6L294.4 187.2c-24 18-38.2 46.1-38.4 76.1L371.3 367.1zm-19.6 25.4l-116-104.4C175.9 290.3 128 339.6 128 400c0 3.9 .2 7.8 .6 11.6c1.8 17.5-10.2 36.4-27.8 36.4H96c-17.7 0-32 14.3-32 32s14.3 32 32 32H240c61.9 0 112-50.1 112-112c0-2.5-.1-5-.2-7.5z"/></svg></span>
+                        </button>
+                        <ul id="mdbook-theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-default_theme">Auto</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-ayu">Ayu</button></li>
+                        </ul>
+                        <button id="mdbook-search-toggle" class="icon-button" type="button" title="Search (`/`)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="/ s" aria-controls="mdbook-searchbar">
+                            <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M416 208c0 45.9-14.9 88.3-40 122.7L502.6 457.4c12.5 12.5 12.5 32.8 0 45.3s-32.8 12.5-45.3 0L330.7 376c-34.4 25.2-76.8 40-122.7 40C93.1 416 0 322.9 0 208S93.1 0 208 0S416 93.1 416 208zM208 352c79.5 0 144-64.5 144-144s-64.5-144-144-144S64 128.5 64 208s64.5 144 144 144z"/></svg></span>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">cred</h1>
+
+                    <div class="right-buttons">
+                        <a href="print.html" title="Print this book" aria-label="Print this book">
+                            <span class=fa-svg id="print-button"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M128 0C92.7 0 64 28.7 64 64v96h64V64H354.7L384 93.3V160h64V93.3c0-17-6.7-33.3-18.7-45.3L400 18.7C388 6.7 371.7 0 354.7 0H128zM384 352v32 64H128V384 368 352H384zm64 32h32c17.7 0 32-14.3 32-32V256c0-35.3-28.7-64-64-64H64c-35.3 0-64 28.7-64 64v96c0 17.7 14.3 32 32 32H64v64c0 35.3 28.7 64 64 64H384c35.3 0 64-28.7 64-64V384zm-16-88c-13.3 0-24-10.7-24-24s10.7-24 24-24s24 10.7 24 24s-10.7 24-24 24z"/></svg></span>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="mdbook-search-wrapper" class="hidden">
+                    <form id="mdbook-searchbar-outer" class="searchbar-outer">
+                        <div class="search-wrapper">
+                            <input type="search" id="mdbook-searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="mdbook-searchresults-outer" aria-describedby="searchresults-header">
+                            <div class="spinner-wrapper">
+                                <span class=fa-svg id="fa-spin"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M304 48c0-26.5-21.5-48-48-48s-48 21.5-48 48s21.5 48 48 48s48-21.5 48-48zm0 416c0-26.5-21.5-48-48-48s-48 21.5-48 48s21.5 48 48 48s48-21.5 48-48zM48 304c26.5 0 48-21.5 48-48s-21.5-48-48-48s-48 21.5-48 48s21.5 48 48 48zm464-48c0-26.5-21.5-48-48-48s-48 21.5-48 48s21.5 48 48 48s48-21.5 48-48zM142.9 437c18.7-18.7 18.7-49.1 0-67.9s-49.1-18.7-67.9 0s-18.7 49.1 0 67.9s49.1 18.7 67.9 0zm0-294.2c18.7-18.7 18.7-49.1 0-67.9S93.7 56.2 75 75s-18.7 49.1 0 67.9s49.1 18.7 67.9 0zM369.1 437c18.7 18.7 49.1 18.7 67.9 0s18.7-49.1 0-67.9s-49.1-18.7-67.9 0s-18.7 49.1 0 67.9z"/></svg></span>
+                            </div>
+                        </div>
+                    </form>
+                    <div id="mdbook-searchresults-outer" class="searchresults-outer hidden">
+                        <div id="mdbook-searchresults-header" class="searchresults-header"></div>
+                        <ul id="mdbook-searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('mdbook-sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('mdbook-sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#mdbook-sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="mdbook-content" class="content">
+                    <main>
+                        <h1 id="introduction"><a class="header" href="#introduction">Introduction</a></h1>
+<h2 id="what-it-is"><a class="header" href="#what-it-is">What it is</a></h2>
+<p><strong><code>cred</code></strong> is a command-line tool that stores encrypted secrets locally and safely pushes them to target platforms on demand.</p>
+<p>⚠️ <strong>Status: Early Preview (v0.4.0)</strong></p>
+<p><code>cred</code> is currently in active development. The on-disk format, CLI surface, and security model may change between minor versions. Do not rely on it as your sole secrets backup yet.</p>
+<h2 id="what-it-is-not"><a class="header" href="#what-it-is-not">What it is <strong>not</strong></a></h2>
+<ul>
+<li>A hosted secrets manager</li>
+<li>A multi-user access control system</li>
+<li>A replacement for HashiCorp Vault or AWS Secrets Manager</li>
+<li>A bidirectional secrets sync tool</li>
+<li>A runtime secret injector for applications</li>
+</ul>
+<h2 id="who-is-this-for"><a class="header" href="#who-is-this-for">Who is this for</a></h2>
+<ul>
+<li>Open-source maintainers</li>
+<li>Small teams</li>
+<li>Solo developers</li>
+<li>People who don’t <em>need</em> enterprise infrastructure yet</li>
+</ul>
+<h2 id="why-cred-exists"><a class="header" href="#why-cred-exists">Why cred exists</a></h2>
+<p>Managing secrets across projects, targets, and sources is a mess and a chore.</p>
+<p><code>cred</code> solves this by giving you:</p>
+<h3 id="1-a-matrix-vault-per-project"><a class="header" href="#1-a-matrix-vault-per-project"><strong>1. A Matrix Vault per Project</strong></a></h3>
+<p>Your secrets live inside <code>.cred/vault.enc</code> as an encrypted store with per-secret metadata (format, timestamps, description, source).</p>
+<h3 id="2-sources-and-targets"><a class="header" href="#2-sources-and-targets"><strong>2. Sources and Targets</strong></a></h3>
+<p><code>cred</code> distinguishes between <strong>sources</strong> (where credentials come from) and <strong>targets</strong> (where secrets are pushed to):</p>
+<ul>
+<li><strong>Sources</strong>: Platforms that can programmatically generate credentials (e.g., Resend API keys)</li>
+<li><strong>Targets</strong>: Platforms where you push secrets for deployment (e.g., GitHub Actions secrets)</li>
+</ul>
+<h3 id="3-a-global-configuration-store"><a class="header" href="#3-a-global-configuration-store"><strong>3. A global configuration store</strong></a></h3>
+<p>Metadata and preferences live in <code>~/.config/cred/global.toml</code>, while source and target tokens are stored securely in the OS credential store (keyring). Nothing sensitive is written to the TOML.</p>
+<h3 id="4-target-agnostic-secret-pushing"><a class="header" href="#4-target-agnostic-secret-pushing"><strong>4. Target-agnostic secret pushing</strong></a></h3>
+<p>You manage secrets locally, but <code>cred</code> can upload them to specified targets.</p>
+<h4 id="supported-sources"><a class="header" href="#supported-sources">Supported sources:</a></h4>
+<ul>
+<li>Resend (API key generation)</li>
+</ul>
+<h4 id="supported-targets"><a class="header" href="#supported-targets">Supported targets:</a></h4>
+<ul>
+<li>GitHub (Actions secrets)</li>
+</ul>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="installation"><a class="header" href="#installation">Installation</a></h1>
+<h3 id="homebrew-macos"><a class="header" href="#homebrew-macos">Homebrew (macOS)</a></h3>
+<pre><code class="language-bash">brew tap edneedham/cred
+</code></pre>
+<pre><code class="language-bash">brew install edneedham/cred/cred
+</code></pre>
+<h3 id="quick-install-shell"><a class="header" href="#quick-install-shell">Quick install (shell)</a></h3>
+<pre><code class="language-bash">curl -fsSL https://raw.githubusercontent.com/edneedham/cred/main/scripts/install.sh | sh -s
+</code></pre>
+<h3 id="install-with-cargo"><a class="header" href="#install-with-cargo">Install with Cargo:</a></h3>
+<pre><code class="language-bash">cargo install cred
+</code></pre>
+<h3 id="pre-built-binaries"><a class="header" href="#pre-built-binaries">Pre-built binaries</a></h3>
+<p>Download the latest release for your platform from <a href="https://github.com/edneedham/cred/releases">GitHub Releases</a>.</p>
+<p>Available binary targets:</p>
+<ul>
+<li><code>cred-vX.Y.Z-aarch64-apple-darwin</code> - macOS Apple Silicon</li>
+<li><code>cred-vX.Y.Z-x86_64-apple-darwin</code> - macOS Intel</li>
+<li><code>cred-vX.Y.Z-x86_64-unknown-linux-gnu</code> - Linux x86_64</li>
+<li><code>cred-vX.Y.Z-x86_64-pc-windows-msvc.exe</code> - Windows</li>
+</ul>
+<p>Make the binary executable and move it to your PATH:</p>
+<pre><code class="language-bash">chmod +x cred-*
+sudo mv cred-* /usr/local/bin/cred
+</code></pre>
+<p>Check installation:</p>
+<pre><code class="language-bash">cred --version
+</code></pre>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="getting-started"><a class="header" href="#getting-started">Getting Started</a></h1>
+<p>Get from zero to your first secret push in under 5 minutes.</p>
+<h2 id="1-initialize-your-project"><a class="header" href="#1-initialize-your-project">1. Initialize your project</a></h2>
+<pre><code class="language-bash">cred init
+</code></pre>
+<p>This creates <code>.cred/vault.enc</code> in your project.</p>
+<h2 id="2-add-a-target"><a class="header" href="#2-add-a-target">2. Add a target</a></h2>
+<pre><code class="language-bash">cred target set github
+</code></pre>
+<p>You’ll be prompted for a fine-grained PAT with <strong>Actions secrets</strong> permission.</p>
+<h2 id="3-store-a-secret"><a class="header" href="#3-store-a-secret">3. Store a secret</a></h2>
+<pre><code class="language-bash">cred secret set DATABASE_URL "postgres://user:pass@localhost/db"
+</code></pre>
+<h2 id="4-push-to-github"><a class="header" href="#4-push-to-github">4. Push to GitHub</a></h2>
+<p>Preview first:</p>
+<pre><code class="language-bash">cred push github --dry-run
+</code></pre>
+<p>Then push:</p>
+<pre><code class="language-bash">cred push github
+</code></pre>
+<p>Done! Your secret is now in GitHub Actions.</p>
+<hr>
+<p><strong>Next steps:</strong></p>
+<ul>
+<li><a href="commands/README.html">Commands Reference</a> — all available commands</li>
+<li><a href="#sources-1">Sources</a> — generate credentials from APIs like Resend</li>
+<li><a href="#cicd-integration">CI/CD Integration</a> — automation patterns</li>
+</ul>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="concepts"><a class="header" href="#concepts">Concepts</a></h1>
+<p>cred is built around three core concepts that work together to manage your secrets.</p>
+<h2 id="vault"><a class="header" href="#vault">Vault</a></h2>
+<p>The <strong>vault</strong> is your local encrypted secrets store. Each project has its own vault at <code>.cred/vault.enc</code> containing all your secrets with metadata like format, timestamps, and descriptions.</p>
+<p><a href="#vault-1">Learn more about the Vault →</a></p>
+<h2 id="sources"><a class="header" href="#sources">Sources</a></h2>
+<p><strong>Sources</strong> are platforms that can programmatically generate credentials. Instead of manually creating API keys, you can have cred generate them for you with the appropriate permissions.</p>
+<p>Currently supported:</p>
+<ul>
+<li><strong>Resend</strong> — Email API key generation</li>
+</ul>
+<p><a href="#sources-1">Learn more about Sources →</a></p>
+<h2 id="targets"><a class="header" href="#targets">Targets</a></h2>
+<p><strong>Targets</strong> are platforms where you push secrets for deployment. cred uploads your vault secrets to these platforms so your CI/CD pipelines can access them.</p>
+<p>Currently supported:</p>
+<ul>
+<li><strong>GitHub</strong> — Actions secrets</li>
+</ul>
+<p><a href="#targets-1">Learn more about Targets →</a></p>
+<hr>
+<h2 id="how-they-work-together"><a class="header" href="#how-they-work-together">How They Work Together</a></h2>
+<pre><code>┌─────────────┐     generate      ┌─────────────┐      push       ┌─────────────┐
+│   Source    │ ───────────────►  │    Vault    │ ──────────────► │   Target    │
+│  (Resend)   │                   │ (encrypted) │                 │  (GitHub)   │
+└─────────────┘                   └─────────────┘                 └─────────────┘
+                                        ▲
+                                        │ manual set
+                                        │
+                                  ┌─────────────┐
+                                  │     You     │
+                                  └─────────────┘
+</code></pre>
+<ol>
+<li><strong>Sources</strong> generate credentials and store them in your vault</li>
+<li><strong>You</strong> can also manually add secrets to the vault</li>
+<li><strong>Targets</strong> receive secrets when you push from the vault</li>
+</ol>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="sources-1"><a class="header" href="#sources-1">Sources</a></h1>
+<p>Sources are platforms that can <strong>programmatically generate credentials</strong>. Unlike targets (which only receive secrets), sources create new API keys on demand.</p>
+<h2 id="why-use-sources"><a class="header" href="#why-use-sources">Why Use Sources?</a></h2>
+<p>Instead of manually creating API keys in a web dashboard and copy-pasting them, sources let you:</p>
+<ul>
+<li>Generate keys directly from the command line</li>
+<li>Automatically store them in your vault with proper metadata</li>
+<li>Track which keys came from which source</li>
+<li>Revoke all generated keys at once when needed</li>
+</ul>
+<h2 id="adding-a-source"><a class="header" href="#adding-a-source">Adding a Source</a></h2>
+<p>Add your master API key:</p>
+<pre><code class="language-bash">cred source add resend --token "$RESEND_API_KEY"
+</code></pre>
+<p>Or interactively (will prompt for token):</p>
+<pre><code class="language-bash">cred source add resend
+</code></pre>
+<p>The master token is stored securely in your OS credential store (keyring), not in plaintext files.</p>
+<h2 id="generating-credentials"><a class="header" href="#generating-credentials">Generating Credentials</a></h2>
+<p>Generate a new API key from the source:</p>
+<pre><code class="language-bash">cred source generate resend RESEND_EMAIL_KEY --permission sending_access -d "Email service key"
+</code></pre>
+<p>This creates a new API key via Resend’s API and stores it in your vault with <code>source: resend</code> metadata.</p>
+<h2 id="managing-source-keys"><a class="header" href="#managing-source-keys">Managing Source Keys</a></h2>
+<p><strong>List API keys at the source:</strong></p>
+<pre><code class="language-bash">cred source keys resend
+</code></pre>
+<p><strong>Delete a generated key</strong> (removes from source AND local vault):</p>
+<pre><code class="language-bash">cred source delete resend RESEND_EMAIL_KEY --yes
+</code></pre>
+<p><strong>List configured sources:</strong></p>
+<pre><code class="language-bash">cred source list
+</code></pre>
+<h2 id="revoking-a-source"><a class="header" href="#revoking-a-source">Revoking a Source</a></h2>
+<p>Revoke source authentication (deletes all generated keys and removes master key):</p>
+<pre><code class="language-bash">cred source revoke resend --yes
+</code></pre>
+<p>This will:</p>
+<ol>
+<li>Delete all API keys generated from this source at Resend</li>
+<li>Remove them from the local vault</li>
+<li>Remove the stored master key</li>
+</ol>
+<hr>
+<h2 id="resend"><a class="header" href="#resend">Resend</a></h2>
+<p><a href="https://resend.com">Resend</a> is an email API service. cred can generate API keys with specific permission levels.</p>
+<h3 id="permission-levels"><a class="header" href="#permission-levels">Permission Levels</a></h3>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Permission</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td><code>full_access</code></td><td>Can create, delete, get, and update any resource</td></tr>
+<tr><td><code>sending_access</code></td><td>Can only send emails (recommended for most use cases)</td></tr>
+</tbody>
+</table>
+</div>
+<h3 id="example"><a class="header" href="#example">Example</a></h3>
+<pre><code class="language-bash"># Add your master key (needs full_access to create other keys)
+cred source add resend
+
+# Generate a restricted key for your app
+cred source generate resend EMAIL_API_KEY --permission sending_access
+
+# Push to GitHub Actions
+cred push github
+</code></pre>
+<hr>
+<h2 id="why-sources-use-master-keys"><a class="header" href="#why-sources-use-master-keys">Why Sources Use Master Keys</a></h2>
+<p>Sources authenticate with a master API key that has permission to create additional keys. The generated keys can have narrower scopes (e.g., <code>sending_access</code> only), following the <strong>principle of least privilege</strong>.</p>
+<p>Your application never sees the master key — it only gets the restricted key you generated.</p>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="targets-1"><a class="header" href="#targets-1">Targets</a></h1>
+<p>Targets are platforms where you <strong>push secrets for deployment</strong>. cred uploads your vault secrets to these platforms so your CI/CD pipelines can access them.</p>
+<h2 id="adding-a-target"><a class="header" href="#adding-a-target">Adding a Target</a></h2>
+<p>Authenticate a deployment target:</p>
+<pre><code class="language-bash">cred target set github
+</code></pre>
+<p>You will be securely prompted for a token. The token is stored in your OS credential store, not in plaintext on disk.</p>
+<p>For non-interactive use (CI):</p>
+<pre><code class="language-bash">cred target set github --token "$GITHUB_TOKEN" --non-interactive
+</code></pre>
+<h2 id="managing-targets"><a class="header" href="#managing-targets">Managing Targets</a></h2>
+<p><strong>List configured targets:</strong></p>
+<pre><code class="language-bash">cred target list
+</code></pre>
+<p><strong>Revoke a target:</strong></p>
+<pre><code class="language-bash">cred target revoke github --yes
+</code></pre>
+<hr>
+<h2 id="github"><a class="header" href="#github">GitHub</a></h2>
+<p>GitHub Actions secrets are the primary target for cred. Secrets you push become available to your workflows.</p>
+<h3 id="setup"><a class="header" href="#setup">Setup</a></h3>
+<ol>
+<li>Create a <strong>fine-grained Personal Access Token</strong> at <a href="https://github.com/settings/tokens">github.com/settings/tokens</a></li>
+<li>Select only the repository you want to manage</li>
+<li>Grant only the <strong>Actions secrets</strong> permission (read and write)</li>
+<li>Add the token to cred:</li>
+</ol>
+<pre><code class="language-bash">cred target set github
+</code></pre>
+<h3 id="pushing-secrets"><a class="header" href="#pushing-secrets">Pushing Secrets</a></h3>
+<pre><code class="language-bash"># Push all secrets
+cred push github
+
+# Push specific secrets
+cred push github DATABASE_URL API_KEY
+</code></pre>
+<p>cred automatically detects your repository from git metadata. If you’re not in a git repository, specify it explicitly:</p>
+<pre><code class="language-bash">cred push github --repo owner/repo
+</code></pre>
+<h3 id="using-secrets-in-workflows"><a class="header" href="#using-secrets-in-workflows">Using Secrets in Workflows</a></h3>
+<p>Once pushed, secrets are available in your GitHub Actions:</p>
+<pre><code class="language-yaml">jobs:
+    deploy:
+        runs-on: ubuntu-latest
+        env:
+            DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        steps:
+            - run: echo "Secret is available"
+</code></pre>
+<hr>
+<h2 id="why-targets-use-simple-tokens"><a class="header" href="#why-targets-use-simple-tokens">Why Targets Use Simple Tokens</a></h2>
+<p>Targets need <strong>minimal permissions</strong> — just enough to write secrets. This follows the principle of least privilege.</p>
+<p>Unlike sources (which need elevated permissions to generate new credentials), targets only need write access to a specific resource (e.g., GitHub Actions secrets for one repository).</p>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="vault-1"><a class="header" href="#vault-1">Vault</a></h1>
+<p>The vault is your local encrypted secrets store. Each cred project has its own vault containing all secrets with rich metadata.</p>
+<h2 id="structure"><a class="header" href="#structure">Structure</a></h2>
+<p>When you run <code>cred init</code>, cred creates:</p>
+<pre><code>.cred/
+├── project.toml    # Project metadata
+└── vault.enc       # Encrypted secrets
+</code></pre>
+<p>Global configuration lives at:</p>
+<pre><code>~/.config/cred/global.toml
+</code></pre>
+<h2 id="secret-metadata"><a class="header" href="#secret-metadata">Secret Metadata</a></h2>
+<p>Each secret in the vault includes:</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Field</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td><code>key</code></td><td>The secret name (e.g., <code>DATABASE_URL</code>)</td></tr>
+<tr><td><code>value</code></td><td>The encrypted secret value</td></tr>
+<tr><td><code>format</code></td><td>Content format (raw, json, pem, etc.)</td></tr>
+<tr><td><code>created_at</code></td><td>When the secret was first added</td></tr>
+<tr><td><code>updated_at</code></td><td>When the secret was last modified</td></tr>
+<tr><td><code>description</code></td><td>Optional human-readable description</td></tr>
+<tr><td><code>source</code></td><td>Where it came from (<code>manual</code> or a source name)</td></tr>
+</tbody>
+</table>
+</div>
+<h2 id="secret-formats"><a class="header" href="#secret-formats">Secret Formats</a></h2>
+<p>cred auto-detects the format of your secrets:</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Format</th><th>Detection</th><th>Example</th></tr>
+</thead>
+<tbody>
+<tr><td><code>pem</code></td><td>Starts with <code>-----BEGIN</code></td><td>Certificates, private keys</td></tr>
+<tr><td><code>json</code></td><td>Valid JSON object or array</td><td><code>{"key": "value"}</code></td></tr>
+<tr><td><code>base64</code></td><td>Single-line base64 content</td><td><code>SGVsbG8gV29ybGQ=</code></td></tr>
+<tr><td><code>multiline</code></td><td>Contains newlines</td><td>Multi-line text</td></tr>
+<tr><td><code>raw</code></td><td>Everything else (default)</td><td><code>super-secret-value</code></td></tr>
+</tbody>
+</table>
+</div>
+<p>You can also specify format explicitly:</p>
+<pre><code class="language-bash">cred secret set MY_KEY "value" --format json
+</code></pre>
+<h2 id="viewing-the-vault"><a class="header" href="#viewing-the-vault">Viewing the Vault</a></h2>
+<p><strong>List all secrets:</strong></p>
+<pre><code class="language-bash">cred secret list
+</code></pre>
+<p>Output:</p>
+<pre><code>Vault content:
+  API_KEY = ***** (OpenAI production key)
+  DATABASE_URL = *****
+  JWT_SECRET = ***** [modified]
+</code></pre>
+<p><strong>Get a specific secret:</strong></p>
+<pre><code class="language-bash">cred secret get JWT_SECRET
+</code></pre>
+<p><strong>With full metadata (JSON):</strong></p>
+<pre><code class="language-bash">cred secret get JWT_SECRET --json
+</code></pre>
+<pre><code class="language-json">{
+    "data": {
+        "key": "JWT_SECRET",
+        "value": "super-secret",
+        "format": "raw",
+        "created_at": "2025-12-11T12:00:00Z",
+        "updated_at": "2025-12-11T12:00:00Z",
+        "description": null
+    }
+}
+</code></pre>
+<h2 id="hub-and-spoke-status"><a class="header" href="#hub-and-spoke-status">Hub-and-Spoke Status</a></h2>
+<p>For a complete overview of your project:</p>
+<pre><code class="language-bash">cred status
+</code></pre>
+<pre><code>Vault: 3 secrets
+
+  RESEND_API_KEY       [resend]
+  DATABASE_URL         [manual]
+  JWT_SECRET           [manual] [modified]
+
+Sources: resend ✓
+Targets: github ✓
+</code></pre>
+<h2 id="encryption"><a class="header" href="#encryption">Encryption</a></h2>
+<p>The vault is encrypted at rest using ChaCha20-Poly1305. The encryption key is derived from your project and stored securely. See <a href="#security-model">Security Model</a> for details.</p>
+<h2 id="best-practices"><a class="header" href="#best-practices">Best Practices</a></h2>
+<ol>
+<li><strong>Add <code>.cred/</code> to <code>.gitignore</code></strong> — Never commit your vault</li>
+<li><strong>Use descriptions</strong> — Document what each secret is for</li>
+<li><strong>Keep backups</strong> — Export periodically with <code>cred export</code></li>
+<li><strong>Use sources when possible</strong> — Generated keys have better audit trails</li>
+</ol>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="commands"><a class="header" href="#commands">Commands</a></h1>
+<p>Complete reference for all cred commands.</p>
+<h2 id="project-management"><a class="header" href="#project-management">Project Management</a></h2>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Command</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td><a href="#init"><code>cred init</code></a></td><td>Initialize a new cred project</td></tr>
+<tr><td><a href="#status"><code>cred status</code></a></td><td>Show vault, sources, and targets overview</td></tr>
+<tr><td><a href="#doctor"><code>cred doctor</code></a></td><td>Check project health</td></tr>
+</tbody>
+</table>
+</div>
+<h2 id="secrets"><a class="header" href="#secrets">Secrets</a></h2>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Command</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td><a href="#set-1"><code>cred secret set</code></a></td><td>Add or update a secret</td></tr>
+<tr><td><a href="#get-1"><code>cred secret get</code></a></td><td>Retrieve a secret value</td></tr>
+<tr><td><a href="#list-1"><code>cred secret list</code></a></td><td>List all secrets</td></tr>
+<tr><td><a href="#remove"><code>cred secret remove</code></a></td><td>Delete a secret from vault</td></tr>
+<tr><td><a href="#describe"><code>cred secret describe</code></a></td><td>Update a secret’s description</td></tr>
+<tr><td><a href="#import"><code>cred import</code></a></td><td>Import from .env file</td></tr>
+<tr><td><a href="#export"><code>cred export</code></a></td><td>Export to .env file</td></tr>
+</tbody>
+</table>
+</div>
+<h2 id="deployment"><a class="header" href="#deployment">Deployment</a></h2>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Command</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td><a href="#push"><code>cred push</code></a></td><td>Push secrets to a target</td></tr>
+<tr><td><a href="#prune"><code>cred prune</code></a></td><td>Delete secrets from a target</td></tr>
+</tbody>
+</table>
+</div>
+<h2 id="sources-2"><a class="header" href="#sources-2">Sources</a></h2>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Command</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td><code>cred source add</code></td><td>Add a credential source</td></tr>
+<tr><td><code>cred source generate</code></td><td>Generate a new credential</td></tr>
+<tr><td><code>cred source keys</code></td><td>List keys at the source</td></tr>
+<tr><td><code>cred source delete</code></td><td>Delete a generated key</td></tr>
+<tr><td><code>cred source list</code></td><td>List configured sources</td></tr>
+<tr><td><code>cred source revoke</code></td><td>Remove source and all its keys</td></tr>
+</tbody>
+</table>
+</div>
+<h2 id="targets-2"><a class="header" href="#targets-2">Targets</a></h2>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Command</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td><code>cred target set</code></td><td>Configure a deployment target</td></tr>
+<tr><td><code>cred target list</code></td><td>List configured targets</td></tr>
+<tr><td><code>cred target revoke</code></td><td>Remove a target</td></tr>
+</tbody>
+</table>
+</div>
+<h2 id="configuration"><a class="header" href="#configuration">Configuration</a></h2>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Command</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td><a href="#config"><code>cred config list</code></a></td><td>View all configuration</td></tr>
+<tr><td><a href="#get"><code>cred config get</code></a></td><td>Get a config value</td></tr>
+<tr><td><a href="#set"><code>cred config set</code></a></td><td>Set a config value</td></tr>
+<tr><td><a href="#unset"><code>cred config unset</code></a></td><td>Remove a config value</td></tr>
+</tbody>
+</table>
+</div>
+<hr>
+<h2 id="global-flags"><a class="header" href="#global-flags">Global Flags</a></h2>
+<p>All commands support these flags:</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Flag</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td><code>--json</code></td><td>Machine-readable JSON output</td></tr>
+<tr><td><code>--non-interactive</code></td><td>Fail instead of prompting for input</td></tr>
+<tr><td><code>--dry-run</code></td><td>Preview changes without applying them</td></tr>
+<tr><td><code>--help</code></td><td>Show help for any command</td></tr>
+</tbody>
+</table>
+</div>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="init"><a class="header" href="#init">init</a></h1>
+<p>Initialize a cred project.</p>
+<h2 id="cred-init"><a class="header" href="#cred-init">cred init</a></h2>
+<p>Initialize a new cred project in the current directory:</p>
+<pre><code class="language-bash">cred init
+</code></pre>
+<p>This creates:</p>
+<pre><code>.cred/
+├── project.toml    # Project configuration
+└── vault.enc       # Encrypted secrets vault
+</code></pre>
+<p>Run this once per project, typically at the repository root.</p>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="config"><a class="header" href="#config">config</a></h1>
+<p>Manage global cred configuration.</p>
+<p>Configuration is stored at <code>~/.config/cred/global.toml</code>. Sensitive values (tokens) are stored in your OS keyring, not in this file.</p>
+<h2 id="list"><a class="header" href="#list">list</a></h2>
+<p>View all configuration:</p>
+<pre><code class="language-bash">cred config list
+</code></pre>
+<hr>
+<h2 id="get"><a class="header" href="#get">get</a></h2>
+<p>Get a specific value:</p>
+<pre><code class="language-bash">cred config get preferences.default_target
+</code></pre>
+<hr>
+<h2 id="set"><a class="header" href="#set">set</a></h2>
+<p>Set a configuration value:</p>
+<pre><code class="language-bash">cred config set preferences.default_target github
+</code></pre>
+<hr>
+<h2 id="unset"><a class="header" href="#unset">unset</a></h2>
+<p>Remove a configuration value:</p>
+<pre><code class="language-bash">cred config unset preferences.default_target
+</code></pre>
+<hr>
+<h2 id="available-settings"><a class="header" href="#available-settings">Available Settings</a></h2>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Key</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td><code>preferences.default_target</code></td><td>Default target for push/prune commands</td></tr>
+</tbody>
+</table>
+</div>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="doctor"><a class="header" href="#doctor">doctor</a></h1>
+<p>Check project health and diagnose issues in machine readable JSON:</p>
+<pre><code class="language-bash">cred doctor
+</code></pre>
+<p>Output:</p>
+<pre><code class="language-json">{
+  "api_version": "1",
+  "data": {
+    "cred_installed": true,
+    "global_config": true,
+    "keychain_access": true,
+    "project_detected": false,
+    "ready_for_push": false,
+    "targets": [],
+    "vault_accessible": false,
+    "version": "0.4.0"
+  },
+  "status": "ok"
+}
+</code></pre>
+<p>This verifies:</p>
+<ul>
+<li>Vault file exists and is readable</li>
+<li>Configuration is valid</li>
+<li>Keyring access works</li>
+<li>Sources and targets are reachable</li>
+</ul>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="status"><a class="header" href="#status">status</a></h1>
+<p>Show a hub-and-spoke overview of your project:</p>
+<pre><code class="language-bash">cred status
+</code></pre>
+<p>Output:</p>
+<pre><code>Vault: 3 secrets
+
+  RESEND_API_KEY       [resend]
+  DATABASE_URL         [manual]
+  JWT_SECRET           [manual] [modified]
+
+Sources: resend ✓
+Targets: github ✓
+Git: edneedham/cred
+</code></pre>
+<p>This shows:</p>
+<ul>
+<li>Number of secrets in vault</li>
+<li>Each secret’s source (manual or generated)</li>
+<li>Modified secrets (changed since last push)</li>
+<li>Configured sources and targets</li>
+<li>Git repository (if detected)</li>
+</ul>
+<h2 id="json-output"><a class="header" href="#json-output">JSON Output</a></h2>
+<p>For machine-readable output:</p>
+<pre><code class="language-bash">cred status --json
+</code></pre>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="secret"><a class="header" href="#secret">secret</a></h1>
+<p>Manage secrets in your local vault.</p>
+<h2 id="set-1"><a class="header" href="#set-1">set</a></h2>
+<p>Add or update a secret:</p>
+<pre><code class="language-bash">cred secret set DATABASE_URL "postgres://user:pass@localhost:5432/db"
+</code></pre>
+<p>With a description:</p>
+<pre><code class="language-bash">cred secret set API_KEY "sk-xxx" --description "OpenAI production key"
+cred secret set CERT_PEM "-----BEGIN..." -d "TLS certificate"
+</code></pre>
+<h3 id="format-detection"><a class="header" href="#format-detection">Format Detection</a></h3>
+<p>cred auto-detects the format of your secrets:</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Format</th><th>Detection</th><th>Example</th></tr>
+</thead>
+<tbody>
+<tr><td><code>pem</code></td><td>Starts with <code>-----BEGIN</code></td><td>Certificates, keys</td></tr>
+<tr><td><code>json</code></td><td>Valid JSON object/array</td><td><code>{"key": "value"}</code></td></tr>
+<tr><td><code>base64</code></td><td>Single-line base64</td><td><code>SGVsbG8gV29ybGQ=</code></td></tr>
+<tr><td><code>multiline</code></td><td>Contains newlines</td><td>Multi-line text</td></tr>
+<tr><td><code>raw</code></td><td>Default</td><td>Single-line text</td></tr>
+</tbody>
+</table>
+</div>
+<p>Override auto-detection:</p>
+<pre><code class="language-bash">cred secret set MY_KEY "value" --format json
+</code></pre>
+<hr>
+<h2 id="get-1"><a class="header" href="#get-1">get</a></h2>
+<p>Retrieve a secret value:</p>
+<pre><code class="language-bash">cred secret get JWT_SECRET
+</code></pre>
+<p>With full metadata:</p>
+<pre><code class="language-bash">cred secret get JWT_SECRET --json
+</code></pre>
+<pre><code class="language-json">{
+    "data": {
+        "key": "JWT_SECRET",
+        "value": "super-secret",
+        "format": "raw",
+        "created_at": "2025-12-11T12:00:00Z",
+        "updated_at": "2025-12-11T12:00:00Z",
+        "description": null
+    }
+}
+</code></pre>
+<hr>
+<h2 id="list-1"><a class="header" href="#list-1">list</a></h2>
+<p>List all secrets in the vault:</p>
+<pre><code class="language-bash">cred secret list
+</code></pre>
+<p>Output:</p>
+<pre><code>Vault content:
+  API_KEY = ***** (OpenAI production key)
+  JWT_SECRET = *****
+</code></pre>
+<p>Descriptions are shown inline when present.</p>
+<hr>
+<h2 id="remove"><a class="header" href="#remove">remove</a></h2>
+<p>Delete a secret from the local vault:</p>
+<pre><code class="language-bash">cred secret remove JWT_SECRET --yes
+</code></pre>
+<p>Output:</p>
+<pre><code>✓ Removed 'JWT_SECRET' from local vault (3 days old)
+</code></pre>
+<blockquote>
+<p><strong>Note:</strong> This only removes from the local vault. To delete from a target, use <a href="#prune"><code>cred prune</code></a>.</p>
+</blockquote>
+<hr>
+<h2 id="describe"><a class="header" href="#describe">describe</a></h2>
+<p>Update a secret’s description:</p>
+<pre><code class="language-bash">cred secret describe API_KEY "Updated: rotating quarterly"
+</code></pre>
+<p>Clear a description:</p>
+<pre><code class="language-bash">cred secret describe API_KEY
+</code></pre>
+<hr>
+<h2 id="import"><a class="header" href="#import">import</a></h2>
+<p>Import <code>KEY=VALUE</code> pairs from a .env file:</p>
+<pre><code class="language-bash">cred import .env
+</code></pre>
+<p>Existing keys are skipped by default to keep imports non-destructive.</p>
+<p>Overwrite existing keys:</p>
+<pre><code class="language-bash">cred import .env --overwrite
+</code></pre>
+<p>Preview without writing:</p>
+<pre><code class="language-bash">cred import .env --dry-run
+</code></pre>
+<hr>
+<h2 id="export"><a class="header" href="#export">export</a></h2>
+<p>Write vault contents to a .env file:</p>
+<pre><code class="language-bash">cred export .env.backup
+</code></pre>
+<p>Keys are sorted alphabetically. Existing files are preserved unless forced:</p>
+<pre><code class="language-bash">cred export .env --force
+</code></pre>
+<p>Preview:</p>
+<pre><code class="language-bash">cred export .env --dry-run
+</code></pre>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="push"><a class="header" href="#push">push</a></h1>
+<p>Push secrets from your vault to a target platform.</p>
+<h2 id="basic-usage"><a class="header" href="#basic-usage">Basic Usage</a></h2>
+<p>Push all secrets to GitHub:</p>
+<pre><code class="language-bash">cred push github
+</code></pre>
+<p>Push specific secrets only:</p>
+<pre><code class="language-bash">cred push github DATABASE_URL JWT_SECRET
+</code></pre>
+<h2 id="dry-run"><a class="header" href="#dry-run">Dry Run</a></h2>
+<p>Preview what will change before pushing:</p>
+<pre><code class="language-bash">cred push github --dry-run
+</code></pre>
+<p>Preview specific keys:</p>
+<pre><code class="language-bash">cred push github DATABASE_URL JWT_SECRET --dry-run
+</code></pre>
+<p>Nothing is uploaded when <code>--dry-run</code> is used.</p>
+<h2 id="options"><a class="header" href="#options">Options</a></h2>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Flag</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td><code>--dry-run</code></td><td>Preview changes without pushing</td></tr>
+<tr><td><code>--json</code></td><td>Machine-readable output</td></tr>
+<tr><td><code>--non-interactive</code></td><td>Fail instead of prompting</td></tr>
+</tbody>
+</table>
+</div>
+<h2 id="repository-detection"><a class="header" href="#repository-detection">Repository Detection</a></h2>
+<p>cred automatically detects your repository from git metadata when you’re inside a git repository.</p>
+<p>If you’re not in a git repository, or need to push to a different repo:</p>
+<pre><code class="language-bash">cred push github --repo owner/repo
+</code></pre>
+<h2 id="incremental-updates"><a class="header" href="#incremental-updates">Incremental Updates</a></h2>
+<p>cred tracks which secrets have changed since the last push. Only modified secrets are updated remotely, making pushes efficient.</p>
+<h2 id="workflow-example"><a class="header" href="#workflow-example">Workflow Example</a></h2>
+<pre><code class="language-bash"># Add a secret
+cred secret set DATABASE_URL "postgres://..."
+
+# Preview the push
+cred push github --dry-run
+
+# Push when ready
+cred push github
+</code></pre>
+<h2 id="updating-secrets"><a class="header" href="#updating-secrets">Updating Secrets</a></h2>
+<p>To update a secret:</p>
+<pre><code class="language-bash"># Update locally
+cred secret set JWT_SECRET "new-secret-value"
+
+# Preview changes
+cred push github --dry-run
+
+# Apply
+cred push github
+</code></pre>
+<p>Only the changed secret will be updated at the target.</p>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="prune"><a class="header" href="#prune">prune</a></h1>
+<p>Delete secrets from a target platform. This is a <strong>remote-only</strong> operation — it does not affect your local vault.</p>
+<h2 id="basic-usage-1"><a class="header" href="#basic-usage-1">Basic Usage</a></h2>
+<p>Remove a specific key from a target:</p>
+<pre><code class="language-bash">cred prune github JWT_SECRET --yes
+</code></pre>
+<p>Remove multiple keys:</p>
+<pre><code class="language-bash">cred prune github JWT_SECRET OLD_API_KEY --yes
+</code></pre>
+<h2 id="dry-run-1"><a class="header" href="#dry-run-1">Dry Run</a></h2>
+<p>Preview what will be deleted:</p>
+<pre><code class="language-bash">cred prune github JWT_SECRET --dry-run
+</code></pre>
+<h2 id="prune-all"><a class="header" href="#prune-all">Prune All</a></h2>
+<p>Remove all known keys from a target:</p>
+<pre><code class="language-bash">cred prune github --all --yes
+</code></pre>
+<p>This removes all secrets that cred has pushed to this target.</p>
+<h2 id="options-1"><a class="header" href="#options-1">Options</a></h2>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Flag</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td><code>--dry-run</code></td><td>Preview without deleting</td></tr>
+<tr><td><code>--yes</code></td><td>Confirm destructive operation</td></tr>
+<tr><td><code>--all</code></td><td>Prune all known secrets</td></tr>
+<tr><td><code>--json</code></td><td>Machine-readable output</td></tr>
+</tbody>
+</table>
+</div>
+<h2 id="safety"><a class="header" href="#safety">Safety</a></h2>
+<p>⚠️ <strong>Destructive operations require <code>--yes</code></strong> unless using <code>--dry-run</code>.</p>
+<p>This prevents accidental deletion of production secrets.</p>
+<h2 id="local-vs-remote"><a class="header" href="#local-vs-remote">Local vs Remote</a></h2>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Operation</th><th>Command</th></tr>
+</thead>
+<tbody>
+<tr><td>Delete from vault (local)</td><td><code>cred secret remove KEY --yes</code></td></tr>
+<tr><td>Delete from target (remote)</td><td><code>cred prune github KEY --yes</code></td></tr>
+<tr><td>Delete from both</td><td>Run both commands</td></tr>
+</tbody>
+</table>
+</div>
+<h2 id="workflow-example-1"><a class="header" href="#workflow-example-1">Workflow Example</a></h2>
+<p>Remove a secret completely:</p>
+<pre><code class="language-bash"># Remove from GitHub first
+cred prune github OLD_SECRET --yes
+
+# Then remove from local vault
+cred secret remove OLD_SECRET --yes
+</code></pre>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="cicd-integration"><a class="header" href="#cicd-integration">CI/CD Integration</a></h1>
+<p>cred is designed to work well in automated environments. All commands support flags for non-interactive use.</p>
+<h2 id="automation-flags"><a class="header" href="#automation-flags">Automation Flags</a></h2>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Flag</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td><code>--json</code></td><td>Machine-readable JSON output</td></tr>
+<tr><td><code>--non-interactive</code></td><td>Fail instead of prompting for input</td></tr>
+<tr><td><code>--dry-run</code></td><td>Preview changes without applying</td></tr>
+</tbody>
+</table>
+</div>
+<h2 id="setting-up-targets-in-ci"><a class="header" href="#setting-up-targets-in-ci">Setting Up Targets in CI</a></h2>
+<pre><code class="language-bash">cred target set github \
+  --token "$CRED_GITHUB_TOKEN" \
+  --non-interactive
+</code></pre>
+<p>Then push secrets:</p>
+<pre><code class="language-bash">cred push github --non-interactive
+</code></pre>
+<h2 id="example-github-actions"><a class="header" href="#example-github-actions">Example: GitHub Actions</a></h2>
+<p>Use cred in a workflow to sync secrets:</p>
+<pre><code class="language-yaml">name: Sync Secrets
+
+on:
+    workflow_dispatch: # Manual trigger
+
+jobs:
+    sync:
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v4
+
+            - name: Install cred
+              run: cargo install cred
+
+            - name: Configure target
+              run: |
+                  cred target set github \
+                    --token "${{ secrets.CRED_GITHUB_TOKEN }}" \
+                    --non-interactive
+
+            - name: Push secrets
+              run: cred push github --non-interactive --json
+</code></pre>
+<blockquote>
+<p><strong>Note:</strong> This requires your vault to be accessible in CI. Consider whether this fits your security model.</p>
+</blockquote>
+<h2 id="machine-readable-output"><a class="header" href="#machine-readable-output">Machine-Readable Output</a></h2>
+<p>All commands support <code>--json</code> for parsing:</p>
+<pre><code class="language-bash">cred push github --non-interactive --json
+</code></pre>
+<pre><code class="language-json">{
+    "success": true,
+    "pushed": ["DATABASE_URL", "API_KEY"],
+    "skipped": [],
+    "errors": []
+}
+</code></pre>
+<h2 id="dry-run-in-ci"><a class="header" href="#dry-run-in-ci">Dry Run in CI</a></h2>
+<p>Use <code>--dry-run</code> to validate changes in PR checks:</p>
+<pre><code class="language-bash">cred push github --dry-run --json
+</code></pre>
+<p>This reports what would change without making modifications.</p>
+<h2 id="best-practices-1"><a class="header" href="#best-practices-1">Best Practices</a></h2>
+<ol>
+<li><strong>Use dedicated tokens</strong> — Create a separate PAT for CI with minimal permissions</li>
+<li><strong>Prefer dry-run in PRs</strong> — Validate changes before merging</li>
+<li><strong>Log JSON output</strong> — Makes debugging easier</li>
+<li><strong>Fail fast</strong> — Always use <code>--non-interactive</code> in CI</li>
+</ol>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="security-model"><a class="header" href="#security-model">Security Model</a></h1>
+<p>cred is designed with security as a core concern. This page explains how your secrets are protected.</p>
+<h2 id="encryption-at-rest"><a class="header" href="#encryption-at-rest">Encryption at Rest</a></h2>
+<p>Your vault (<code>.cred/vault.enc</code>) is encrypted using <strong>ChaCha20-Poly1305</strong>, a modern authenticated encryption algorithm. This provides both confidentiality and integrity protection.</p>
+<h2 id="token-storage"><a class="header" href="#token-storage">Token Storage</a></h2>
+<p>Source and target tokens (API keys, PATs) are stored in your <strong>OS credential store</strong>:</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>OS</th><th>Backend</th></tr>
+</thead>
+<tbody>
+<tr><td>macOS</td><td>Keychain</td></tr>
+<tr><td>Linux</td><td>Secret Service (GNOME Keyring, KWallet)</td></tr>
+<tr><td>Windows</td><td>Credential Manager</td></tr>
+</tbody>
+</table>
+</div>
+<p>Tokens are <strong>never</strong> written to plaintext files like <code>~/.config/cred/global.toml</code>.</p>
+<h2 id="what-cred-protects-against"><a class="header" href="#what-cred-protects-against">What cred Protects Against</a></h2>
+<ul>
+<li><strong>Accidental exposure</strong> — Secrets aren’t in plaintext files that could be committed</li>
+<li><strong>Disk compromise</strong> — Vault is encrypted at rest</li>
+<li><strong>Clipboard history</strong> — Interactive prompts for sensitive input</li>
+<li><strong>Overprivileged keys</strong> — Sources generate restricted-scope credentials</li>
+</ul>
+<h2 id="what-cred-does-not-protect-against"><a class="header" href="#what-cred-does-not-protect-against">What cred Does NOT Protect Against</a></h2>
+<ul>
+<li><strong>Compromised machine</strong> — If an attacker has access to your running system, they can access your keyring</li>
+<li><strong>Memory attacks</strong> — Secrets exist in memory during operations</li>
+<li><strong>Malicious targets</strong> — cred trusts the platforms you push to</li>
+</ul>
+<h2 id="safe-inspection"><a class="header" href="#safe-inspection">Safe Inspection</a></h2>
+<p>Use <code>--dry-run</code> to preview any operation before it executes:</p>
+<pre><code class="language-bash">cred push github --dry-run
+cred prune github --all --dry-run
+</code></pre>
+<p>This is especially important for destructive operations.</p>
+<h2 id="best-practices-2"><a class="header" href="#best-practices-2">Best Practices</a></h2>
+<h3 id="1-never-commit-your-vault"><a class="header" href="#1-never-commit-your-vault">1. Never Commit Your Vault</a></h3>
+<p>Added to <code>.gitignore</code> on <code>cred init</code> otherwise check and add manually if needed:</p>
+<pre><code class="language-bash">echo .cred &gt;&gt; .gitignore
+</code></pre>
+<h3 id="2-use-least-privilege"><a class="header" href="#2-use-least-privilege">2. Use Least Privilege</a></h3>
+<ul>
+<li>For <strong>sources</strong>: Use master keys only for generation, deploy restricted keys</li>
+<li>For <strong>targets</strong>: Create fine-grained PATs with minimal permissions</li>
+</ul>
+<h3 id="3-rotation-coming-soon"><a class="header" href="#3-rotation-coming-soon">3. Rotation (coming soon)</a></h3>
+<h3 id="4-keep-backups"><a class="header" href="#4-keep-backups">4. Keep Backups</a></h3>
+<p>Export your vault periodically:</p>
+<pre><code class="language-bash">cred export secrets-backup.env
+</code></pre>
+<p>Store backups securely (encrypted, offline).</p>
+<h3 id="5-audit-your-secrets"><a class="header" href="#5-audit-your-secrets">5. Audit Your Secrets</a></h3>
+<p>Review what’s in your vault:</p>
+<pre><code class="language-bash">cred status
+cred secret list
+</code></pre>
+<p>Remove secrets you no longer need.</p>
+<h2 id="threat-model"><a class="header" href="#threat-model">Threat Model</a></h2>
+<p>cred is designed for:</p>
+<ul>
+<li>Individual developers</li>
+<li>Small teams with trusted members</li>
+<li>Projects that don’t require enterprise-grade access control</li>
+</ul>
+<p>It is <strong>not</strong> designed for:</p>
+<ul>
+<li>Multi-tenant environments</li>
+<li>Compliance-heavy industries (healthcare, finance) without additional controls</li>
+<li>Scenarios requiring audit trails or approval workflows</li>
+</ul>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+
+            </nav>
+
+        </div>
+
+        <template id=fa-eye><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 576 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M288 32c-80.8 0-145.5 36.8-192.6 80.6C48.6 156 17.3 208 2.5 243.7c-3.3 7.9-3.3 16.7 0 24.6C17.3 304 48.6 356 95.4 399.4C142.5 443.2 207.2 480 288 480s145.5-36.8 192.6-80.6c46.8-43.5 78.1-95.4 93-131.1c3.3-7.9 3.3-16.7 0-24.6c-14.9-35.7-46.2-87.7-93-131.1C433.5 68.8 368.8 32 288 32zM432 256c0 79.5-64.5 144-144 144s-144-64.5-144-144s64.5-144 144-144s144 64.5 144 144zM288 192c0 35.3-28.7 64-64 64c-11.5 0-22.3-3-31.6-8.4c-.2 2.8-.4 5.5-.4 8.4c0 53 43 96 96 96s96-43 96-96s-43-96-96-96c-2.8 0-5.6 .1-8.4 .4c5.3 9.3 8.4 20.1 8.4 31.6z"/></svg></span></template>
+        <template id=fa-eye-slash><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M38.8 5.1C28.4-3.1 13.3-1.2 5.1 9.2S-1.2 34.7 9.2 42.9l592 464c10.4 8.2 25.5 6.3 33.7-4.1s6.3-25.5-4.1-33.7L525.6 386.7c39.6-40.6 66.4-86.1 79.9-118.4c3.3-7.9 3.3-16.7 0-24.6c-14.9-35.7-46.2-87.7-93-131.1C465.5 68.8 400.8 32 320 32c-68.2 0-125 26.3-169.3 60.8L38.8 5.1zM223.1 149.5C248.6 126.2 282.7 112 320 112c79.5 0 144 64.5 144 144c0 24.9-6.3 48.3-17.4 68.7L408 294.5c5.2-11.8 8-24.8 8-38.5c0-53-43-96-96-96c-2.8 0-5.6 .1-8.4 .4c5.3 9.3 8.4 20.1 8.4 31.6c0 10.2-2.4 19.8-6.6 28.3l-90.3-70.8zm223.1 298L373 389.9c-16.4 6.5-34.3 10.1-53 10.1c-79.5 0-144-64.5-144-144c0-6.9 .5-13.6 1.4-20.2L83.1 161.5C60.3 191.2 44 220.8 34.5 243.7c-3.3 7.9-3.3 16.7 0 24.6c14.9 35.7 46.2 87.7 93 131.1C174.5 443.2 239.2 480 320 480c47.8 0 89.9-12.9 126.2-32.5z"/></svg></span></template>
+        <template id=fa-copy><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M502.6 70.63l-61.25-61.25C435.4 3.371 427.2 0 418.7 0H255.1c-35.35 0-64 28.66-64 64l.0195 256C192 355.4 220.7 384 256 384h192c35.2 0 64-28.8 64-64V93.25C512 84.77 508.6 76.63 502.6 70.63zM464 320c0 8.836-7.164 16-16 16H255.1c-8.838 0-16-7.164-16-16L239.1 64.13c0-8.836 7.164-16 16-16h128L384 96c0 17.67 14.33 32 32 32h47.1V320zM272 448c0 8.836-7.164 16-16 16H63.1c-8.838 0-16-7.164-16-16L47.98 192.1c0-8.836 7.164-16 16-16H160V128H63.99c-35.35 0-64 28.65-64 64l.0098 256C.002 483.3 28.66 512 64 512h192c35.2 0 64-28.8 64-64v-32h-47.1L272 448z"/></svg></span></template>
+        <template id=fa-play><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 384 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M73 39c-14.8-9.1-33.4-9.4-48.5-.9S0 62.6 0 80V432c0 17.4 9.4 33.4 24.5 41.9s33.7 8.1 48.5-.9L361 297c14.3-8.7 23-24.2 23-41s-8.7-32.2-23-41L73 39z"/></svg></span></template>
+        <template id=fa-clock-rotate-left><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M75 75L41 41C25.9 25.9 0 36.6 0 57.9V168c0 13.3 10.7 24 24 24H134.1c21.4 0 32.1-25.9 17-41l-30.8-30.8C155 85.5 203 64 256 64c106 0 192 86 192 192s-86 192-192 192c-40.8 0-78.6-12.7-109.7-34.4c-14.5-10.1-34.4-6.6-44.6 7.9s-6.6 34.4 7.9 44.6C151.2 495 201.7 512 256 512c141.4 0 256-114.6 256-256S397.4 0 256 0C185.3 0 121.3 28.7 75 75zm181 53c-13.3 0-24 10.7-24 24V256c0 6.4 2.5 12.5 7 17l72 72c9.4 9.4 24.6 9.4 33.9 0s9.4-24.6 0-33.9l-65-65V152c0-13.3-10.7-24-24-24z"/></svg></span></template>
+
+        <!-- Livereload script (if served using the cli tool) -->
+        <script>
+            const wsProtocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsAddress = wsProtocol + "//" + location.host + "/" + "__livereload";
+            const socket = new WebSocket(wsAddress);
+            socket.onmessage = function (event) {
+                if (event.data === "reload") {
+                    socket.close();
+                    location.reload();
+                }
+            };
+
+            window.onbeforeunload = function() {
+                socket.close();
+            }
+        </script>
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="elasticlunr-ef4e11c1.min.js"></script>
+        <script src="mark-09e88c2c.min.js"></script>
+        <script src="searcher-c2a407aa.js"></script>
+
+        <script src="clipboard-1626706a.min.js"></script>
+        <script src="highlight-abc7f01d.js"></script>
+        <script src="book-a0b12cfe.js"></script>
+
+        <!-- Custom JS scripts -->
+
+        <script>
+        window.addEventListener('load', function() {
+            window.setTimeout(window.print, 100);
+        });
+        </script>
+
+
+    </div>
+    </body>
+</html>

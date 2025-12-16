@@ -83,12 +83,6 @@ pub enum Commands {
         #[command(subcommand)]
         action: ConfigAction,
     },
-
-    /// Project-level utilities
-    Project {
-        #[command(subcommand)]
-        action: ProjectAction,
-    },
 }
 
 #[derive(Args, Debug)]
@@ -133,12 +127,6 @@ pub enum ConfigAction {
     Unset { key: String },
     /// List the full config
     List,
-}
-
-#[derive(Subcommand, Debug)]
-pub enum ProjectAction {
-    /// Show project status (git/vault/targets), JSON recommended
-    Status,
 }
 
 #[derive(Subcommand, Debug)]

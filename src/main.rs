@@ -17,7 +17,7 @@ use cli::{Cli, CliFlags, Commands, SecretAction, SetTargetArgs, SourceAction};
 use error::{AppError, ExitCode};
 use io::{print_err, print_json, print_out, print_plain_err, read_token_securely, require_yes};
 use keyring::Entry;
-use project::{ProjectStatusData, resolve_repo_binding};
+use project::resolve_repo_binding;
 use sources::SourceAdapter;
 use std::process;
 use targets::TargetAdapter;
@@ -726,101 +726,6 @@ async fn run(cli: Cli, flags: &CliFlags) -> Result<(), AppError> {
             }
         },
 
-        Commands::Project { action } => {
-            match action {
-                cli::ProjectAction::Status => {
-                    let mut is_project = false;
-                    let mut project_name: Option<String> = None;
-                    let mut vault_exists = false;
-                    let mut vault_accessible = false;
-                    let mut dirty_count: usize = 0;
-                    let mut git_detected = false;
-                    let mut git_root: Option<String> = None;
-                    let mut git_remote_current: Option<String> = None;
-                    let mut git_remote_bound: Option<String> = None;
-                    let mut git_bound = false;
-                    let mut ready_for_push = false;
-                    let mut targets_configured: Vec<String> = Vec::new();
-
-                    let proj = project::Project::find();
-                    if let Ok(p) = proj {
-                        is_project = true;
-                        vault_exists = p.vault_path.exists();
-                        let cfg = p.load_config().ok();
-                        if let Some(c) = cfg.as_ref() {
-                            if let Some(n) = c.name.clone() {
-                                project_name = Some(n);
-                            }
-                            git_root = c.git_root.clone();
-                            git_remote_bound = c.git_repo.clone();
-                            git_bound = c.git_repo.is_some();
-                        }
-
-                        if vault_exists {
-                            if let Ok(master_key) = p.get_master_key() {
-                                if let Ok(v) = vault::Vault::load(&p.vault_path, master_key) {
-                                    let _ = v.list(); // access to ensure decrypt succeeded
-                                    vault_accessible = true;
-                                    dirty_count = v.dirty_keys().len();
-                                }
-                            }
-                        }
-
-                        if let Some(gi) = project::detect_git(None) {
-                            git_detected = true;
-                            git_root = Some(gi.root);
-                            git_remote_current = gi.repo_slug.clone();
-                        }
-
-                        if let Ok(gc) = config::load() {
-                            targets_configured = gc.targets.keys().cloned().collect();
-                            targets_configured.sort();
-                        }
-
-                        ready_for_push = is_project
-                            && vault_exists
-                            && vault_accessible
-                            && (!matches!(git_remote_bound.as_ref(), Some(_))
-                                || git_remote_current == git_remote_bound)
-                            && !targets_configured.is_empty();
-                    }
-
-                    if flags.json {
-                        let data = ProjectStatusData {
-                            is_project,
-                            project_name,
-                            vault_exists,
-                            vault_accessible,
-                            dirty_count,
-                            git_detected,
-                            git_root,
-                            git_bound,
-                            git_remote_current,
-                            git_remote_bound,
-                            targets_configured,
-                            ready_for_push,
-                        };
-                        let payload = project::project_status_payload(&data);
-                        print_json(&payload);
-                    } else {
-                        println!("Project status:");
-                        println!("  is_project: {}", is_project);
-                        println!("  project_name: {:?}", project_name);
-                        println!("  vault_exists: {}", vault_exists);
-                        println!("  vault_accessible: {}", vault_accessible);
-                        println!("  dirty_count: {}", dirty_count);
-                        println!("  git_detected: {}", git_detected);
-                        println!("  git_root: {:?}", git_root);
-                        println!("  git_bound: {}", git_bound);
-                        println!("  git_remote_current: {:?}", git_remote_current);
-                        println!("  git_remote_bound: {:?}", git_remote_bound);
-                        println!("  targets_configured: {:?}", targets_configured);
-                        println!("  ready_for_push: {}", ready_for_push);
-                    }
-                }
-            }
-        }
-
         Commands::Doctor => {
             let version = env!("CARGO_PKG_VERSION").to_string();
 
@@ -923,6 +828,9 @@ async fn handle_status(flags: &CliFlags) -> Result<(), AppError> {
     let mut vault_count: usize = 0;
     let mut is_project = false;
 
+    // Git info
+    let mut git_repo: Option<String> = None;
+
     // Load global config for sources/targets
     if let Ok(gc) = config::load() {
         sources_configured = gc.sources.keys().cloned().collect();
@@ -959,6 +867,11 @@ async fn handle_status(flags: &CliFlags) -> Result<(), AppError> {
         }
     }
 
+    // Detect git repo
+    if let Some(gi) = project::detect_git(None) {
+        git_repo = gi.repo_slug;
+    }
+
     if flags.json {
         let payload = serde_json::json!({
             "api_version": "1",
@@ -969,6 +882,7 @@ async fn handle_status(flags: &CliFlags) -> Result<(), AppError> {
                 "secrets": secrets_info,
                 "sources": sources_configured,
                 "targets": targets_configured,
+                "git_repo": git_repo,
             }
         });
         print_json(&payload);
@@ -990,7 +904,6 @@ async fn handle_status(flags: &CliFlags) -> Result<(), AppError> {
                 let modified = secret["modified"].as_bool().unwrap_or(false);
 
                 let modified_marker = if modified { " [modified]" } else { "" };
-                // TODO: Add target push status when we track pushed_to metadata
                 println!("  {:<20} [{}]{}", key, source, modified_marker);
             }
         }
@@ -1020,6 +933,10 @@ async fn handle_status(flags: &CliFlags) -> Result<(), AppError> {
                     .collect::<Vec<_>>()
                     .join(", ")
             );
+        }
+
+        if let Some(repo) = git_repo {
+            println!("Git: {}", repo);
         }
     }
 
