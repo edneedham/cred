@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-b118d922.js";
+            window.path_to_searchindex_js = "searchindex-436e54db.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-535255e4.js"></script>
@@ -177,7 +177,7 @@
                         <h1 id="introduction"><a class="header" href="#introduction">Introduction</a></h1>
 <h2 id="what-it-is"><a class="header" href="#what-it-is">What it is</a></h2>
 <p><strong><code>cred</code></strong> is a command-line tool that stores encrypted secrets locally and safely pushes them to target platforms on demand.</p>
-<p>⚠️ <strong>Status: Early Preview (v0.4.0)</strong></p>
+<p>⚠️ <strong>Status: Early Preview (v0.5.0)</strong></p>
 <p><code>cred</code> is currently in active development. The on-disk format, CLI surface, and security model may change between minor versions. Do not rely on it as your sole secrets backup yet.</p>
 <h2 id="what-it-is-not"><a class="header" href="#what-it-is-not">What it is <strong>not</strong></a></h2>
 <ul>
@@ -207,7 +207,7 @@
 </ul>
 <h3 id="3-a-global-configuration-store"><a class="header" href="#3-a-global-configuration-store"><strong>3. A global configuration store</strong></a></h3>
 <p>Metadata and preferences live in <code>~/.config/cred/global.toml</code>, while source and target tokens are stored securely in the OS credential store (keyring). Nothing sensitive is written to the TOML.</p>
-<h3 id="4-target-agnostic-secret-pushing"><a class="header" href="#4-target-agnostic-secret-pushing"><strong>4. Target-agnostic secret pushing</strong></a></h3>
+<h3 id="4-target-specific-secret-pushing"><a class="header" href="#4-target-specific-secret-pushing"><strong>4. Target-specific secret pushing</strong></a></h3>
 <p>You manage secrets locally, but <code>cred</code> can upload them to specified targets.</p>
 <h4 id="supported-sources"><a class="header" href="#supported-sources">Supported sources:</a></h4>
 <ul>

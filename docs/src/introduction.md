@@ -4,7 +4,7 @@
 
 **`cred`** is a command-line tool that stores encrypted secrets locally and safely pushes them to target platforms on demand. 
 
-⚠️ **Status: Early Preview (v0.4.0)**
+⚠️ **Status: Early Preview (v0.5.0)**
 
 `cred` is currently in active development. The on-disk format, CLI surface, and security model may change between minor versions. Do not rely on it as your sole secrets backup yet.
 
@@ -22,8 +22,6 @@
 -   Small teams
 -   Solo developers
 -   People who don't _need_ enterprise infrastructure yet
-
-
 
 ## Why cred exists
 
@@ -46,7 +44,7 @@ Your secrets live inside `.cred/vault.enc` as an encrypted store with per-secret
 
 Metadata and preferences live in `~/.config/cred/global.toml`, while source and target tokens are stored securely in the OS credential store (keyring). Nothing sensitive is written to the TOML.
 
-### **4. Target-agnostic secret pushing**
+### **4. Target-specific secret pushing**
 
 You manage secrets locally, but `cred` can upload them to specified targets.
 
