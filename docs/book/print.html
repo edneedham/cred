@@ -36,10 +36,10 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-705a3f43.js";
+            window.path_to_searchindex_js = "searchindex-b118d922.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="toc-5ea07a72.js"></script>
+        <script src="toc-535255e4.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -274,8 +274,48 @@ sudo mv cred-* /usr/local/bin/cred
 <ul>
 <li><a href="commands/README.html">Commands Reference</a> — all available commands</li>
 <li><a href="#sources-1">Sources</a> — generate credentials from APIs like Resend</li>
-<li><a href="#cicd-integration">CI/CD Integration</a> — automation patterns</li>
+<li><a href="ci-cd.html">CI/CD Integration</a> — automation patterns</li>
 </ul>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="migrating-existing-secrets"><a class="header" href="#migrating-existing-secrets">Migrating Existing Secrets</a></h1>
+<p>If you choose to migrate to cred instead of continuing with manual <code>.env</code> files you’ll need the original values from wherever you stored them (password manager, <code>.env</code> files, etc.).</p>
+<h2 id="migration-steps"><a class="header" href="#migration-steps">Migration Steps</a></h2>
+<p><strong>1. Initialize cred:</strong></p>
+<pre><code class="language-bash">cred init
+</code></pre>
+<p><strong>2. Import your secrets:</strong></p>
+<p>From a <code>.env</code> file:</p>
+<pre><code class="language-bash">cred import .env
+</code></pre>
+<p>Or add individually:</p>
+<pre><code class="language-bash">cred secret set DATABASE_URL "postgres://..."
+cred secret set API_KEY "sk-..."
+</code></pre>
+<p><strong>3. Set up the GitHub target:</strong></p>
+<pre><code class="language-bash">cred target set github
+</code></pre>
+<p><strong>4. Push to GitHub:</strong></p>
+<p>Preview first:</p>
+<pre><code class="language-bash">cred push github --dry-run
+</code></pre>
+<p>Then push:</p>
+<pre><code class="language-bash">cred push github
+</code></pre>
+<p>Your existing workflows continue working unchanged — they reference secrets by name, and cred pushes to the same location.</p>
+<h3 id="why-migrate"><a class="header" href="#why-migrate">Why Migrate?</a></h3>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Before (manual)</th><th>After (cred)</th></tr>
+</thead>
+<tbody>
+<tr><td>Secrets in .env files or notes</td><td>Single encrypted vault</td></tr>
+<tr><td>Copy-paste into GitHub UI</td><td><code>cred push github</code></td></tr>
+<tr><td>No visibility into what’s deployed</td><td><code>cred status</code> shows everything</td></tr>
+<tr><td>Hard to sync across repos</td><td>Push to multiple targets</td></tr>
+</tbody>
+</table>
+</div>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="concepts"><a class="header" href="#concepts">Concepts</a></h1>
 <p>cred is built around three core concepts that work together to manage your secrets.</p>
@@ -966,81 +1006,6 @@ cred prune github OLD_SECRET --yes
 cred secret remove OLD_SECRET --yes
 </code></pre>
 <div style="break-before: page; page-break-before: always;"></div>
-<h1 id="cicd-integration"><a class="header" href="#cicd-integration">CI/CD Integration</a></h1>
-<p>cred is designed to work well in automated environments. All commands support flags for non-interactive use.</p>
-<h2 id="automation-flags"><a class="header" href="#automation-flags">Automation Flags</a></h2>
-<div class="table-wrapper">
-<table>
-<thead>
-<tr><th>Flag</th><th>Description</th></tr>
-</thead>
-<tbody>
-<tr><td><code>--json</code></td><td>Machine-readable JSON output</td></tr>
-<tr><td><code>--non-interactive</code></td><td>Fail instead of prompting for input</td></tr>
-<tr><td><code>--dry-run</code></td><td>Preview changes without applying</td></tr>
-</tbody>
-</table>
-</div>
-<h2 id="setting-up-targets-in-ci"><a class="header" href="#setting-up-targets-in-ci">Setting Up Targets in CI</a></h2>
-<pre><code class="language-bash">cred target set github \
-  --token "$CRED_GITHUB_TOKEN" \
-  --non-interactive
-</code></pre>
-<p>Then push secrets:</p>
-<pre><code class="language-bash">cred push github --non-interactive
-</code></pre>
-<h2 id="example-github-actions"><a class="header" href="#example-github-actions">Example: GitHub Actions</a></h2>
-<p>Use cred in a workflow to sync secrets:</p>
-<pre><code class="language-yaml">name: Sync Secrets
-
-on:
-    workflow_dispatch: # Manual trigger
-
-jobs:
-    sync:
-        runs-on: ubuntu-latest
-        steps:
-            - uses: actions/checkout@v4
-
-            - name: Install cred
-              run: cargo install cred
-
-            - name: Configure target
-              run: |
-                  cred target set github \
-                    --token "${{ secrets.CRED_GITHUB_TOKEN }}" \
-                    --non-interactive
-
-            - name: Push secrets
-              run: cred push github --non-interactive --json
-</code></pre>
-<blockquote>
-<p><strong>Note:</strong> This requires your vault to be accessible in CI. Consider whether this fits your security model.</p>
-</blockquote>
-<h2 id="machine-readable-output"><a class="header" href="#machine-readable-output">Machine-Readable Output</a></h2>
-<p>All commands support <code>--json</code> for parsing:</p>
-<pre><code class="language-bash">cred push github --non-interactive --json
-</code></pre>
-<pre><code class="language-json">{
-    "success": true,
-    "pushed": ["DATABASE_URL", "API_KEY"],
-    "skipped": [],
-    "errors": []
-}
-</code></pre>
-<h2 id="dry-run-in-ci"><a class="header" href="#dry-run-in-ci">Dry Run in CI</a></h2>
-<p>Use <code>--dry-run</code> to validate changes in PR checks:</p>
-<pre><code class="language-bash">cred push github --dry-run --json
-</code></pre>
-<p>This reports what would change without making modifications.</p>
-<h2 id="best-practices-1"><a class="header" href="#best-practices-1">Best Practices</a></h2>
-<ol>
-<li><strong>Use dedicated tokens</strong> — Create a separate PAT for CI with minimal permissions</li>
-<li><strong>Prefer dry-run in PRs</strong> — Validate changes before merging</li>
-<li><strong>Log JSON output</strong> — Makes debugging easier</li>
-<li><strong>Fail fast</strong> — Always use <code>--non-interactive</code> in CI</li>
-</ol>
-<div style="break-before: page; page-break-before: always;"></div>
 <h1 id="security-model"><a class="header" href="#security-model">Security Model</a></h1>
 <p>cred is designed with security as a core concern. This page explains how your secrets are protected.</p>
 <h2 id="encryption-at-rest"><a class="header" href="#encryption-at-rest">Encryption at Rest</a></h2>
@@ -1079,7 +1044,7 @@ jobs:
 cred prune github --all --dry-run
 </code></pre>
 <p>This is especially important for destructive operations.</p>
-<h2 id="best-practices-2"><a class="header" href="#best-practices-2">Best Practices</a></h2>
+<h2 id="best-practices-1"><a class="header" href="#best-practices-1">Best Practices</a></h2>
 <h3 id="1-never-commit-your-vault"><a class="header" href="#1-never-commit-your-vault">1. Never Commit Your Vault</a></h3>
 <p>Added to <code>.gitignore</code> on <code>cred init</code> otherwise check and add manually if needed:</p>
 <pre><code class="language-bash">echo .cred &gt;&gt; .gitignore

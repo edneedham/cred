@@ -3,6 +3,7 @@
 -   [Introduction](./introduction.md)
 -   [Installation](./installation.md)
 -   [Getting Started](./getting-started.md)
+-   [Migrating](./migrating.md)
 -   [Concepts](./concepts/README.md)
     -   [Sources](./concepts/sources.md)
     -   [Targets](./concepts/targets.md)
@@ -15,5 +16,4 @@
     -   [secret](./commands/secret.md)
     -   [push](./commands/push.md)
     -   [prune](./commands/prune.md)
--   [CI/CD Integration](./ci-cd.md)
 -   [Security Model](./security.md)
