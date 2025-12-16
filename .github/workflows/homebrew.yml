@@ -269,6 +269,7 @@ jobs:
                   cat "$FORMULA"
 
             - name: Commit bottle block
+              working-directory: tap
               run: |
                   VERSION="${{ needs.update-formula.outputs.version }}"
                   git config user.name "github-actions[bot]"
