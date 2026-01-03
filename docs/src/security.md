@@ -6,6 +6,36 @@ cred is designed with security as a core concern. This page explains how your se
 
 Your vault (`.cred/vault.enc`) is encrypted using **ChaCha20-Poly1305**, a modern authenticated encryption algorithm. This provides both confidentiality and integrity protection.
 
+## Key Derivation
+
+cred supports two key modes:
+
+### Keyring Mode (Default)
+
+The encryption key is:
+- Randomly generated on `cred init`
+- Stored in your OS credential store
+- Unique to your machine
+
+Best for: Solo developers, local-only access.
+
+### Passphrase Mode (Team Sharing)
+
+The encryption key is:
+- Derived from a shared passphrase using **Argon2id**
+- Parameters: m=19456 KiB, t=2 iterations, p=1 (OWASP recommended)
+- Salt stored in `project.toml` (safe to commit)
+
+Best for: Teams who need shared vault access.
+
+```bash
+# Initialize with passphrase
+cred init --passphrase
+
+# Or convert existing project
+cred key convert --to passphrase --yes
+```
+
 ## Token Storage
 
 Source and target tokens (API keys, PATs) are stored in your **OS credential store**:
@@ -93,3 +123,12 @@ It is **not** designed for:
 -   Multi-tenant environments
 -   Compliance-heavy industries (healthcare, finance) without additional controls
 -   Scenarios requiring audit trails or approval workflows
+
+## Team Sharing Security
+
+When using passphrase mode:
+
+-   **Passphrase strength matters** — Use 12+ characters with mixed case, numbers, symbols
+-   **Share securely** — Use a password manager or encrypted channel, never plaintext
+-   **Rotate when needed** — If a team member leaves, convert to a new passphrase
+-   **The salt is public** — Only the passphrase must remain secret

@@ -32,13 +32,26 @@ cred push github DATABASE_URL JWT_SECRET --dry-run
 
 Nothing is uploaded when `--dry-run` is used.
 
+## Environment-Specific Push
+
+Push secrets from a specific environment:
+
+```bash
+cred push github --env prod
+```
+
+This pushes only secrets from the `prod` environment.
+
+---
+
 ## Options
 
-| Flag                | Description                     |
-| ------------------- | ------------------------------- |
-| `--dry-run`         | Preview changes without pushing |
-| `--json`            | Machine-readable output         |
-| `--non-interactive` | Fail instead of prompting       |
+| Flag                | Description                       |
+| ------------------- | --------------------------------- |
+| `--env <name>`      | Push from specific environment    |
+| `--dry-run`         | Preview changes without pushing   |
+| `--json`            | Machine-readable output           |
+| `--non-interactive` | Fail instead of prompting         |
 
 ## Repository Detection
 

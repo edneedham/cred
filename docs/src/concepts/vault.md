@@ -1,6 +1,6 @@
 # Vault
 
-The vault is your local encrypted secrets store. Each cred project has its own vault containing all secrets with rich metadata.
+The vault is your local encrypted secrets store. Each cred project has its own vault containing all secrets with rich metadata, organized by environment.
 
 ## Structure
 
@@ -17,6 +17,25 @@ Global configuration lives at:
 ```
 ~/.config/cred/global.toml
 ```
+
+## Environments
+
+Secrets are organized into environments (e.g., `default`, `staging`, `prod`). This allows you to manage different configurations for different deployment contexts.
+
+```bash
+# List environments
+cred env list
+
+# Create an environment
+cred env create prod
+
+# Set a secret in an environment
+cred secret set DATABASE_URL "postgres://..." --env prod
+```
+
+By default, secrets are stored in the `default` environment.
+
+See [`cred env`](../commands/env.md) for more details.
 
 ## Secret Metadata
 

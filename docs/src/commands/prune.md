@@ -34,14 +34,25 @@ cred prune github --all --yes
 
 This removes all secrets that cred has pushed to this target.
 
+## Environment-Specific Prune
+
+Prune secrets from a specific environment:
+
+```bash
+cred prune github OLD_KEY --env prod --yes
+```
+
+---
+
 ## Options
 
-| Flag        | Description                   |
-| ----------- | ----------------------------- |
-| `--dry-run` | Preview without deleting      |
-| `--yes`     | Confirm destructive operation |
-| `--all`     | Prune all known secrets       |
-| `--json`    | Machine-readable output       |
+| Flag           | Description                      |
+| -------------- | -------------------------------- |
+| `--env <name>` | Prune from specific environment  |
+| `--dry-run`    | Preview without deleting         |
+| `--yes`        | Confirm destructive operation    |
+| `--all`        | Prune all known secrets          |
+| `--json`       | Machine-readable output          |
 
 ## Safety
 

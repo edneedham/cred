@@ -17,6 +17,12 @@ cred secret set API_KEY "sk-xxx" --description "OpenAI production key"
 cred secret set CERT_PEM "-----BEGIN..." -d "TLS certificate"
 ```
 
+In a specific environment:
+
+```bash
+cred secret set DATABASE_URL "postgres://prod..." --env prod
+```
+
 ### Format Detection
 
 cred auto-detects the format of your secrets:
@@ -43,6 +49,12 @@ Retrieve a secret value:
 
 ```bash
 cred secret get JWT_SECRET
+```
+
+From a specific environment:
+
+```bash
+cred secret get JWT_SECRET --env prod
 ```
 
 With full metadata:
@@ -82,6 +94,12 @@ Vault content:
   JWT_SECRET = *****
 ```
 
+List secrets in a specific environment:
+
+```bash
+cred secret list --env prod
+```
+
 Descriptions are shown inline when present.
 
 ---
@@ -92,6 +110,12 @@ Delete a secret from the local vault:
 
 ```bash
 cred secret remove JWT_SECRET --yes
+```
+
+From a specific environment:
+
+```bash
+cred secret remove JWT_SECRET --env prod --yes
 ```
 
 Output:
@@ -128,6 +152,12 @@ Import `KEY=VALUE` pairs from a .env file:
 cred import .env
 ```
 
+Import to a specific environment:
+
+```bash
+cred import prod.env --env prod
+```
+
 Existing keys are skipped by default to keep imports non-destructive.
 
 Overwrite existing keys:
@@ -150,6 +180,12 @@ Write vault contents to a .env file:
 
 ```bash
 cred export .env.backup
+```
+
+Export from a specific environment:
+
+```bash
+cred export prod.env --env prod
 ```
 
 Keys are sorted alphabetically. Existing files are preserved unless forced:

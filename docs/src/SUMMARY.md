@@ -14,6 +14,8 @@
     -   [doctor](./commands/doctor.md)
     -   [status](./commands/status.md)
     -   [secret](./commands/secret.md)
+    -   [env](./commands/env.md)
+    -   [key](./commands/key.md)
     -   [push](./commands/push.md)
     -   [prune](./commands/prune.md)
 -   [Security Model](./security.md)
