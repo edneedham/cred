@@ -1,5 +1,63 @@
 # Changelog
 
+## v0.7.0
+
+### Team Collaboration
+
+-   **Passphrase mode**: Derive encryption key from a shared passphrase using Argon2id
+-   Teams share passphrase out-of-band; each member derives the same key locally
+-   Salt stored in `project.toml` (not secret, safe to commit)
+-   Uses OWASP-recommended Argon2id parameters (m=19456 KiB, t=2, p=1)
+
+### New Commands
+
+-   `cred init --passphrase` — Initialize project in passphrase mode (prompts for passphrase)
+-   `cred key status` — Show current key mode (keyring or passphrase)
+-   `cred key convert --to passphrase` — Convert existing keyring project to passphrase mode
+-   `cred key convert --to keyring` — Convert passphrase project back to keyring mode
+
+### CI Support
+
+-   `CRED_PASSPHRASE` env var for automation (no interactive prompt)
+-   Passphrase mode works seamlessly in CI environments
+
+### Project Config
+
+-   New `key_mode` field: "keyring" (default) or "passphrase"
+-   New `salt` field: Base64-encoded Argon2 salt (only for passphrase mode)
+
+## v0.6.0
+
+### Breaking Changes
+
+-   **Vault schema v3**: Secrets are now scoped to environments
+-   Existing vaults auto-migrate to v3 on first load (secrets placed in "default" environment)
+-   This is a one-way migration; users cannot downgrade to older cred versions after migration
+
+### Environment Namespacing
+
+-   `--env <ENV>` flag for secret operations: `secret set`, `secret get`, `secret list`, `secret remove`, `secret describe`
+-   `--env <ENV>` flag for data operations: `push`, `prune`, `import`, `export`
+-   `cred env list` — List all environments in the vault
+-   `cred env create <name>` — Create a new empty environment
+-   `cred env delete <name>` — Delete an environment and all its secrets (requires `--yes`)
+-   `cred status` now groups secrets by environment
+-   `cred secret list --env "*"` lists secrets across all environments
+
+### New Vault API
+
+-   `list_environments()` — List all environment names
+-   `create_environment()`, `delete_environment()` — Manage environments
+-   `*_in_env()` variants for all secret operations (set, get, remove, list, etc.)
+-   `list_all_entries()` — List all secrets across all environments
+-   `total_count()` — Count secrets across all environments
+
+### Migration
+
+-   **Automatic**: v1 and v2 vaults migrate transparently to v3 on load
+-   **Manual**: No action required unless you want to use multiple environments
+-   Migrated secrets are placed in the "default" environment
+
 ## v0.5.0
 
 ### Breaking Changes

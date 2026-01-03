@@ -220,7 +220,7 @@ mod tests {
 
         let raw = std::fs::read_to_string(&vault_path).unwrap();
         let parsed: EncFile = serde_json::from_str(&raw).unwrap();
-        assert_eq!(parsed.version, 2);
+        assert_eq!(parsed.version, 3);
         assert!(!parsed.nonce.is_empty());
         assert!(!parsed.ciphertext.is_empty());
     }
@@ -700,9 +700,9 @@ mod tests {
         assert_eq!(ml_entry.format, SecretFormat::Multiline);
     }
 
-    // After migration and save, file is v2 format.
+    // After migration and save, file is v3 format.
     #[test]
-    fn test_migration_saves_as_v2() {
+    fn test_migration_saves_as_v3() {
         use base64::{Engine, engine::general_purpose::STANDARD as BASE64};
         use chacha20poly1305::{
             ChaCha20Poly1305,
@@ -730,14 +730,14 @@ mod tests {
         let v = vault::Vault::load(&vault_path, key).unwrap();
         v.save().unwrap();
 
-        // Check file is now v2
+        // Check file is now v3
         #[derive(serde::Deserialize)]
         struct EncFile {
             version: u8,
         }
         let raw = fs::read_to_string(&vault_path).unwrap();
         let parsed: EncFile = serde_json::from_str(&raw).unwrap();
-        assert_eq!(parsed.version, 2);
+        assert_eq!(parsed.version, 3);
 
         // Reload works
         let v2 = vault::Vault::load(&vault_path, key).unwrap();
@@ -832,5 +832,279 @@ mod tests {
         assert!(result.is_err());
         let err_msg = result.unwrap_err().to_string();
         assert!(err_msg.contains("Unsupported vault version") || err_msg.contains("99"));
+    }
+
+    // ========== v0.6.0 Environment Tests ==========
+
+    // v2 vaults migrate to v3 with secrets placed in "default" environment.
+    #[test]
+    fn test_v2_to_v3_migration() {
+        use base64::{Engine, engine::general_purpose::STANDARD as BASE64};
+        use chacha20poly1305::{
+            ChaCha20Poly1305,
+            aead::{Aead, AeadCore, KeyInit, OsRng},
+        };
+
+        let dir = tempdir().unwrap();
+        let vault_path = dir.path().join("vault.enc");
+        let key = get_test_key();
+
+        // Create a v2 vault manually (flat secrets structure)
+        let v2_payload = serde_json::json!({
+            "version": 2,
+            "secrets": {
+                "API_KEY": {
+                    "value": "secret123",
+                    "format": "raw",
+                    "created_at": "2024-01-01T00:00:00Z",
+                    "updated_at": "2024-01-01T00:00:00Z"
+                },
+                "DB_URL": {
+                    "value": "postgres://localhost",
+                    "format": "raw",
+                    "created_at": "2024-01-01T00:00:00Z",
+                    "updated_at": "2024-01-01T00:00:00Z"
+                }
+            }
+        });
+        let plaintext = serde_json::to_vec(&v2_payload).unwrap();
+
+        let cipher = ChaCha20Poly1305::new(&key.into());
+        let nonce = ChaCha20Poly1305::generate_nonce(&mut OsRng);
+        let ciphertext = cipher.encrypt(&nonce, plaintext.as_ref()).unwrap();
+
+        let v2_file = serde_json::json!({
+            "version": 2,
+            "nonce": BASE64.encode(&nonce),
+            "ciphertext": BASE64.encode(&ciphertext)
+        });
+        fs::write(&vault_path, serde_json::to_string(&v2_file).unwrap()).unwrap();
+
+        // Load the v2 vault - should auto-migrate to v3
+        let v = vault::Vault::load(&vault_path, key).unwrap();
+
+        // Secrets should be in "default" environment
+        assert_eq!(
+            v.get_in_env(vault::DEFAULT_ENV, "API_KEY"),
+            Some(&"secret123".to_string())
+        );
+        assert_eq!(
+            v.get_in_env(vault::DEFAULT_ENV, "DB_URL"),
+            Some(&"postgres://localhost".to_string())
+        );
+
+        // Legacy accessors should still work
+        assert_eq!(v.get("API_KEY"), Some(&"secret123".to_string()));
+        assert_eq!(v.get("DB_URL"), Some(&"postgres://localhost".to_string()));
+
+        // Verify environment list
+        let envs = v.list_environments();
+        assert!(envs.contains(&vault::DEFAULT_ENV.to_string()));
+    }
+
+    // Secrets in different environments are isolated.
+    #[test]
+    fn test_environment_isolation() {
+        let dir = tempdir().unwrap();
+        let vault_path = dir.path().join("vault.enc");
+        let key = get_test_key();
+
+        let mut v = vault::Vault::load(&vault_path, key).unwrap();
+
+        // Set same key in different environments with different values
+        v.set_in_env("dev", "DATABASE_URL", "postgres://dev:5432/dev");
+        v.set_in_env("prod", "DATABASE_URL", "postgres://prod:5432/prod");
+        v.set_in_env(vault::DEFAULT_ENV, "SHARED_KEY", "shared_value");
+        v.save().unwrap();
+
+        // Reload to verify persistence
+        let v2 = vault::Vault::load(&vault_path, key).unwrap();
+
+        // Each environment should have isolated values
+        assert_eq!(
+            v2.get_in_env("dev", "DATABASE_URL"),
+            Some(&"postgres://dev:5432/dev".to_string())
+        );
+        assert_eq!(
+            v2.get_in_env("prod", "DATABASE_URL"),
+            Some(&"postgres://prod:5432/prod".to_string())
+        );
+        assert_eq!(
+            v2.get_in_env(vault::DEFAULT_ENV, "SHARED_KEY"),
+            Some(&"shared_value".to_string())
+        );
+
+        // Cross-environment access should return None
+        assert_eq!(v2.get_in_env("dev", "SHARED_KEY"), None);
+        assert_eq!(v2.get_in_env("prod", "SHARED_KEY"), None);
+        assert_eq!(v2.get_in_env(vault::DEFAULT_ENV, "DATABASE_URL"), None);
+    }
+
+    // Environment management: create, list, delete.
+    #[test]
+    fn test_environment_management() {
+        let dir = tempdir().unwrap();
+        let vault_path = dir.path().join("vault.enc");
+        let key = get_test_key();
+
+        let mut v = vault::Vault::load(&vault_path, key).unwrap();
+
+        // Initially should have default environment
+        let initial_envs = v.list_environments();
+        assert!(initial_envs.contains(&vault::DEFAULT_ENV.to_string()));
+
+        // Create new environments
+        assert!(v.create_environment("staging"));
+        assert!(v.create_environment("production"));
+
+        // Creating duplicate returns false
+        assert!(!v.create_environment("staging"));
+
+        let envs = v.list_environments();
+        assert!(envs.contains(&"staging".to_string()));
+        assert!(envs.contains(&"production".to_string()));
+
+        // Add secrets to staging
+        v.set_in_env("staging", "KEY1", "value1");
+        v.set_in_env("staging", "KEY2", "value2");
+
+        assert_eq!(v.count_in_env("staging"), 2);
+        assert_eq!(v.count_in_env("production"), 0);
+
+        // Delete staging environment
+        assert!(v.delete_environment("staging"));
+        assert!(!v.list_environments().contains(&"staging".to_string()));
+
+        // Deleting non-existent env returns false
+        assert!(!v.delete_environment("nonexistent"));
+    }
+
+    // List all entries across environments.
+    #[test]
+    fn test_list_all_entries() {
+        let dir = tempdir().unwrap();
+        let vault_path = dir.path().join("vault.enc");
+        let key = get_test_key();
+
+        let mut v = vault::Vault::load(&vault_path, key).unwrap();
+
+        v.set_in_env("dev", "API_KEY", "dev_key");
+        v.set_in_env("prod", "API_KEY", "prod_key");
+        v.set_in_env(vault::DEFAULT_ENV, "COMMON", "common_value");
+
+        let all = v.list_all_entries();
+        assert_eq!(all.len(), 3);
+
+        // Verify entries are sorted by env, then key
+        let keys: Vec<(&str, &str)> = all.iter().map(|(e, k, _)| (*e, *k)).collect();
+        assert!(keys.contains(&(vault::DEFAULT_ENV, "COMMON")));
+        assert!(keys.contains(&("dev", "API_KEY")));
+        assert!(keys.contains(&("prod", "API_KEY")));
+    }
+
+    // Total count across all environments.
+    #[test]
+    fn test_total_count() {
+        let dir = tempdir().unwrap();
+        let vault_path = dir.path().join("vault.enc");
+        let key = get_test_key();
+
+        let mut v = vault::Vault::load(&vault_path, key).unwrap();
+
+        v.set_in_env("dev", "KEY1", "val");
+        v.set_in_env("dev", "KEY2", "val");
+        v.set_in_env("prod", "KEY1", "val");
+        v.set_in_env(vault::DEFAULT_ENV, "KEY1", "val");
+
+        assert_eq!(v.total_count(), 4);
+    }
+
+    // v1 vaults also migrate correctly to v3.
+    #[test]
+    fn test_v1_to_v3_migration() {
+        use base64::{Engine, engine::general_purpose::STANDARD as BASE64};
+        use chacha20poly1305::{
+            ChaCha20Poly1305,
+            aead::{Aead, AeadCore, KeyInit, OsRng},
+        };
+
+        let dir = tempdir().unwrap();
+        let vault_path = dir.path().join("vault.enc");
+        let key = get_test_key();
+
+        // Create a v1 vault manually (bare strings)
+        let v1_payload = serde_json::json!({
+            "LEGACY_KEY": "legacy_value",
+            "OLD_SECRET": "old_secret_value"
+        });
+        let plaintext = serde_json::to_vec(&v1_payload).unwrap();
+
+        let cipher = ChaCha20Poly1305::new(&key.into());
+        let nonce = ChaCha20Poly1305::generate_nonce(&mut OsRng);
+        let ciphertext = cipher.encrypt(&nonce, plaintext.as_ref()).unwrap();
+
+        let v1_file = serde_json::json!({
+            "version": 1,
+            "nonce": BASE64.encode(&nonce),
+            "ciphertext": BASE64.encode(&ciphertext)
+        });
+        fs::write(&vault_path, serde_json::to_string(&v1_file).unwrap()).unwrap();
+
+        // Load the v1 vault - should auto-migrate to v3
+        let v = vault::Vault::load(&vault_path, key).unwrap();
+
+        // Secrets should be in "default" environment
+        assert_eq!(
+            v.get_in_env(vault::DEFAULT_ENV, "LEGACY_KEY"),
+            Some(&"legacy_value".to_string())
+        );
+        assert_eq!(
+            v.get_in_env(vault::DEFAULT_ENV, "OLD_SECRET"),
+            Some(&"old_secret_value".to_string())
+        );
+
+        // Save and reload to verify v3 persistence
+        v.save().unwrap();
+        let v2 = vault::Vault::load(&vault_path, key).unwrap();
+        assert_eq!(v2.get("LEGACY_KEY"), Some(&"legacy_value".to_string()));
+    }
+
+    // Remove and describe work correctly in specific environments.
+    #[test]
+    fn test_env_specific_operations() {
+        let dir = tempdir().unwrap();
+        let vault_path = dir.path().join("vault.enc");
+        let key = get_test_key();
+
+        let mut v = vault::Vault::load(&vault_path, key).unwrap();
+
+        // Set up data in multiple environments
+        v.set_in_env("dev", "API_KEY", "dev_api_key");
+        v.set_in_env("prod", "API_KEY", "prod_api_key");
+
+        // Remove from dev only
+        let removed = v.remove_in_env("dev", "API_KEY");
+        assert_eq!(removed, Some("dev_api_key".to_string()));
+
+        // Prod should still have the key
+        assert_eq!(
+            v.get_in_env("prod", "API_KEY"),
+            Some(&"prod_api_key".to_string())
+        );
+        assert_eq!(v.get_in_env("dev", "API_KEY"), None);
+
+        // Set description in prod
+        v.set_in_env("prod", "WITH_DESC", "value");
+        assert!(v.set_description_in_env(
+            "prod",
+            "WITH_DESC",
+            Some("Production secret".to_string())
+        ));
+
+        let entry = v.get_entry_in_env("prod", "WITH_DESC").unwrap();
+        assert_eq!(entry.description, Some("Production secret".to_string()));
+
+        // Setting description for non-existent key returns false
+        assert!(!v.set_description_in_env("prod", "NONEXISTENT", Some("desc".to_string())));
     }
 }

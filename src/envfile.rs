@@ -45,23 +45,43 @@ pub fn parse_env_file(path: &Path) -> Result<Vec<(String, String)>, AppError> {
     Ok(entries)
 }
 
-/// Merge parsed .env entries into the vault. By default keeps existing keys;
+/// Merge parsed .env entries into the vault (default environment). By default keeps existing keys;
 /// set `overwrite` to replace existing values. Honors `dry_run` by not mutating
 /// the vault while still returning the counters that would apply.
+#[allow(dead_code)]
 pub fn import_entries(
     entries: &[(String, String)],
     vault: &mut Vault,
     overwrite: bool,
     dry_run: bool,
 ) -> ImportStats {
+    import_entries_to_env(
+        entries,
+        vault,
+        crate::vault::DEFAULT_ENV,
+        overwrite,
+        dry_run,
+    )
+}
+
+/// Merge parsed .env entries into a specific environment in the vault.
+/// By default keeps existing keys; set `overwrite` to replace existing values.
+/// Honors `dry_run` by not mutating the vault while still returning the counters that would apply.
+pub fn import_entries_to_env(
+    entries: &[(String, String)],
+    vault: &mut Vault,
+    env: &str,
+    overwrite: bool,
+    dry_run: bool,
+) -> ImportStats {
     let mut stats = ImportStats::default();
 
     for (key, value) in entries {
-        if vault.get(key).is_some() {
+        if vault.get_in_env(env, key).is_some() {
             if overwrite {
                 stats.overwritten += 1;
                 if !dry_run {
-                    vault.set(key, value);
+                    vault.set_in_env(env, key, value);
                 }
             } else {
                 stats.skipped += 1;
@@ -69,7 +89,7 @@ pub fn import_entries(
         } else {
             stats.added += 1;
             if !dry_run {
-                vault.set(key, value);
+                vault.set_in_env(env, key, value);
             }
         }
     }
@@ -77,11 +97,31 @@ pub fn import_entries(
     stats
 }
 
-/// Export vault contents to a .env-style file. Keys are sorted for stability.
+/// Export vault contents (default environment) to a .env-style file. Keys are sorted for stability.
 /// Refuses to overwrite unless `force` is true. If `dry_run`, no file is
 /// created but overwrite checks still apply.
+#[allow(dead_code)]
 pub fn export_env_file(
     vault: &Vault,
+    output_path: &Path,
+    force: bool,
+    dry_run: bool,
+) -> Result<usize, AppError> {
+    export_env_file_from_env(
+        vault,
+        crate::vault::DEFAULT_ENV,
+        output_path,
+        force,
+        dry_run,
+    )
+}
+
+/// Export vault contents from a specific environment to a .env-style file. Keys are sorted for stability.
+/// Refuses to overwrite unless `force` is true. If `dry_run`, no file is
+/// created but overwrite checks still apply.
+pub fn export_env_file_from_env(
+    vault: &Vault,
+    env: &str,
     output_path: &Path,
     force: bool,
     dry_run: bool,
@@ -93,7 +133,7 @@ pub fn export_env_file(
         )));
     }
 
-    let secrets = vault.list();
+    let secrets = vault.list_in_env(env);
     let mut entries: Vec<_> = secrets.iter().collect();
     entries.sort_by(|a, b| a.0.cmp(b.0));
 

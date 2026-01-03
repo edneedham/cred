@@ -13,7 +13,9 @@ mod tests;
 mod vault;
 
 use clap::Parser;
-use cli::{Cli, CliFlags, Commands, SecretAction, SetTargetArgs, SourceAction};
+use cli::{
+    Cli, CliFlags, Commands, EnvAction, KeyAction, SecretAction, SetTargetArgs, SourceAction,
+};
 use error::{AppError, ExitCode};
 use io::{print_err, print_json, print_out, print_plain_err, read_token_securely, require_yes};
 use keyring::Entry;
@@ -67,9 +69,44 @@ async fn main() {
 /// Core dispatcher for all subcommands.
 async fn run(cli: Cli, flags: &CliFlags) -> Result<(), AppError> {
     match cli.command {
-        Commands::Init => {
+        Commands::Init(args) => {
             config::ensure_global_config_exists()?;
-            project::init()?;
+
+            if args.passphrase {
+                // Prompt for passphrase
+                let passphrase = if flags.non_interactive {
+                    std::env::var("CRED_PASSPHRASE").map_err(|_| {
+                        AppError::user(anyhow::anyhow!(
+                            "Non-interactive mode requires CRED_PASSPHRASE env var for passphrase init"
+                        ))
+                    })?
+                } else {
+                    let pp1 =
+                        rpassword::prompt_password("Enter vault passphrase: ").map_err(|e| {
+                            AppError::user(anyhow::anyhow!("Failed to read passphrase: {}", e))
+                        })?;
+                    let pp2 = rpassword::prompt_password("Confirm passphrase: ").map_err(|e| {
+                        AppError::user(anyhow::anyhow!("Failed to read passphrase: {}", e))
+                    })?;
+
+                    if pp1 != pp2 {
+                        return Err(AppError::user(anyhow::anyhow!("Passphrases do not match")));
+                    }
+
+                    if pp1.len() < 8 {
+                        return Err(AppError::user(anyhow::anyhow!(
+                            "Passphrase must be at least 8 characters"
+                        )));
+                    }
+
+                    pp1
+                };
+
+                project::init_with_passphrase(&passphrase)?;
+            } else {
+                project::init()?;
+            }
+
             if flags.json {
                 let payload = serde_json::json!({
                     "api_version": "1",
@@ -150,18 +187,31 @@ async fn run(cli: Cli, flags: &CliFlags) -> Result<(), AppError> {
                     value,
                     description,
                     format,
+                    env,
                 } => {
                     if flags.dry_run {
-                        println!("(dry-run) Would set {}", key);
+                        println!("(dry-run) Would set {} in env '{}'", key, env);
                         return Ok(());
                     }
                     // Use explicit format if provided, otherwise auto-detect
                     let fmt = format.unwrap_or_else(|| vault::Vault::detect_format(&value));
-                    vault.set_with_metadata(&key, &value, fmt, description, None, None);
+                    vault.set_with_metadata_in_env(
+                        &env,
+                        &key,
+                        &value,
+                        fmt,
+                        description,
+                        None,
+                        None,
+                    );
                     vault.save()?;
-                    print_out(flags, &format!("✓ Set {} = *****", key));
+                    if env == vault::DEFAULT_ENV {
+                        print_out(flags, &format!("✓ Set {} = *****", key));
+                    } else {
+                        print_out(flags, &format!("✓ Set {} = ***** (env: {})", key, env));
+                    }
                 }
-                SecretAction::Get { key } => match vault.get_entry(&key) {
+                SecretAction::Get { key, env } => match vault.get_entry_in_env(&env, &key) {
                     Some(entry) => {
                         if flags.json {
                             let payload = serde_json::json!({
@@ -169,6 +219,7 @@ async fn run(cli: Cli, flags: &CliFlags) -> Result<(), AppError> {
                                 "status": "ok",
                                 "data": {
                                     "key": key,
+                                    "env": env,
                                     "value": entry.value,
                                     "format": entry.format.to_string(),
                                     "created_at": entry.created_at.to_rfc3339(),
@@ -181,12 +232,15 @@ async fn run(cli: Cli, flags: &CliFlags) -> Result<(), AppError> {
                             println!("{}", entry.value)
                         }
                     }
-                    None => print_err(flags, &format!("Secret '{}' not found", key)),
+                    None => print_err(
+                        flags,
+                        &format!("Secret '{}' not found in env '{}'", key, env),
+                    ),
                 },
-                SecretAction::Remove { key } => {
+                SecretAction::Remove { key, env } => {
                     require_yes(&flags, "secret remove")?;
                     if flags.dry_run {
-                        if let Some(entry) = vault.get_entry(&key) {
+                        if let Some(entry) = vault.get_entry_in_env(&env, &key) {
                             if flags.json {
                                 let payload = serde_json::json!({
                                     "api_version": "1",
@@ -195,6 +249,7 @@ async fn run(cli: Cli, flags: &CliFlags) -> Result<(), AppError> {
                                         "action": "remove",
                                         "dry_run": true,
                                         "key": key,
+                                        "env": env,
                                         "format": entry.format.to_string(),
                                         "created_at": entry.created_at.to_rfc3339(),
                                         "description": entry.description,
@@ -205,18 +260,22 @@ async fn run(cli: Cli, flags: &CliFlags) -> Result<(), AppError> {
                                 print_out(
                                     flags,
                                     &format!(
-                                        "(dry-run) Would remove '{}' (created {})",
+                                        "(dry-run) Would remove '{}' from env '{}' (created {})",
                                         key,
+                                        env,
                                         entry.created_at.format("%Y-%m-%d")
                                     ),
                                 );
                             }
                         } else {
-                            print_out(flags, &format!("Secret '{}' did not exist locally.", key));
+                            print_out(
+                                flags,
+                                &format!("Secret '{}' did not exist in env '{}'.", key, env),
+                            );
                         }
                         return Ok(());
                     }
-                    if let Some(entry) = vault.remove_entry(&key) {
+                    if let Some(entry) = vault.remove_entry_in_env(&env, &key) {
                         vault.save()?;
                         if flags.json {
                             let payload = serde_json::json!({
@@ -225,6 +284,7 @@ async fn run(cli: Cli, flags: &CliFlags) -> Result<(), AppError> {
                                 "data": {
                                     "action": "removed",
                                     "key": key,
+                                    "env": env,
                                     "format": entry.format.to_string(),
                                     "created_at": entry.created_at.to_rfc3339(),
                                     "updated_at": entry.updated_at.to_rfc3339(),
@@ -243,64 +303,143 @@ async fn run(cli: Cli, flags: &CliFlags) -> Result<(), AppError> {
                             };
                             print_out(
                                 flags,
-                                &format!("✓ Removed '{}' from local vault ({})", key, age_str),
+                                &format!("✓ Removed '{}' from env '{}' ({})", key, env, age_str),
                             );
                         }
                     } else {
-                        print_out(flags, &format!("Secret '{}' did not exist locally.", key));
+                        print_out(
+                            flags,
+                            &format!("Secret '{}' did not exist in env '{}'.", key, env),
+                        );
                     }
                 }
-                SecretAction::List {} => {
-                    let entries = vault.list_entries();
-                    let mut keys: Vec<&String> = entries.keys().collect();
-                    keys.sort();
-                    if flags.json {
-                        let secrets_data: Vec<serde_json::Value> = keys
-                            .iter()
-                            .map(|k| {
-                                let entry = &entries[*k];
-                                serde_json::json!({
-                                    "key": k,
-                                    "format": entry.format.to_string(),
-                                    "created_at": entry.created_at.to_rfc3339(),
-                                    "updated_at": entry.updated_at.to_rfc3339(),
-                                    "description": entry.description,
+                SecretAction::List { env } => {
+                    // Handle special "*" case to list all environments
+                    if env == "*" {
+                        let all_entries = vault.list_all_entries();
+                        if flags.json {
+                            let secrets_data: Vec<serde_json::Value> = all_entries
+                                .iter()
+                                .map(|(e, k, entry)| {
+                                    serde_json::json!({
+                                        "env": e,
+                                        "key": k,
+                                        "format": entry.format.to_string(),
+                                        "created_at": entry.created_at.to_rfc3339(),
+                                        "updated_at": entry.updated_at.to_rfc3339(),
+                                        "description": entry.description,
+                                    })
                                 })
-                            })
-                            .collect();
-                        let payload = serde_json::json!({
-                            "api_version": "1",
-                            "status": "ok",
-                            "data": { "secrets": secrets_data }
-                        });
-                        println!("{}", serde_json::to_string(&payload).unwrap_or_default());
+                                .collect();
+                            let payload = serde_json::json!({
+                                "api_version": "1",
+                                "status": "ok",
+                                "data": {
+                                    "environments": vault.list_environments(),
+                                    "secrets": secrets_data
+                                }
+                            });
+                            println!("{}", serde_json::to_string(&payload).unwrap_or_default());
+                        } else {
+                            let envs = vault.list_environments();
+                            println!("Vault content ({} environments):", envs.len());
+                            for env_name in envs {
+                                if let Some(entries) = vault.list_entries_in_env(&env_name) {
+                                    let mut keys: Vec<&String> = entries.keys().collect();
+                                    keys.sort();
+                                    println!("\n  [{}] ({} secrets)", env_name, keys.len());
+                                    for k in keys {
+                                        let entry = &entries[k];
+                                        if let Some(desc) = &entry.description {
+                                            println!("    {} = ***** ({})", k, desc);
+                                        } else {
+                                            println!("    {} = *****", k);
+                                        }
+                                    }
+                                }
+                            }
+                        }
                     } else {
-                        println!("Vault content:");
-                        for k in keys {
-                            let entry = &entries[k];
-                            if let Some(desc) = &entry.description {
-                                println!("  {} = ***** ({})", k, desc);
+                        // List specific environment
+                        let entries = vault.list_entries_in_env(&env);
+                        if let Some(entries) = entries {
+                            let mut keys: Vec<&String> = entries.keys().collect();
+                            keys.sort();
+                            if flags.json {
+                                let secrets_data: Vec<serde_json::Value> = keys
+                                    .iter()
+                                    .map(|k| {
+                                        let entry = &entries[*k];
+                                        serde_json::json!({
+                                            "key": k,
+                                            "env": env,
+                                            "format": entry.format.to_string(),
+                                            "created_at": entry.created_at.to_rfc3339(),
+                                            "updated_at": entry.updated_at.to_rfc3339(),
+                                            "description": entry.description,
+                                        })
+                                    })
+                                    .collect();
+                                let payload = serde_json::json!({
+                                    "api_version": "1",
+                                    "status": "ok",
+                                    "data": { "env": env, "secrets": secrets_data }
+                                });
+                                println!("{}", serde_json::to_string(&payload).unwrap_or_default());
                             } else {
-                                println!("  {} = *****", k);
+                                if env == vault::DEFAULT_ENV {
+                                    println!("Vault content:");
+                                } else {
+                                    println!("Vault content (env: {}):", env);
+                                }
+                                for k in keys {
+                                    let entry = &entries[k];
+                                    if let Some(desc) = &entry.description {
+                                        println!("  {} = ***** ({})", k, desc);
+                                    } else {
+                                        println!("  {} = *****", k);
+                                    }
+                                }
+                            }
+                        } else {
+                            if flags.json {
+                                let payload = serde_json::json!({
+                                    "api_version": "1",
+                                    "status": "ok",
+                                    "data": { "env": env, "secrets": [] }
+                                });
+                                println!("{}", serde_json::to_string(&payload).unwrap_or_default());
+                            } else {
+                                println!("Environment '{}' does not exist or is empty.", env);
                             }
                         }
                     }
                 }
-                SecretAction::Describe { key, description } => {
+                SecretAction::Describe {
+                    key,
+                    description,
+                    env,
+                } => {
                     if flags.dry_run {
                         match &description {
                             Some(d) => print_out(
                                 flags,
-                                &format!("(dry-run) Would set description for '{}' to: {}", key, d),
+                                &format!(
+                                    "(dry-run) Would set description for '{}' in env '{}' to: {}",
+                                    key, env, d
+                                ),
                             ),
                             None => print_out(
                                 flags,
-                                &format!("(dry-run) Would clear description for '{}'", key),
+                                &format!(
+                                    "(dry-run) Would clear description for '{}' in env '{}'",
+                                    key, env
+                                ),
                             ),
                         }
                         return Ok(());
                     }
-                    if vault.set_description(&key, description.clone()) {
+                    if vault.set_description_in_env(&env, &key, description.clone()) {
                         vault.save()?;
                         match &description {
                             Some(d) => {
@@ -311,15 +450,21 @@ async fn run(cli: Cli, flags: &CliFlags) -> Result<(), AppError> {
                             }
                         }
                     } else {
-                        print_err(flags, &format!("Secret '{}' not found", key));
+                        print_err(
+                            flags,
+                            &format!("Secret '{}' not found in env '{}'", key, env),
+                        );
                     }
                 }
-                SecretAction::Revoke { key, target } => {
+                SecretAction::Revoke { key, target, env } => {
                     require_yes(&flags, "secret revoke")?;
                     if flags.dry_run {
                         print_out(
                             flags,
-                            &format!("(dry-run) Would revoke '{}' from {}", key, target),
+                            &format!(
+                                "(dry-run) Would revoke '{}' from {} (env: {})",
+                                key, target, env
+                            ),
                         );
                         return Ok(());
                     }
@@ -333,10 +478,13 @@ async fn run(cli: Cli, flags: &CliFlags) -> Result<(), AppError> {
                     };
 
                     // 2. Get Value for Revocation
-                    let secret_value = match vault.get(&key) {
+                    let secret_value = match vault.get_in_env(&env, &key) {
                         Some(v) => v.clone(),
                         None => {
-                            print_err(flags, &format!("Secret '{}' not found locally.", key));
+                            print_err(
+                                flags,
+                                &format!("Secret '{}' not found in env '{}'.", key, env),
+                            );
                             return Ok(());
                         }
                     };
@@ -365,7 +513,7 @@ async fn run(cli: Cli, flags: &CliFlags) -> Result<(), AppError> {
                     print_out(flags, "✓ Remote key destroyed.");
 
                     // 4. Local Remove
-                    vault.remove(&key);
+                    vault.remove_in_env(&env, &key);
                     if !flags.dry_run {
                         vault.save()?;
                         print_out(flags, "✓ Removed from local vault.");
@@ -381,8 +529,13 @@ async fn run(cli: Cli, flags: &CliFlags) -> Result<(), AppError> {
 
             let path = std::path::Path::new(&args.path);
             let entries = envfile::parse_env_file(path)?;
-            let stats =
-                envfile::import_entries(&entries, &mut vault, args.overwrite, flags.dry_run);
+            let stats = envfile::import_entries_to_env(
+                &entries,
+                &mut vault,
+                &args.env,
+                args.overwrite,
+                flags.dry_run,
+            );
 
             if !flags.dry_run {
                 vault.save()?;
@@ -394,6 +547,7 @@ async fn run(cli: Cli, flags: &CliFlags) -> Result<(), AppError> {
                     "status": "ok",
                     "data": {
                         "path": args.path,
+                        "env": args.env,
                         "added": stats.added,
                         "overwritten": stats.overwritten,
                         "skipped": stats.skipped,
@@ -402,19 +556,29 @@ async fn run(cli: Cli, flags: &CliFlags) -> Result<(), AppError> {
                 });
                 print_json(&payload);
             } else if flags.dry_run {
+                let env_suffix = if args.env == vault::DEFAULT_ENV {
+                    String::new()
+                } else {
+                    format!(" to env '{}'", args.env)
+                };
                 print_out(
                     flags,
                     &format!(
-                        "(dry-run) Would import from {} (add {}, overwrite {}, skip {}).",
-                        args.path, stats.added, stats.overwritten, stats.skipped
+                        "(dry-run) Would import from {}{} (add {}, overwrite {}, skip {}).",
+                        args.path, env_suffix, stats.added, stats.overwritten, stats.skipped
                     ),
                 );
             } else {
+                let env_suffix = if args.env == vault::DEFAULT_ENV {
+                    String::new()
+                } else {
+                    format!(" to env '{}'", args.env)
+                };
                 print_out(
                     flags,
                     &format!(
-                        "✓ Imported {} (added {}, overwritten {}, skipped {}).",
-                        args.path, stats.added, stats.overwritten, stats.skipped
+                        "✓ Imported {}{} (added {}, overwritten {}, skipped {}).",
+                        args.path, env_suffix, stats.added, stats.overwritten, stats.skipped
                     ),
                 );
             }
@@ -426,7 +590,13 @@ async fn run(cli: Cli, flags: &CliFlags) -> Result<(), AppError> {
             let vault = vault::Vault::load(&proj.vault_path, master_key)?;
 
             let path = std::path::Path::new(&args.path);
-            let count = envfile::export_env_file(&vault, path, args.force, flags.dry_run)?;
+            let count = envfile::export_env_file_from_env(
+                &vault,
+                &args.env,
+                path,
+                args.force,
+                flags.dry_run,
+            )?;
 
             if flags.json {
                 let payload = serde_json::json!({
@@ -434,20 +604,34 @@ async fn run(cli: Cli, flags: &CliFlags) -> Result<(), AppError> {
                     "status": "ok",
                     "data": {
                         "path": args.path,
+                        "env": args.env,
                         "exported": count,
                         "dry_run": flags.dry_run
                     }
                 });
                 print_json(&payload);
             } else if flags.dry_run {
+                let env_suffix = if args.env == vault::DEFAULT_ENV {
+                    String::new()
+                } else {
+                    format!(" from env '{}'", args.env)
+                };
                 print_out(
                     flags,
-                    &format!("(dry-run) Would export {} keys to {}.", count, args.path),
+                    &format!(
+                        "(dry-run) Would export {} keys{} to {}.",
+                        count, env_suffix, args.path
+                    ),
                 );
             } else {
+                let env_suffix = if args.env == vault::DEFAULT_ENV {
+                    String::new()
+                } else {
+                    format!(" from env '{}'", args.env)
+                };
                 print_out(
                     flags,
-                    &format!("✓ Exported {} keys to {}.", count, args.path),
+                    &format!("✓ Exported {} keys{} to {}.", count, env_suffix, args.path),
                 );
             }
         }
@@ -491,12 +675,12 @@ async fn run(cli: Cli, flags: &CliFlags) -> Result<(), AppError> {
             let keys_to_push: Vec<String> = if !args.keys.is_empty() {
                 args.keys.clone()
             } else {
-                vault.list().keys().cloned().collect()
+                vault.list_in_env(&args.env).keys().cloned().collect()
             };
 
             let mut filtered = std::collections::HashMap::new();
             for k in keys_to_push {
-                if let Some(val) = vault.get(&k) {
+                if let Some(val) = vault.get_in_env(&args.env, &k) {
                     filtered.insert(k, val.clone());
                 }
             }
@@ -508,6 +692,7 @@ async fn run(cli: Cli, flags: &CliFlags) -> Result<(), AppError> {
                         "status": "ok",
                         "data": {
                             "target": format!("{}", args.target),
+                            "env": args.env,
                             "repo": repo,
                             "will_create": [],
                             "will_update": [],
@@ -516,7 +701,12 @@ async fn run(cli: Cli, flags: &CliFlags) -> Result<(), AppError> {
                     });
                     println!("{}", serde_json::to_string(&payload).unwrap_or_default());
                 } else {
-                    print_out(flags, "No secrets to push.");
+                    let env_suffix = if args.env == vault::DEFAULT_ENV {
+                        String::new()
+                    } else {
+                        format!(" in env '{}'", args.env)
+                    };
+                    print_out(flags, &format!("No secrets to push{}.", env_suffix));
                 }
                 return Ok(());
             }
@@ -531,6 +721,7 @@ async fn run(cli: Cli, flags: &CliFlags) -> Result<(), AppError> {
                         "status": "ok",
                         "data": {
                             "target": format!("{}", args.target),
+                            "env": args.env,
                             "repo": repo,
                             "will_push": keys,
                             "will_delete": Vec::<String>::new()
@@ -540,6 +731,9 @@ async fn run(cli: Cli, flags: &CliFlags) -> Result<(), AppError> {
                 } else {
                     print_out(flags, "(dry-run) Push skipped (no remote mutation).");
                     print_out(flags, &format!("Target: {}", args.target));
+                    if args.env != vault::DEFAULT_ENV {
+                        print_out(flags, &format!("Env: {}", args.env));
+                    }
                     if let Some(r) = repo.as_ref() {
                         print_out(flags, &format!("Repo: {}", r));
                     }
@@ -550,7 +744,15 @@ async fn run(cli: Cli, flags: &CliFlags) -> Result<(), AppError> {
                 return Ok(());
             }
 
-            print_out(flags, &format!("📦 Pushing {} secrets...", filtered.len()));
+            let env_suffix = if args.env == vault::DEFAULT_ENV {
+                String::new()
+            } else {
+                format!(" from env '{}'", args.env)
+            };
+            print_out(
+                flags,
+                &format!("📦 Pushing {} secrets{}...", filtered.len(), env_suffix),
+            );
             let options = targets::PushOptions { repo };
             if let Err(e) = target_impl.push(&filtered, &token, &options).await {
                 print_err(flags, &format!("x Failed to push: {}", e));
@@ -592,7 +794,7 @@ async fn run(cli: Cli, flags: &CliFlags) -> Result<(), AppError> {
             let vault = vault::Vault::load(&proj.vault_path, master_key)?;
 
             let keys_to_prune: Vec<String> = if args.all {
-                let mut ks: Vec<String> = vault.list().keys().cloned().collect();
+                let mut ks: Vec<String> = vault.list_in_env(&args.env).keys().cloned().collect();
                 ks.sort();
                 ks
             } else if !args.keys.is_empty() {
@@ -634,6 +836,7 @@ async fn run(cli: Cli, flags: &CliFlags) -> Result<(), AppError> {
                         "status": "ok",
                         "data": {
                             "target": format!("{}", args.target),
+                            "env": args.env,
                             "repo": repo,
                             "will_delete": keys_sorted
                         }
@@ -644,6 +847,9 @@ async fn run(cli: Cli, flags: &CliFlags) -> Result<(), AppError> {
                     keys_sorted.sort();
                     print_out(flags, "(dry-run) Prune skipped (no remote mutation).");
                     print_out(flags, &format!("Target: {}", args.target));
+                    if args.env != vault::DEFAULT_ENV {
+                        print_out(flags, &format!("Env: {}", args.env));
+                    }
                     if let Some(r) = repo.as_ref() {
                         print_out(flags, &format!("Repo: {}", r));
                     }
@@ -652,7 +858,15 @@ async fn run(cli: Cli, flags: &CliFlags) -> Result<(), AppError> {
                 return Ok(());
             }
 
-            print_out(flags, &format!("Deleting from Remote ({})...", args.target));
+            let env_suffix = if args.env == vault::DEFAULT_ENV {
+                String::new()
+            } else {
+                format!(" (env: {})", args.env)
+            };
+            print_out(
+                flags,
+                &format!("Deleting from Remote ({}){}...", args.target, env_suffix),
+            );
             let options = targets::PushOptions { repo };
 
             // ATOMIC: Remote fail stops local delete
@@ -708,6 +922,191 @@ async fn run(cli: Cli, flags: &CliFlags) -> Result<(), AppError> {
                 }
             }
         },
+
+        Commands::Env { action } => {
+            let proj = project::Project::find()?;
+            let master_key = proj.get_master_key()?;
+            let mut vault = vault::Vault::load(&proj.vault_path, master_key)?;
+
+            match action {
+                EnvAction::List => {
+                    let envs = vault.list_environments();
+                    if flags.json {
+                        let env_data: Vec<serde_json::Value> = envs
+                            .iter()
+                            .map(|e| {
+                                serde_json::json!({
+                                    "name": e,
+                                    "count": vault.count_in_env(e),
+                                })
+                            })
+                            .collect();
+                        let payload = serde_json::json!({
+                            "api_version": "1",
+                            "status": "ok",
+                            "data": { "environments": env_data }
+                        });
+                        print_json(&payload);
+                    } else {
+                        if envs.is_empty() {
+                            println!("No environments configured.");
+                        } else {
+                            println!("Environments:");
+                            for env in envs {
+                                let count = vault.count_in_env(&env);
+                                println!("  {} ({} secrets)", env, count);
+                            }
+                        }
+                    }
+                }
+                EnvAction::Create { name } => {
+                    if flags.dry_run {
+                        print_out(
+                            flags,
+                            &format!("(dry-run) Would create environment '{}'", name),
+                        );
+                        return Ok(());
+                    }
+                    if vault.create_environment(&name) {
+                        vault.save()?;
+                        print_out(flags, &format!("✓ Created environment '{}'", name));
+                    } else {
+                        print_err(flags, &format!("Environment '{}' already exists", name));
+                    }
+                }
+                EnvAction::Delete { name } => {
+                    require_yes(flags, "env delete")?;
+
+                    if name == vault::DEFAULT_ENV {
+                        print_err(flags, "Cannot delete the default environment");
+                        return Ok(());
+                    }
+
+                    let count = vault.count_in_env(&name);
+                    if flags.dry_run {
+                        print_out(
+                            flags,
+                            &format!(
+                                "(dry-run) Would delete environment '{}' ({} secrets)",
+                                name, count
+                            ),
+                        );
+                        return Ok(());
+                    }
+                    if vault.delete_environment(&name) {
+                        vault.save()?;
+                        print_out(
+                            flags,
+                            &format!(
+                                "✓ Deleted environment '{}' ({} secrets removed)",
+                                name, count
+                            ),
+                        );
+                    } else {
+                        print_err(flags, &format!("Environment '{}' does not exist", name));
+                    }
+                }
+            }
+        }
+
+        Commands::Key { action } => {
+            let proj = project::Project::find()?;
+            let config = proj.load_config()?;
+
+            match action {
+                KeyAction::Status => {
+                    if flags.json {
+                        let payload = serde_json::json!({
+                            "api_version": "1",
+                            "status": "ok",
+                            "data": {
+                                "key_mode": config.key_mode.to_string(),
+                                "has_salt": config.salt.is_some(),
+                            }
+                        });
+                        print_json(&payload);
+                    } else {
+                        println!("Key mode: {}", config.key_mode);
+                        if config.key_mode == project::KeyMode::Passphrase {
+                            println!("Salt: configured (team-shareable)");
+                        } else {
+                            println!("Key stored in: System Credential Store");
+                        }
+                    }
+                }
+                KeyAction::Convert { to } => {
+                    require_yes(flags, "key convert")?;
+
+                    match to.to_lowercase().as_str() {
+                        "passphrase" => {
+                            if flags.dry_run {
+                                print_out(flags, "(dry-run) Would convert to passphrase mode");
+                                return Ok(());
+                            }
+
+                            // Prompt for passphrase
+                            let passphrase = if flags.non_interactive {
+                                std::env::var("CRED_PASSPHRASE").map_err(|_| {
+                                    AppError::user(anyhow::anyhow!(
+                                        "Non-interactive mode requires CRED_PASSPHRASE env var"
+                                    ))
+                                })?
+                            } else {
+                                let pp1 =
+                                    rpassword::prompt_password("Enter new vault passphrase: ")
+                                        .map_err(|e| {
+                                            AppError::user(anyhow::anyhow!(
+                                                "Failed to read passphrase: {}",
+                                                e
+                                            ))
+                                        })?;
+                                let pp2 = rpassword::prompt_password("Confirm passphrase: ")
+                                    .map_err(|e| {
+                                        AppError::user(anyhow::anyhow!(
+                                            "Failed to read passphrase: {}",
+                                            e
+                                        ))
+                                    })?;
+
+                                if pp1 != pp2 {
+                                    return Err(AppError::user(anyhow::anyhow!(
+                                        "Passphrases do not match"
+                                    )));
+                                }
+
+                                if pp1.len() < 8 {
+                                    return Err(AppError::user(anyhow::anyhow!(
+                                        "Passphrase must be at least 8 characters"
+                                    )));
+                                }
+
+                                pp1
+                            };
+
+                            project::convert_to_passphrase(&proj, &passphrase)?;
+                            print_out(flags, "✓ Converted to passphrase mode");
+                            print_out(flags, "  Share the passphrase out-of-band with your team.");
+                        }
+                        "keyring" => {
+                            if flags.dry_run {
+                                print_out(flags, "(dry-run) Would convert to keyring mode");
+                                return Ok(());
+                            }
+
+                            project::convert_to_keyring(&proj)?;
+                            print_out(flags, "✓ Converted to keyring mode");
+                            print_out(flags, "  Key is now stored in the System Credential Store.");
+                        }
+                        other => {
+                            return Err(AppError::user(anyhow::anyhow!(
+                                "Unknown key mode '{}'. Use 'keyring' or 'passphrase'.",
+                                other
+                            )));
+                        }
+                    }
+                }
+            }
+        }
 
         Commands::Doctor => {
             let version = env!("CARGO_PKG_VERSION").to_string();
@@ -809,6 +1208,7 @@ async fn handle_status(flags: &CliFlags) -> Result<(), AppError> {
     let mut targets_configured: Vec<String> = Vec::new();
     let mut secrets_info: Vec<serde_json::Value> = Vec::new();
     let mut vault_count: usize = 0;
+    let mut environments: Vec<String> = Vec::new();
     let mut is_project = false;
 
     // Git info
@@ -828,17 +1228,13 @@ async fn handle_status(flags: &CliFlags) -> Result<(), AppError> {
         if p.vault_path.exists() {
             if let Ok(master_key) = p.get_master_key() {
                 if let Ok(v) = vault::Vault::load(&p.vault_path, master_key) {
-                    let entries = v.list_entries();
-                    vault_count = entries.len();
+                    vault_count = v.total_count();
+                    environments = v.list_environments();
 
-                    let mut keys: Vec<&String> = entries.keys().collect();
-                    keys.sort();
-
-                    for key in keys {
-                        let entry = &entries[key];
+                    for (env, key, entry) in v.list_all_entries() {
                         let source = entry.source.as_deref().unwrap_or("unknown");
-
                         secrets_info.push(serde_json::json!({
+                            "env": env,
                             "key": key,
                             "source": source,
                         }));
@@ -860,6 +1256,7 @@ async fn handle_status(flags: &CliFlags) -> Result<(), AppError> {
             "data": {
                 "is_project": is_project,
                 "vault_count": vault_count,
+                "environments": environments,
                 "secrets": secrets_info,
                 "sources": sources_configured,
                 "targets": targets_configured,
@@ -873,16 +1270,31 @@ async fn handle_status(flags: &CliFlags) -> Result<(), AppError> {
             return Ok(());
         }
 
-        println!("Vault: {} secrets", vault_count);
+        println!(
+            "Vault: {} secrets ({} environments)",
+            vault_count,
+            environments.len()
+        );
         println!();
 
         if secrets_info.is_empty() {
             println!("  (no secrets)");
         } else {
+            // Group by environment for display
+            let mut current_env = String::new();
             for secret in &secrets_info {
+                let env = secret["env"].as_str().unwrap_or("default");
                 let key = secret["key"].as_str().unwrap_or("");
                 let source = secret["source"].as_str().unwrap_or("unknown");
-                println!("  {:<20} [{}]", key, source);
+
+                if env != current_env {
+                    if !current_env.is_empty() {
+                        println!();
+                    }
+                    println!("  [{}]", env);
+                    current_env = env.to_string();
+                }
+                println!("    {:<20} [{}]", key, source);
             }
         }
 
@@ -1124,11 +1536,16 @@ async fn handle_source_action(action: SourceAction, flags: &CliFlags) -> Result<
 
         SourceAction::Generate(args) => {
             if flags.dry_run {
+                let env_suffix = if args.env == vault::DEFAULT_ENV {
+                    String::new()
+                } else {
+                    format!(" in env '{}'", args.env)
+                };
                 print_out(
                     flags,
                     &format!(
-                        "(dry-run) Would generate '{}' from source '{}'",
-                        args.key_name, args.source
+                        "(dry-run) Would generate '{}' from source '{}'{}",
+                        args.key_name, args.source, env_suffix
                     ),
                 );
                 return Ok(());
@@ -1168,7 +1585,8 @@ async fn handle_source_action(action: SourceAction, flags: &CliFlags) -> Result<
             let master_key = proj.get_master_key()?;
             let mut v = vault::Vault::load(&proj.vault_path, master_key)?;
             let fmt = vault::Vault::detect_format(&credential.value);
-            v.set_with_metadata(
+            v.set_with_metadata_in_env(
+                &args.env,
                 &args.key_name,
                 &credential.value,
                 fmt,
@@ -1184,6 +1602,7 @@ async fn handle_source_action(action: SourceAction, flags: &CliFlags) -> Result<
                     "status": "ok",
                     "data": {
                         "key": args.key_name,
+                        "env": args.env,
                         "source": source_name,
                         "source_id": credential.id,
                         "message": "Credential generated and stored"
@@ -1191,9 +1610,14 @@ async fn handle_source_action(action: SourceAction, flags: &CliFlags) -> Result<
                 });
                 print_json(&payload);
             } else {
+                let env_suffix = if args.env == vault::DEFAULT_ENV {
+                    String::new()
+                } else {
+                    format!(" (env: {})", args.env)
+                };
                 println!(
-                    "✓ Generated '{}' from {} and stored in vault",
-                    args.key_name, source_name
+                    "✓ Generated '{}' from {} and stored in vault{}",
+                    args.key_name, source_name, env_suffix
                 );
                 if let Some(id) = &credential.id {
                     println!("  Remote ID: {} (saved for revocation)", id);
@@ -1257,12 +1681,15 @@ async fn handle_source_action(action: SourceAction, flags: &CliFlags) -> Result<
             let master_key = proj.get_master_key()?;
             let mut v = vault::Vault::load(&proj.vault_path, master_key)?;
 
-            let entry = v.get_entry(&args.key_name).ok_or_else(|| {
-                AppError::user(anyhow::anyhow!(
-                    "Key '{}' not found in vault",
-                    args.key_name
-                ))
-            })?;
+            let entry = v
+                .get_entry_in_env(&args.env, &args.key_name)
+                .ok_or_else(|| {
+                    AppError::user(anyhow::anyhow!(
+                        "Key '{}' not found in env '{}'",
+                        args.key_name,
+                        args.env
+                    ))
+                })?;
 
             // Verify the key came from this source
             if entry.source.as_deref() != Some(&source_name) {
@@ -1283,11 +1710,16 @@ async fn handle_source_action(action: SourceAction, flags: &CliFlags) -> Result<
             })?;
 
             if flags.dry_run {
+                let env_suffix = if args.env == vault::DEFAULT_ENV {
+                    String::new()
+                } else {
+                    format!(" (env: {})", args.env)
+                };
                 print_out(
                     flags,
                     &format!(
-                        "(dry-run) Would delete '{}' (id: {}) from {} and local vault",
-                        args.key_name, source_id, source_name
+                        "(dry-run) Would delete '{}' (id: {}) from {} and local vault{}",
+                        args.key_name, source_id, source_name, env_suffix
                     ),
                 );
                 return Ok(());
@@ -1314,7 +1746,7 @@ async fn handle_source_action(action: SourceAction, flags: &CliFlags) -> Result<
                 .map_err(AppError::user)?;
 
             // Remove from local vault
-            v.remove_entry(&args.key_name);
+            v.remove_entry_in_env(&args.env, &args.key_name);
             v.save()?;
 
             if flags.json {
@@ -1323,6 +1755,7 @@ async fn handle_source_action(action: SourceAction, flags: &CliFlags) -> Result<
                     "status": "ok",
                     "data": {
                         "key": args.key_name,
+                        "env": args.env,
                         "source": source_name,
                         "source_id": source_id,
                         "message": "Credential deleted from source and local vault"
@@ -1330,9 +1763,14 @@ async fn handle_source_action(action: SourceAction, flags: &CliFlags) -> Result<
                 });
                 print_json(&payload);
             } else {
+                let env_suffix = if args.env == vault::DEFAULT_ENV {
+                    String::new()
+                } else {
+                    format!(" (env: {})", args.env)
+                };
                 println!(
-                    "✓ Deleted '{}' from {} and local vault",
-                    args.key_name, source_name
+                    "✓ Deleted '{}' from {} and local vault{}",
+                    args.key_name, source_name, env_suffix
                 );
             }
         }

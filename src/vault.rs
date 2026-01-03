@@ -2,9 +2,10 @@
 //!
 //! # Vault Schema Versions
 //! - **v1**: Legacy format where decrypted payload is `HashMap<String, String>`
-//! - **v2**: Current format with `SecretEntry` containing value, format, hash, timestamps, description
+//! - **v2**: Flat format with `SecretEntry` containing value, format, hash, timestamps, description
+//! - **v3**: Current format with environments: `HashMap<String, HashMap<String, SecretEntry>>`
 //!
-//! Migration from v1 to v2 is automatic on load; v2 is always written on save.
+//! Migration from v1/v2 to v3 is automatic on load; v3 is always written on save.
 
 use anyhow::{Context, Result, bail};
 use base64::{Engine, engine::general_purpose::STANDARD as BASE64};
@@ -21,7 +22,10 @@ use std::path::{Path, PathBuf};
 use zeroize::Zeroize;
 
 /// Current vault schema version.
-const CURRENT_VERSION: u8 = 2;
+const CURRENT_VERSION: u8 = 3;
+
+/// Default environment name for backward compatibility.
+pub const DEFAULT_ENV: &str = "default";
 
 /// On-disk representation of the vault file (envelope).
 #[derive(Serialize, Deserialize)]
@@ -108,27 +112,39 @@ impl Zeroize for SecretEntry {
     }
 }
 
-/// V2 decrypted payload structure.
+/// V2 decrypted payload structure (legacy, for migration).
 #[derive(Serialize, Deserialize, Debug)]
 struct VaultPayloadV2 {
     version: u8,
     secrets: HashMap<String, SecretEntry>,
 }
 
+/// V3 decrypted payload structure with environment support.
+#[derive(Serialize, Deserialize, Debug)]
+struct VaultPayloadV3 {
+    version: u8,
+    environments: HashMap<String, HashMap<String, SecretEntry>>,
+}
+
 /// In-memory vault plus file/key context.
+/// Secrets are organized by environment.
 #[derive(Debug, Default)]
 pub struct Vault {
     path: PathBuf,
     key: [u8; 32],
-    secrets: HashMap<String, SecretEntry>,
+    /// Secrets organized by environment: env_name -> (key -> entry)
+    environments: HashMap<String, HashMap<String, SecretEntry>>,
 }
 
 impl Zeroize for Vault {
     fn zeroize(&mut self) {
-        self.secrets.drain().for_each(|(mut k, mut v)| {
-            k.zeroize();
-            v.zeroize();
-        });
+        for (mut env_name, mut secrets) in self.environments.drain() {
+            env_name.zeroize();
+            for (mut k, mut v) in secrets.drain() {
+                k.zeroize();
+                v.zeroize();
+            }
+        }
         self.key.zeroize();
     }
 }
@@ -141,15 +157,19 @@ impl Drop for Vault {
 
 impl Vault {
     /// Load or initialize a vault from disk, decrypting with the provided 32-byte key.
-    /// Automatically migrates v1 vaults to v2 format in memory.
+    /// Automatically migrates v1/v2 vaults to v3 format in memory.
     pub fn load(vault_path: &Path, key: [u8; 32]) -> Result<Self> {
         let mut vault = Vault {
             path: vault_path.to_path_buf(),
             key,
-            secrets: HashMap::new(),
+            environments: HashMap::new(),
         };
 
         if !vault_path.exists() {
+            // Initialize with default environment
+            vault
+                .environments
+                .insert(DEFAULT_ENV.to_string(), HashMap::new());
             return Ok(vault);
         }
 
@@ -172,23 +192,24 @@ impl Vault {
             .decrypt(nonce, ciphertext.as_ref())
             .map_err(|_| anyhow::anyhow!("Decryption failed. Data corrupted or wrong key."))?;
 
-        let secrets = match file_data.version {
-            1 => Self::migrate_v1_to_v2(&plaintext)?,
-            2 => Self::parse_v2(&plaintext)?,
+        let environments = match file_data.version {
+            1 => Self::migrate_v1_to_v3(&plaintext)?,
+            2 => Self::migrate_v2_to_v3(&plaintext)?,
+            3 => Self::parse_v3(&plaintext)?,
             v => bail!("Unsupported vault version: {}. Please upgrade cred.", v),
         };
 
-        vault.secrets = secrets;
+        vault.environments = environments;
         Ok(vault)
     }
 
-    /// Migrate v1 (bare strings) to v2 (SecretEntry).
-    fn migrate_v1_to_v2(plaintext: &[u8]) -> Result<HashMap<String, SecretEntry>> {
+    /// Migrate v1 (bare strings) to v3 (environments).
+    fn migrate_v1_to_v3(plaintext: &[u8]) -> Result<HashMap<String, HashMap<String, SecretEntry>>> {
         let old_secrets: HashMap<String, String> =
             serde_json::from_slice(plaintext).context("Failed to parse v1 secrets")?;
 
         let now = Utc::now();
-        let migrated = old_secrets
+        let migrated: HashMap<String, SecretEntry> = old_secrets
             .into_iter()
             .map(|(k, v)| {
                 let format = Self::detect_format(&v);
@@ -206,14 +227,26 @@ impl Vault {
             })
             .collect();
 
-        Ok(migrated)
+        let mut environments = HashMap::new();
+        environments.insert(DEFAULT_ENV.to_string(), migrated);
+        Ok(environments)
     }
 
-    /// Parse v2 payload directly.
-    fn parse_v2(plaintext: &[u8]) -> Result<HashMap<String, SecretEntry>> {
+    /// Migrate v2 (flat secrets) to v3 (environments).
+    fn migrate_v2_to_v3(plaintext: &[u8]) -> Result<HashMap<String, HashMap<String, SecretEntry>>> {
         let payload: VaultPayloadV2 =
             serde_json::from_slice(plaintext).context("Failed to parse v2 payload")?;
-        Ok(payload.secrets)
+
+        let mut environments = HashMap::new();
+        environments.insert(DEFAULT_ENV.to_string(), payload.secrets);
+        Ok(environments)
+    }
+
+    /// Parse v3 payload directly.
+    fn parse_v3(plaintext: &[u8]) -> Result<HashMap<String, HashMap<String, SecretEntry>>> {
+        let payload: VaultPayloadV3 =
+            serde_json::from_slice(plaintext).context("Failed to parse v3 payload")?;
+        Ok(payload.environments)
     }
 
     /// Auto-detect format based on value content.
@@ -311,17 +344,19 @@ impl Vault {
         format!("{:x}", hasher.finalize())
     }
 
-    /// Encrypt and persist the current secrets to `vault.enc` (always as v2).
+    /// Encrypt and persist the current secrets to `vault.enc` (always as v3).
     /// Computes and stores value hashes for change detection.
     pub fn save(&self) -> Result<()> {
-        // Clone secrest and compute hashes before persisting
-        let mut secrets = self.secrets.clone();
-        for entry in secrets.values_mut() {
-            entry.hash = Some(Self::compute_hash(&entry.value));
+        // Clone environments and compute hashes before persisting
+        let mut environments = self.environments.clone();
+        for secrets in environments.values_mut() {
+            for entry in secrets.values_mut() {
+                entry.hash = Some(Self::compute_hash(&entry.value));
+            }
         }
-        let payload = VaultPayloadV2 {
+        let payload = VaultPayloadV3 {
             version: CURRENT_VERSION,
-            secrets,
+            environments,
         };
         let plaintext = serde_json::to_vec(&payload)?;
 
@@ -342,23 +377,59 @@ impl Vault {
         Ok(())
     }
 
-    /// Insert or overwrite a secret key/value in memory (not persisted until `save`).
+    // ========== Environment Management ==========
+
+    /// List all environment names in the vault.
+    pub fn list_environments(&self) -> Vec<String> {
+        let mut envs: Vec<_> = self.environments.keys().cloned().collect();
+        envs.sort();
+        envs
+    }
+
+    /// Create a new empty environment. Returns false if it already exists.
+    pub fn create_environment(&mut self, env: &str) -> bool {
+        if self.environments.contains_key(env) {
+            false
+        } else {
+            self.environments.insert(env.to_string(), HashMap::new());
+            true
+        }
+    }
+
+    /// Delete an environment and all its secrets. Returns false if it doesn't exist.
+    pub fn delete_environment(&mut self, env: &str) -> bool {
+        self.environments.remove(env).is_some()
+    }
+
+    /// Check if an environment exists.
+    pub fn has_environment(&self, env: &str) -> bool {
+        self.environments.contains_key(env)
+    }
+
+    /// Get the number of secrets in a specific environment.
+    pub fn count_in_env(&self, env: &str) -> usize {
+        self.environments.get(env).map(|s| s.len()).unwrap_or(0)
+    }
+
+    // ========== Secret Operations (Environment-Aware) ==========
+
+    /// Insert or overwrite a secret in a specific environment.
     /// Automatically detects format and updates timestamps. Source defaults to "manual".
-    pub fn set(&mut self, key: &str, value: &str) {
+    pub fn set_in_env(&mut self, env: &str, key: &str, value: &str) {
         let now = Utc::now();
         let format = Self::detect_format(value);
 
-        match self.secrets.get_mut(key) {
+        let secrets = self.environments.entry(env.to_string()).or_default();
+
+        match secrets.get_mut(key) {
             Some(entry) => {
                 entry.value = value.to_string();
                 entry.format = format;
                 entry.updated_at = now;
-                // Clear hash since value changed; will be recomputed if needed
                 entry.hash = None;
-                // Preserve existing source and source_id on update
             }
             None => {
-                self.secrets.insert(
+                secrets.insert(
                     key.to_string(),
                     SecretEntry {
                         value: value.to_string(),
@@ -375,9 +446,10 @@ impl Vault {
         }
     }
 
-    /// Insert or overwrite a secret with explicit metadata.
-    pub fn set_with_metadata(
+    /// Insert or overwrite a secret with explicit metadata in a specific environment.
+    pub fn set_with_metadata_in_env(
         &mut self,
+        env: &str,
         key: &str,
         value: &str,
         format: SecretFormat,
@@ -386,25 +458,24 @@ impl Vault {
         source_id: Option<String>,
     ) {
         let now = Utc::now();
+        let secrets = self.environments.entry(env.to_string()).or_default();
 
-        match self.secrets.get_mut(key) {
+        match secrets.get_mut(key) {
             Some(entry) => {
                 entry.value = value.to_string();
                 entry.format = format;
                 entry.description = description;
                 entry.updated_at = now;
                 entry.hash = None;
-                // Update source if provided, otherwise preserve existing
                 if source.is_some() {
                     entry.source = source;
                 }
-                // Update source_id if provided
                 if source_id.is_some() {
                     entry.source_id = source_id;
                 }
             }
             None => {
-                self.secrets.insert(
+                secrets.insert(
                     key.to_string(),
                     SecretEntry {
                         value: value.to_string(),
@@ -421,58 +492,174 @@ impl Vault {
         }
     }
 
-    /// Fetch a secret value by key from memory.
-    pub fn get(&self, key: &str) -> Option<&String> {
-        self.secrets.get(key).map(|e| &e.value)
+    /// Fetch a secret value by key from a specific environment.
+    pub fn get_in_env(&self, env: &str, key: &str) -> Option<&String> {
+        self.environments
+            .get(env)
+            .and_then(|secrets| secrets.get(key))
+            .map(|e| &e.value)
     }
 
-    /// Fetch the full secret entry by key from memory.
-    pub fn get_entry(&self, key: &str) -> Option<&SecretEntry> {
-        self.secrets.get(key)
+    /// Fetch the full secret entry by key from a specific environment.
+    pub fn get_entry_in_env(&self, env: &str, key: &str) -> Option<&SecretEntry> {
+        self.environments
+            .get(env)
+            .and_then(|secrets| secrets.get(key))
     }
 
-    /// Remove a secret, returning the prior value if present (not persisted until `save`).
-    pub fn remove(&mut self, key: &str) -> Option<String> {
-        self.secrets.remove(key).map(|e| e.value)
+    /// Remove a secret from a specific environment, returning the prior value if present.
+    pub fn remove_in_env(&mut self, env: &str, key: &str) -> Option<String> {
+        self.environments
+            .get_mut(env)
+            .and_then(|secrets| secrets.remove(key))
+            .map(|e| e.value)
     }
 
-    /// Remove a secret, returning the full entry if present.
-    pub fn remove_entry(&mut self, key: &str) -> Option<SecretEntry> {
-        self.secrets.remove(key)
+    /// Remove a secret from a specific environment, returning the full entry if present.
+    pub fn remove_entry_in_env(&mut self, env: &str, key: &str) -> Option<SecretEntry> {
+        self.environments
+            .get_mut(env)
+            .and_then(|secrets| secrets.remove(key))
     }
 
-    /// Borrow the in-memory secrets map (key → value only, for backward compatibility).
-    pub fn list(&self) -> HashMap<String, String> {
-        self.secrets
-            .iter()
-            .map(|(k, e)| (k.clone(), e.value.clone()))
-            .collect()
+    /// List secrets in a specific environment (key → value only).
+    pub fn list_in_env(&self, env: &str) -> HashMap<String, String> {
+        self.environments
+            .get(env)
+            .map(|secrets| {
+                secrets
+                    .iter()
+                    .map(|(k, e)| (k.clone(), e.value.clone()))
+                    .collect()
+            })
+            .unwrap_or_default()
     }
 
-    /// Borrow the full in-memory secrets map with all metadata.
-    pub fn list_entries(&self) -> &HashMap<String, SecretEntry> {
-        &self.secrets
+    /// List full secret entries in a specific environment.
+    pub fn list_entries_in_env(&self, env: &str) -> Option<&HashMap<String, SecretEntry>> {
+        self.environments.get(env)
     }
 
-    /// Update the description for an existing secret.
-    pub fn set_description(&mut self, key: &str, description: Option<String>) -> bool {
-        if let Some(entry) = self.secrets.get_mut(key) {
-            entry.description = description;
-            entry.updated_at = Utc::now();
-            true
-        } else {
-            false
+    /// Update the description for an existing secret in a specific environment.
+    pub fn set_description_in_env(
+        &mut self,
+        env: &str,
+        key: &str,
+        description: Option<String>,
+    ) -> bool {
+        if let Some(secrets) = self.environments.get_mut(env) {
+            if let Some(entry) = secrets.get_mut(key) {
+                entry.description = description;
+                entry.updated_at = Utc::now();
+                return true;
+            }
         }
+        false
     }
 
-    /// Update the hash for an existing secret.
+    // ========== Backward-Compatible Methods (Default Environment) ==========
+
+    /// Insert or overwrite a secret in the default environment.
+    /// Automatically detects format and updates timestamps. Source defaults to "manual".
+    pub fn set(&mut self, key: &str, value: &str) {
+        self.set_in_env(DEFAULT_ENV, key, value)
+    }
+
+    /// Insert or overwrite a secret with explicit metadata in the default environment.
+    pub fn set_with_metadata(
+        &mut self,
+        key: &str,
+        value: &str,
+        format: SecretFormat,
+        description: Option<String>,
+        source: Option<String>,
+        source_id: Option<String>,
+    ) {
+        self.set_with_metadata_in_env(
+            DEFAULT_ENV,
+            key,
+            value,
+            format,
+            description,
+            source,
+            source_id,
+        )
+    }
+
+    /// Fetch a secret value by key from the default environment.
+    pub fn get(&self, key: &str) -> Option<&String> {
+        self.get_in_env(DEFAULT_ENV, key)
+    }
+
+    /// Fetch the full secret entry by key from the default environment.
+    pub fn get_entry(&self, key: &str) -> Option<&SecretEntry> {
+        self.get_entry_in_env(DEFAULT_ENV, key)
+    }
+
+    /// Remove a secret from the default environment, returning the prior value if present.
+    pub fn remove(&mut self, key: &str) -> Option<String> {
+        self.remove_in_env(DEFAULT_ENV, key)
+    }
+
+    /// Remove a secret from the default environment, returning the full entry if present.
+    pub fn remove_entry(&mut self, key: &str) -> Option<SecretEntry> {
+        self.remove_entry_in_env(DEFAULT_ENV, key)
+    }
+
+    /// List secrets in the default environment (key → value only, for backward compatibility).
+    pub fn list(&self) -> HashMap<String, String> {
+        self.list_in_env(DEFAULT_ENV)
+    }
+
+    /// List full secret entries in the default environment.
+    pub fn list_entries(&self) -> &HashMap<String, SecretEntry> {
+        self.environments.get(DEFAULT_ENV).unwrap_or_else(|| {
+            // This should never happen after load(), but provide empty fallback
+            static EMPTY: std::sync::OnceLock<HashMap<String, SecretEntry>> =
+                std::sync::OnceLock::new();
+            EMPTY.get_or_init(HashMap::new)
+        })
+    }
+
+    /// Update the description for an existing secret in the default environment.
+    pub fn set_description(&mut self, key: &str, description: Option<String>) -> bool {
+        self.set_description_in_env(DEFAULT_ENV, key, description)
+    }
+
+    /// Update the hash for an existing secret in the default environment.
     #[allow(dead_code)]
     pub fn set_hash(&mut self, key: &str, hash: Option<String>) -> bool {
-        if let Some(entry) = self.secrets.get_mut(key) {
-            entry.hash = hash;
-            true
-        } else {
-            false
+        self.set_hash_in_env(DEFAULT_ENV, key, hash)
+    }
+
+    /// Update the hash for an existing secret in a specific environment.
+    #[allow(dead_code)]
+    pub fn set_hash_in_env(&mut self, env: &str, key: &str, hash: Option<String>) -> bool {
+        if let Some(secrets) = self.environments.get_mut(env) {
+            if let Some(entry) = secrets.get_mut(key) {
+                entry.hash = hash;
+                return true;
+            }
         }
+        false
+    }
+
+    // ========== Cross-Environment Helpers ==========
+
+    /// List all secrets across all environments with their environment names.
+    pub fn list_all_entries(&self) -> Vec<(&str, &str, &SecretEntry)> {
+        let mut result = Vec::new();
+        for (env, secrets) in &self.environments {
+            for (key, entry) in secrets {
+                result.push((env.as_str(), key.as_str(), entry));
+            }
+        }
+        result.sort_by(|a, b| a.0.cmp(b.0).then(a.1.cmp(b.1)));
+        result
+    }
+
+    /// Get the total number of secrets across all environments.
+    pub fn total_count(&self) -> usize {
+        self.environments.values().map(|s| s.len()).sum()
     }
 }

@@ -4,7 +4,7 @@
 
 **`cred`** is a command-line tool that stores encrypted secrets locally and safely pushes them to target platforms on demand. 
 
-⚠️ **Status: Early Preview (v0.5.0)**
+⚠️ **Status: Early Preview (v0.7.0)**
 
 `cred` is currently in active development. The on-disk format, CLI surface, and security model may change between minor versions. Do not rely on it as your sole secrets backup yet.
 

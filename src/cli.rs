@@ -3,7 +3,7 @@
 
 use crate::sources::Source;
 use crate::targets::Target;
-use crate::vault::SecretFormat;
+use crate::vault::{DEFAULT_ENV, SecretFormat};
 use clap::{Args, Parser, Subcommand};
 
 #[derive(Debug, Clone, Copy)]
@@ -40,7 +40,7 @@ pub struct Cli {
 #[derive(Subcommand)]
 pub enum Commands {
     /// Initialize a new cred project in the current directory
-    Init,
+    Init(InitArgs),
 
     /// Run health checks (use --json for machine output)
     Doctor,
@@ -83,6 +83,53 @@ pub enum Commands {
         #[command(subcommand)]
         action: ConfigAction,
     },
+
+    /// Manage vault environments
+    Env {
+        #[command(subcommand)]
+        action: EnvAction,
+    },
+
+    /// Manage encryption key and key mode
+    Key {
+        #[command(subcommand)]
+        action: KeyAction,
+    },
+}
+
+#[derive(Args, Debug)]
+pub struct InitArgs {
+    /// Initialize with passphrase-based key derivation (for team sharing)
+    #[arg(long)]
+    pub passphrase: bool,
+}
+
+#[derive(Subcommand, Debug)]
+pub enum KeyAction {
+    /// Show current key mode
+    Status,
+    /// Convert key mode (keyring <-> passphrase)
+    Convert {
+        /// Target key mode: "keyring" or "passphrase"
+        #[arg(long)]
+        to: String,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+pub enum EnvAction {
+    /// List all environments in the vault
+    List,
+    /// Create a new empty environment
+    Create {
+        /// Name of the environment to create
+        name: String,
+    },
+    /// Delete an environment and all its secrets
+    Delete {
+        /// Name of the environment to delete
+        name: String,
+    },
 }
 
 #[derive(Args, Debug)]
@@ -97,6 +144,10 @@ pub struct PushArgs {
     /// Explicit repository (required if not in git for GitHub)
     #[arg(long)]
     pub repo: Option<String>,
+
+    /// Environment to push secrets from (defaults to "default")
+    #[arg(long, short = 'e', default_value = DEFAULT_ENV)]
+    pub env: String,
 }
 
 #[derive(Args, Debug)]
@@ -115,6 +166,10 @@ pub struct PruneArgs {
     /// Prune all known keys (requires --yes unless dry-run)
     #[arg(long)]
     pub all: bool,
+
+    /// Environment to prune secrets from (defaults to "default")
+    #[arg(long, short = 'e', default_value = DEFAULT_ENV)]
+    pub env: String,
 }
 
 #[derive(Subcommand, Debug)]
@@ -172,6 +227,10 @@ pub struct DeleteSourceKeyArgs {
 
     /// The vault key name of the credential to delete
     pub key_name: String,
+
+    /// Environment containing the secret (defaults to "default")
+    #[arg(long, short = 'e', default_value = DEFAULT_ENV)]
+    pub env: String,
 }
 
 #[derive(Args, Debug)]
@@ -199,6 +258,10 @@ pub struct GenerateSourceArgs {
     /// Description for the secret
     #[arg(long, short = 'd')]
     pub description: Option<String>,
+
+    /// Environment to store the generated secret in (defaults to "default")
+    #[arg(long, short = 'e', default_value = DEFAULT_ENV)]
+    pub env: String,
 }
 
 #[derive(Subcommand, Debug)]
@@ -213,24 +276,47 @@ pub enum SecretAction {
         /// Format hint: raw, multiline, base64, json (auto-detected if omitted)
         #[arg(long, short = 'f')]
         format: Option<SecretFormat>,
+        /// Environment to set the secret in (defaults to "default")
+        #[arg(long, short = 'e', default_value = DEFAULT_ENV)]
+        env: String,
     },
     /// Get a secret value
-    Get { key: String },
+    Get {
+        key: String,
+        /// Environment to get the secret from (defaults to "default")
+        #[arg(long, short = 'e', default_value = DEFAULT_ENV)]
+        env: String,
+    },
     /// List all secrets
-    List {},
+    List {
+        /// Environment to list secrets from (defaults to "default", use "*" for all)
+        #[arg(long, short = 'e', default_value = DEFAULT_ENV)]
+        env: String,
+    },
     /// Set or update a secret's description
     Describe {
         key: String,
         /// The description text (omit to clear)
         description: Option<String>,
+        /// Environment containing the secret (defaults to "default")
+        #[arg(long, short = 'e', default_value = DEFAULT_ENV)]
+        env: String,
     },
     /// Remove from Local Vault ONLY (Use 'prune' for remote removal)
-    Remove { key: String },
+    Remove {
+        key: String,
+        /// Environment to remove the secret from (defaults to "default")
+        #[arg(long, short = 'e', default_value = DEFAULT_ENV)]
+        env: String,
+    },
     /// Revoke a generated secret at the source AND locally
     Revoke {
         key: String,
         #[arg(long)]
         target: Target,
+        /// Environment containing the secret (defaults to "default")
+        #[arg(long, short = 'e', default_value = DEFAULT_ENV)]
+        env: String,
     },
 }
 
@@ -241,6 +327,9 @@ pub struct ImportArgs {
     /// Overwrite existing keys instead of skipping
     #[arg(long)]
     pub overwrite: bool,
+    /// Environment to import secrets into (defaults to "default")
+    #[arg(long, short = 'e', default_value = DEFAULT_ENV)]
+    pub env: String,
 }
 
 #[derive(Args, Debug)]
@@ -250,4 +339,7 @@ pub struct ExportArgs {
     /// Overwrite the output file if it exists
     #[arg(long)]
     pub force: bool,
+    /// Environment to export secrets from (defaults to "default")
+    #[arg(long, short = 'e', default_value = DEFAULT_ENV)]
+    pub env: String,
 }
