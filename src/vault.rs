@@ -82,6 +82,26 @@ impl std::str::FromStr for SecretFormat {
     }
 }
 
+/// A historical version of a secret value.
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct HistoricalValue {
+    pub value: String,
+    pub format: SecretFormat,
+    pub updated_at: DateTime<Utc>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source: Option<String>,
+}
+
+impl Zeroize for HistoricalValue {
+    fn zeroize(&mut self) {
+        self.value.zeroize();
+        self.source.zeroize();
+    }
+}
+
+/// Maximum number of historical versions to keep per secret.
+const MAX_HISTORY_SIZE: usize = 10;
+
 /// A single secret with metadata (v2+).
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct SecretEntry {
@@ -100,6 +120,9 @@ pub struct SecretEntry {
     /// Remote ID at the source (for revocation)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub source_id: Option<String>,
+    /// Previous versions of this secret (newest first, max 10)
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub history: Vec<HistoricalValue>,
 }
 
 impl Zeroize for SecretEntry {
@@ -109,6 +132,9 @@ impl Zeroize for SecretEntry {
         self.description.zeroize();
         self.source.zeroize();
         self.source_id.zeroize();
+        for h in &mut self.history {
+            h.zeroize();
+        }
     }
 }
 
@@ -222,6 +248,7 @@ impl Vault {
                     description: None,
                     source: None, // Unknown origin for migrated secrets
                     source_id: None,
+                    history: Vec::new(),
                 };
                 (k, entry)
             })
@@ -440,6 +467,7 @@ impl Vault {
                         description: None,
                         source: Some("manual".to_string()),
                         source_id: None,
+                        history: Vec::new(),
                     },
                 );
             }
@@ -462,6 +490,19 @@ impl Vault {
 
         match secrets.get_mut(key) {
             Some(entry) => {
+                // Save current value to history before updating (only if value changed)
+                if entry.value != value {
+                    let historical = HistoricalValue {
+                        value: entry.value.clone(),
+                        format: entry.format.clone(),
+                        updated_at: entry.updated_at,
+                        source: entry.source.clone(),
+                    };
+                    entry.history.insert(0, historical);
+                    // Keep only the last MAX_HISTORY_SIZE entries
+                    entry.history.truncate(MAX_HISTORY_SIZE);
+                }
+
                 entry.value = value.to_string();
                 entry.format = format;
                 entry.description = description;
@@ -486,6 +527,7 @@ impl Vault {
                         description,
                         source: source.or_else(|| Some("manual".to_string())),
                         source_id,
+                        history: Vec::new(),
                     },
                 );
             }
@@ -555,6 +597,53 @@ impl Vault {
             }
         }
         false
+    }
+
+    /// Get the history of a secret in a specific environment.
+    pub fn get_history_in_env(&self, env: &str, key: &str) -> Option<&Vec<HistoricalValue>> {
+        self.environments
+            .get(env)
+            .and_then(|secrets| secrets.get(key))
+            .map(|e| &e.history)
+    }
+
+    /// Rollback a secret to a previous version by index (0 = most recent previous value).
+    /// Returns the value that was rolled back to, or None if the key or version doesn't exist.
+    pub fn rollback_in_env(
+        &mut self,
+        env: &str,
+        key: &str,
+        version_index: usize,
+    ) -> Option<String> {
+        let secrets = self.environments.get_mut(env)?;
+        let entry = secrets.get_mut(key)?;
+
+        if version_index >= entry.history.len() {
+            return None;
+        }
+
+        // Get the historical value to restore
+        let historical = entry.history.remove(version_index);
+
+        // Save current value to history first
+        let current_historical = HistoricalValue {
+            value: entry.value.clone(),
+            format: entry.format.clone(),
+            updated_at: entry.updated_at,
+            source: entry.source.clone(),
+        };
+        entry.history.insert(0, current_historical);
+        entry.history.truncate(MAX_HISTORY_SIZE);
+
+        // Restore the historical value
+        let restored_value = historical.value.clone();
+        entry.value = historical.value;
+        entry.format = historical.format;
+        entry.source = historical.source;
+        entry.updated_at = Utc::now();
+        entry.hash = None; // Clear hash since value changed
+
+        Some(restored_value)
     }
 
     // ========== Backward-Compatible Methods (Default Environment) ==========

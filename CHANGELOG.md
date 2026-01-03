@@ -1,5 +1,33 @@
 # Changelog
 
+## v0.8.0
+
+### Secret History & Rollback
+
+-   **Version history**: Secrets now track up to 10 previous versions
+-   History is preserved automatically on every update
+-   Only stores history when the value actually changes
+
+### New Commands
+
+-   `cred secret history <key>` — View version history for a secret
+-   `cred secret rollback <key> --version <N>` — Restore a previous version
+
+### Vault Schema
+
+-   Added `history` field to `SecretEntry` (backward compatible)
+-   Existing vaults work without migration
+
+### Example
+
+```bash
+# View history
+cred secret history DATABASE_URL
+
+# Rollback to previous version
+cred secret rollback DATABASE_URL --version 0 --yes
+```
+
 ## v0.7.0
 
 ### Team Collaboration

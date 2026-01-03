@@ -519,6 +519,149 @@ async fn run(cli: Cli, flags: &CliFlags) -> Result<(), AppError> {
                         print_out(flags, "✓ Removed from local vault.");
                     }
                 }
+                SecretAction::History { key, env } => {
+                    let entry = vault.get_entry_in_env(&env, &key);
+                    match entry {
+                        Some(e) => {
+                            if flags.json {
+                                let history_data: Vec<_> = e
+                                    .history
+                                    .iter()
+                                    .enumerate()
+                                    .map(|(i, h)| {
+                                        serde_json::json!({
+                                            "version": i,
+                                            "value": h.value,
+                                            "format": h.format.to_string(),
+                                            "updated_at": h.updated_at.to_rfc3339(),
+                                            "source": h.source,
+                                        })
+                                    })
+                                    .collect();
+
+                                let payload = serde_json::json!({
+                                    "api_version": "1",
+                                    "status": "ok",
+                                    "data": {
+                                        "key": key,
+                                        "env": env,
+                                        "current": {
+                                            "value": e.value,
+                                            "format": e.format.to_string(),
+                                            "updated_at": e.updated_at.to_rfc3339(),
+                                            "source": e.source,
+                                        },
+                                        "history": history_data,
+                                    }
+                                });
+                                print_json(&payload);
+                            } else if e.history.is_empty() {
+                                print_out(
+                                    flags,
+                                    &format!("No history for '{}' in env '{}'", key, env),
+                                );
+                            } else {
+                                println!("History for '{}' in env '{}':", key, env);
+                                println!();
+                                println!(
+                                    "  [current] {} ({})",
+                                    e.updated_at.format("%Y-%m-%d %H:%M:%S"),
+                                    e.source.as_deref().unwrap_or("unknown")
+                                );
+                                for (i, h) in e.history.iter().enumerate() {
+                                    println!(
+                                        "  [{}] {} ({})",
+                                        i,
+                                        h.updated_at.format("%Y-%m-%d %H:%M:%S"),
+                                        h.source.as_deref().unwrap_or("unknown")
+                                    );
+                                }
+                                println!();
+                                println!(
+                                    "Use 'cred secret rollback {} --version <N>' to restore",
+                                    key
+                                );
+                            }
+                        }
+                        None => {
+                            print_err(
+                                flags,
+                                &format!("Secret '{}' not found in env '{}'", key, env),
+                            );
+                        }
+                    }
+                }
+                SecretAction::Rollback { key, version, env } => {
+                    require_yes(&flags, "secret rollback")?;
+
+                    // Check if secret exists
+                    let entry = vault.get_entry_in_env(&env, &key);
+                    if entry.is_none() {
+                        print_err(
+                            flags,
+                            &format!("Secret '{}' not found in env '{}'", key, env),
+                        );
+                        return Ok(());
+                    }
+
+                    let history_len = entry.unwrap().history.len();
+                    if history_len == 0 {
+                        print_err(flags, &format!("No history for '{}' in env '{}'", key, env));
+                        return Ok(());
+                    }
+
+                    if version >= history_len {
+                        print_err(
+                            flags,
+                            &format!(
+                                "Version {} not found. Available versions: 0-{}",
+                                version,
+                                history_len - 1
+                            ),
+                        );
+                        return Ok(());
+                    }
+
+                    if flags.dry_run {
+                        print_out(
+                            flags,
+                            &format!(
+                                "(dry-run) Would rollback '{}' to version {} in env '{}'",
+                                key, version, env
+                            ),
+                        );
+                        return Ok(());
+                    }
+
+                    match vault.rollback_in_env(&env, &key, version) {
+                        Some(_) => {
+                            vault.save()?;
+                            if flags.json {
+                                let payload = serde_json::json!({
+                                    "api_version": "1",
+                                    "status": "ok",
+                                    "data": {
+                                        "key": key,
+                                        "env": env,
+                                        "rolled_back_to": version,
+                                    }
+                                });
+                                print_json(&payload);
+                            } else {
+                                print_out(
+                                    flags,
+                                    &format!(
+                                        "✓ Rolled back '{}' to version {} in env '{}'",
+                                        key, version, env
+                                    ),
+                                );
+                            }
+                        }
+                        None => {
+                            print_err(flags, &format!("Failed to rollback '{}'", key));
+                        }
+                    }
+                }
             }
         }
 

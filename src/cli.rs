@@ -318,6 +318,23 @@ pub enum SecretAction {
         #[arg(long, short = 'e', default_value = DEFAULT_ENV)]
         env: String,
     },
+    /// Show version history for a secret
+    History {
+        key: String,
+        /// Environment containing the secret (defaults to "default")
+        #[arg(long, short = 'e', default_value = DEFAULT_ENV)]
+        env: String,
+    },
+    /// Rollback a secret to a previous version
+    Rollback {
+        key: String,
+        /// Version index to rollback to (0 = most recent previous version)
+        #[arg(long, short = 'v', default_value = "0")]
+        version: usize,
+        /// Environment containing the secret (defaults to "default")
+        #[arg(long, short = 'e', default_value = DEFAULT_ENV)]
+        env: String,
+    },
 }
 
 #[derive(Args, Debug)]

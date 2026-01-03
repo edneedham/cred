@@ -144,6 +144,62 @@ cred secret describe API_KEY
 
 ---
 
+## history
+
+View the version history of a secret:
+
+```bash
+cred secret history DATABASE_URL
+```
+
+Output:
+
+```
+History for 'DATABASE_URL' in env 'default':
+
+  [current] 2025-01-03 14:30:00 (manual)
+  [0] 2025-01-02 10:15:00 (manual)
+  [1] 2025-01-01 09:00:00 (manual)
+
+Use 'cred secret rollback DATABASE_URL --version <N>' to restore
+```
+
+From a specific environment:
+
+```bash
+cred secret history DATABASE_URL --env prod
+```
+
+cred keeps up to 10 previous versions of each secret.
+
+---
+
+## rollback
+
+Restore a secret to a previous version:
+
+```bash
+cred secret rollback DATABASE_URL --version 0 --yes
+```
+
+The `--version` flag specifies which historical version to restore (0 = most recent previous value).
+
+From a specific environment:
+
+```bash
+cred secret rollback DATABASE_URL --version 0 --env prod --yes
+```
+
+Preview before rolling back:
+
+```bash
+cred secret rollback DATABASE_URL --version 0 --dry-run
+```
+
+> **Note:** Rollback is a destructive operation and requires `--yes` to confirm.
+
+---
+
 ## import
 
 Import `KEY=VALUE` pairs from a .env file:
