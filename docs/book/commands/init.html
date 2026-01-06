@@ -35,10 +35,10 @@
             const path_to_root = "../";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "../searchindex-436e54db.js";
+            window.path_to_searchindex_js = "../searchindex-1d16cc28.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="../toc-535255e4.js"></script>
+        <script src="../toc-e58f5c98.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -176,7 +176,7 @@
                     <main>
                         <h1 id="init"><a class="header" href="#init">init</a></h1>
 <p>Initialize a cred project.</p>
-<h2 id="cred-init"><a class="header" href="#cred-init">cred init</a></h2>
+<h2 id="usage"><a class="header" href="#usage">Usage</a></h2>
 <p>Initialize a new cred project in the current directory:</p>
 <pre><code class="language-bash">cred init
 </code></pre>
@@ -186,6 +186,25 @@
 └── vault.enc       # Encrypted secrets vault
 </code></pre>
 <p>Run this once per project, typically at the repository root.</p>
+<h2 id="what-happens"><a class="header" href="#what-happens">What Happens</a></h2>
+<ol>
+<li>Creates the <code>.cred/</code> directory</li>
+<li>Generates a random 32-byte encryption key</li>
+<li>Stores the key in your OS credential store (Keychain, GNOME Keyring, etc.)</li>
+<li>Creates an empty encrypted vault</li>
+<li>Adds <code>.cred/</code> to <code>.gitignore</code></li>
+</ol>
+<h2 id="cicd-usage"><a class="header" href="#cicd-usage">CI/CD Usage</a></h2>
+<p>For CI environments, export your encryption key as base64:</p>
+<pre><code class="language-bash"># On your machine, get the key
+cred doctor --json | jq -r '.data.key_b64'
+</code></pre>
+<p>Then set it as a CI secret:</p>
+<pre><code class="language-yaml"># GitHub Actions example
+env:
+  CRED_MASTER_KEY_B64: ${{ secrets.CRED_MASTER_KEY }}
+</code></pre>
+<p>See <a href="../security.html">Security Model</a> for more details.</p>
 
                     </main>
 

@@ -35,10 +35,10 @@
             const path_to_root = "../";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "../searchindex-436e54db.js";
+            window.path_to_searchindex_js = "../searchindex-1d16cc28.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="../toc-535255e4.js"></script>
+        <script src="../toc-e58f5c98.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -179,11 +179,16 @@
 <pre><code class="language-bash">cred status
 </code></pre>
 <p>Output:</p>
-<pre><code>Vault: 3 secrets
+<pre><code>Vault: 5 secrets (2 environments)
 
+Environment: default
   RESEND_API_KEY       [resend]
   DATABASE_URL         [manual]
+
+Environment: prod
+  DATABASE_URL         [manual]
   JWT_SECRET           [manual]
+  API_KEY              [manual]
 
 Sources: resend ✓
 Targets: github ✓
@@ -191,7 +196,8 @@ Git: edneedham/cred
 </code></pre>
 <p>This shows:</p>
 <ul>
-<li>Number of secrets in vault</li>
+<li>Total secrets and environment count</li>
+<li>Secrets grouped by environment</li>
 <li>Each secret’s source (manual or generated)</li>
 <li>Configured sources and targets</li>
 <li>Git repository (if detected)</li>

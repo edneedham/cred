@@ -1,5 +1,32 @@
 # Changelog
 
+## v0.9.0
+
+### Breaking Changes
+
+-   **Removed passphrase mode** — cred is now single-machine only
+    -   Removed `cred init --passphrase`
+    -   Removed `cred key status` and `cred key convert` commands
+    -   Removed `CRED_PASSPHRASE` environment variable support
+    -   Removed `key_mode` and `salt` fields from project.toml
+
+### Simplified Model
+
+cred is now explicitly for **solo developers**:
+
+-   Encryption key stored in OS keyring (single machine)
+-   Push secrets to targets (GitHub Actions, etc.)
+-   CI uses `CRED_MASTER_KEY_B64` env var when keyring unavailable
+
+### Why This Change
+
+The passphrase mode implied multi-machine/team access but didn't actually work:
+-   vault.enc was gitignored, so it couldn't be shared
+-   Committing encrypted vaults has security implications
+-   The model was confusing and incomplete
+
+The new model is honest: cred stores secrets locally and pushes to targets. CI reads from targets, not from cred directly.
+
 ## v0.8.0
 
 ### Secret History & Rollback
@@ -30,29 +57,13 @@ cred secret rollback DATABASE_URL --version 0 --yes
 
 ## v0.7.0
 
-### Team Collaboration
+> ⚠️ **Note**: Passphrase mode was removed in v0.9.0. The features below are no longer available.
 
--   **Passphrase mode**: Derive encryption key from a shared passphrase using Argon2id
--   Teams share passphrase out-of-band; each member derives the same key locally
--   Salt stored in `project.toml` (not secret, safe to commit)
--   Uses OWASP-recommended Argon2id parameters (m=19456 KiB, t=2, p=1)
+### Multi-Machine Access (Removed in v0.9.0)
 
-### New Commands
-
--   `cred init --passphrase` — Initialize project in passphrase mode (prompts for passphrase)
--   `cred key status` — Show current key mode (keyring or passphrase)
--   `cred key convert --to passphrase` — Convert existing keyring project to passphrase mode
--   `cred key convert --to keyring` — Convert passphrase project back to keyring mode
-
-### CI Support
-
--   `CRED_PASSPHRASE` env var for automation (no interactive prompt)
--   Passphrase mode works seamlessly in CI environments
-
-### Project Config
-
--   New `key_mode` field: "keyring" (default) or "passphrase"
--   New `salt` field: Base64-encoded Argon2 salt (only for passphrase mode)
+-   ~~Passphrase mode: Derive encryption key from passphrase using Argon2id~~
+-   ~~`cred init --passphrase`, `cred key status`, `cred key convert`~~
+-   ~~`CRED_PASSPHRASE` env var~~
 
 ## v0.6.0
 

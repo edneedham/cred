@@ -8,7 +8,7 @@ Get from zero to your first secret push in under 5 minutes.
 cred init
 ```
 
-This creates `.cred/vault.enc` in your project.
+This creates `.cred/vault.enc` in your project and stores the encryption key in your OS credential store.
 
 ## 2. Add a target
 
@@ -41,7 +41,28 @@ Done! Your secret is now in GitHub Actions.
 
 ---
 
+## Working with Environments
+
+Organize secrets by environment (dev, staging, prod):
+
+```bash
+# Create environments
+cred env create staging
+cred env create prod
+
+# Set secrets in specific environments
+cred secret set DATABASE_URL "postgres://prod..." --env prod
+
+# Push prod secrets to GitHub
+cred push github --env prod
+```
+
+See [env command](./commands/env.md) for more details.
+
+---
+
 **Next steps:**
-- [Commands Reference](./commands/README.md) — all available commands
-- [Sources](./concepts/sources.md) — generate credentials from APIs like Resend
-- [CI/CD Integration](./ci-cd.md) — automation patterns
+-   [Commands Reference](./commands/README.md) — all available commands
+-   [Environments](./commands/env.md) — organize secrets by environment
+-   [Sources](./concepts/sources.md) — generate credentials from APIs like Resend
+-   [Security Model](./security.md) — how your secrets are protected

@@ -1,6 +1,6 @@
 [package]
 name = "cred"
-version = "0.8.0"
+version = "0.9.0"
 edition = "2024"
 description = "A command-line tool to manage secrets and environment variables locally and remotely."
 readme = "README.md"
@@ -14,7 +14,6 @@ github = []
 
 [dependencies]
 anyhow = "1.0.100"
-argon2 = "0.5"
 base64 = "0.22.1"
 chacha20poly1305 = "0.10.1"
 clap = { version = "4.5.53", features = ["derive"] }

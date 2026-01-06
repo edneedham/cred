@@ -35,10 +35,10 @@
             const path_to_root = "../";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "../searchindex-436e54db.js";
+            window.path_to_searchindex_js = "../searchindex-1d16cc28.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="../toc-535255e4.js"></script>
+        <script src="../toc-e58f5c98.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -191,6 +191,12 @@
 <pre><code class="language-bash">cred push github DATABASE_URL JWT_SECRET --dry-run
 </code></pre>
 <p>Nothing is uploaded when <code>--dry-run</code> is used.</p>
+<h2 id="environment-specific-push"><a class="header" href="#environment-specific-push">Environment-Specific Push</a></h2>
+<p>Push secrets from a specific environment:</p>
+<pre><code class="language-bash">cred push github --env prod
+</code></pre>
+<p>This pushes only secrets from the <code>prod</code> environment.</p>
+<hr>
 <h2 id="options"><a class="header" href="#options">Options</a></h2>
 <div class="table-wrapper">
 <table>
@@ -198,6 +204,7 @@
 <tr><th>Flag</th><th>Description</th></tr>
 </thead>
 <tbody>
+<tr><td><code>--env &lt;name&gt;</code></td><td>Push from specific environment</td></tr>
 <tr><td><code>--dry-run</code></td><td>Preview changes without pushing</td></tr>
 <tr><td><code>--json</code></td><td>Machine-readable output</td></tr>
 <tr><td><code>--non-interactive</code></td><td>Fail instead of prompting</td></tr>
@@ -238,7 +245,7 @@ cred push github
 
                     <nav class="nav-wrapper" aria-label="Page navigation">
                         <!-- Mobile navigation buttons -->
-                            <a rel="prev" href="../commands/secret.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                            <a rel="prev" href="../commands/env.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                                 <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg></span>
                             </a>
 
@@ -252,7 +259,7 @@ cred push github
             </div>
 
             <nav class="nav-wide-wrapper" aria-label="Page navigation">
-                    <a rel="prev" href="../commands/secret.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                    <a rel="prev" href="../commands/env.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                         <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg></span>
                     </a>
 

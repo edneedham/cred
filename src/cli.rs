@@ -40,7 +40,7 @@ pub struct Cli {
 #[derive(Subcommand)]
 pub enum Commands {
     /// Initialize a new cred project in the current directory
-    Init(InitArgs),
+    Init,
 
     /// Run health checks (use --json for machine output)
     Doctor,
@@ -88,31 +88,6 @@ pub enum Commands {
     Env {
         #[command(subcommand)]
         action: EnvAction,
-    },
-
-    /// Manage encryption key and key mode
-    Key {
-        #[command(subcommand)]
-        action: KeyAction,
-    },
-}
-
-#[derive(Args, Debug)]
-pub struct InitArgs {
-    /// Initialize with passphrase-based key derivation (for team sharing)
-    #[arg(long)]
-    pub passphrase: bool,
-}
-
-#[derive(Subcommand, Debug)]
-pub enum KeyAction {
-    /// Show current key mode
-    Status,
-    /// Convert key mode (keyring <-> passphrase)
-    Convert {
-        /// Target key mode: "keyring" or "passphrase"
-        #[arg(long)]
-        to: String,
     },
 }
 

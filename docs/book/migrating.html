@@ -35,10 +35,10 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-436e54db.js";
+            window.path_to_searchindex_js = "searchindex-1d16cc28.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="toc-535255e4.js"></script>
+        <script src="toc-e58f5c98.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -187,6 +187,10 @@
 <p>Or add individually:</p>
 <pre><code class="language-bash">cred secret set DATABASE_URL "postgres://..."
 cred secret set API_KEY "sk-..."
+</code></pre>
+<p><strong>Tip:</strong> Use environments to organize secrets by deployment context:</p>
+<pre><code class="language-bash">cred env create prod
+cred import prod.env --env prod
 </code></pre>
 <p><strong>3. Set up the GitHub target:</strong></p>
 <pre><code class="language-bash">cred target set github

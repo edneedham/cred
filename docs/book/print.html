@@ -36,10 +36,10 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-436e54db.js";
+            window.path_to_searchindex_js = "searchindex-1d16cc28.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="toc-535255e4.js"></script>
+        <script src="toc-e58f5c98.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -178,38 +178,45 @@
                         <h1 id="introduction"><a class="header" href="#introduction">Introduction</a></h1>
 <h2 id="what-it-is"><a class="header" href="#what-it-is">What it is</a></h2>
 <p><strong><code>cred</code></strong> is a command-line tool that stores encrypted secrets locally and safely pushes them to target platforms on demand.</p>
-<p>⚠️ <strong>Status: Early Preview (v0.5.0)</strong></p>
+<p>⚠️ <strong>Status: Early Preview (v0.9.0)</strong></p>
 <p><code>cred</code> is currently in active development. The on-disk format, CLI surface, and security model may change between minor versions. Do not rely on it as your sole secrets backup yet.</p>
 <h2 id="what-it-is-not"><a class="header" href="#what-it-is-not">What it is <strong>not</strong></a></h2>
 <ul>
 <li>A hosted secrets manager</li>
 <li>A multi-user access control system</li>
 <li>A replacement for HashiCorp Vault or AWS Secrets Manager</li>
-<li>A bidirectional secrets sync tool</li>
 <li>A runtime secret injector for applications</li>
 </ul>
 <h2 id="who-is-this-for"><a class="header" href="#who-is-this-for">Who is this for</a></h2>
 <ul>
-<li>Open-source maintainers</li>
-<li>Small teams</li>
-<li>Solo developers</li>
-<li>People who don’t <em>need</em> enterprise infrastructure yet</li>
+<li><strong>Solo developers</strong> managing secrets across projects</li>
+<li>Open-source maintainers who need reproducible CI/CD secrets</li>
+<li>Anyone who wants local-first secrets without running infrastructure</li>
 </ul>
 <h2 id="why-cred-exists"><a class="header" href="#why-cred-exists">Why cred exists</a></h2>
-<p>Managing secrets across projects, targets, and sources is a mess and a chore.</p>
+<p>Managing secrets across projects and CI/CD platforms is a mess and a chore.</p>
 <p><code>cred</code> solves this by giving you:</p>
-<h3 id="1-a-matrix-vault-per-project"><a class="header" href="#1-a-matrix-vault-per-project"><strong>1. A Matrix Vault per Project</strong></a></h3>
-<p>Your secrets live inside <code>.cred/vault.enc</code> as an encrypted store with per-secret metadata (format, timestamps, description, source).</p>
-<h3 id="2-sources-and-targets"><a class="header" href="#2-sources-and-targets"><strong>2. Sources and Targets</strong></a></h3>
+<h3 id="1-an-encrypted-vault-per-project"><a class="header" href="#1-an-encrypted-vault-per-project"><strong>1. An Encrypted Vault per Project</strong></a></h3>
+<p>Your secrets live inside <code>.cred/vault.enc</code> as an encrypted store with per-secret metadata (format, timestamps, description, source, version history).</p>
+<h3 id="2-environment-namespacing"><a class="header" href="#2-environment-namespacing"><strong>2. Environment Namespacing</strong></a></h3>
+<p>Organize secrets by deployment context:</p>
+<pre><code class="language-bash">cred env create prod
+cred secret set DATABASE_URL "postgres://prod..." --env prod
+cred push github --env prod
+</code></pre>
+<h3 id="3-version-history--rollback"><a class="header" href="#3-version-history--rollback"><strong>3. Version History &amp; Rollback</strong></a></h3>
+<p>Every secret update is tracked. Roll back to any of the last 10 versions:</p>
+<pre><code class="language-bash">cred secret history API_KEY
+cred secret rollback API_KEY --version 0 --yes
+</code></pre>
+<h3 id="4-sources-and-targets"><a class="header" href="#4-sources-and-targets"><strong>4. Sources and Targets</strong></a></h3>
 <p><code>cred</code> distinguishes between <strong>sources</strong> (where credentials come from) and <strong>targets</strong> (where secrets are pushed to):</p>
 <ul>
 <li><strong>Sources</strong>: Platforms that can programmatically generate credentials (e.g., Resend API keys)</li>
 <li><strong>Targets</strong>: Platforms where you push secrets for deployment (e.g., GitHub Actions secrets)</li>
 </ul>
-<h3 id="3-a-global-configuration-store"><a class="header" href="#3-a-global-configuration-store"><strong>3. A global configuration store</strong></a></h3>
-<p>Metadata and preferences live in <code>~/.config/cred/global.toml</code>, while source and target tokens are stored securely in the OS credential store (keyring). Nothing sensitive is written to the TOML.</p>
-<h3 id="4-target-specific-secret-pushing"><a class="header" href="#4-target-specific-secret-pushing"><strong>4. Target-specific secret pushing</strong></a></h3>
-<p>You manage secrets locally, but <code>cred</code> can upload them to specified targets.</p>
+<h3 id="5-secure-key-storage"><a class="header" href="#5-secure-key-storage"><strong>5. Secure Key Storage</strong></a></h3>
+<p>Your encryption key is stored in your OS credential store (Keychain, GNOME Keyring, Windows Credential Manager). Nothing sensitive is written to plaintext files.</p>
 <h4 id="supported-sources"><a class="header" href="#supported-sources">Supported sources:</a></h4>
 <ul>
 <li>Resend (API key generation)</li>
@@ -253,7 +260,7 @@ sudo mv cred-* /usr/local/bin/cred
 <h2 id="1-initialize-your-project"><a class="header" href="#1-initialize-your-project">1. Initialize your project</a></h2>
 <pre><code class="language-bash">cred init
 </code></pre>
-<p>This creates <code>.cred/vault.enc</code> in your project.</p>
+<p>This creates <code>.cred/vault.enc</code> in your project and stores the encryption key in your OS credential store.</p>
 <h2 id="2-add-a-target"><a class="header" href="#2-add-a-target">2. Add a target</a></h2>
 <pre><code class="language-bash">cred target set github
 </code></pre>
@@ -270,11 +277,26 @@ sudo mv cred-* /usr/local/bin/cred
 </code></pre>
 <p>Done! Your secret is now in GitHub Actions.</p>
 <hr>
+<h2 id="working-with-environments"><a class="header" href="#working-with-environments">Working with Environments</a></h2>
+<p>Organize secrets by environment (dev, staging, prod):</p>
+<pre><code class="language-bash"># Create environments
+cred env create staging
+cred env create prod
+
+# Set secrets in specific environments
+cred secret set DATABASE_URL "postgres://prod..." --env prod
+
+# Push prod secrets to GitHub
+cred push github --env prod
+</code></pre>
+<p>See <a href="#env">env command</a> for more details.</p>
+<hr>
 <p><strong>Next steps:</strong></p>
 <ul>
 <li><a href="commands/README.html">Commands Reference</a> — all available commands</li>
+<li><a href="#env">Environments</a> — organize secrets by environment</li>
 <li><a href="#sources-1">Sources</a> — generate credentials from APIs like Resend</li>
-<li><a href="ci-cd.html">CI/CD Integration</a> — automation patterns</li>
+<li><a href="#security-model">Security Model</a> — how your secrets are protected</li>
 </ul>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="migrating-existing-secrets"><a class="header" href="#migrating-existing-secrets">Migrating Existing Secrets</a></h1>
@@ -290,6 +312,10 @@ sudo mv cred-* /usr/local/bin/cred
 <p>Or add individually:</p>
 <pre><code class="language-bash">cred secret set DATABASE_URL "postgres://..."
 cred secret set API_KEY "sk-..."
+</code></pre>
+<p><strong>Tip:</strong> Use environments to organize secrets by deployment context:</p>
+<pre><code class="language-bash">cred env create prod
+cred import prod.env --env prod
 </code></pre>
 <p><strong>3. Set up the GitHub target:</strong></p>
 <pre><code class="language-bash">cred target set github
@@ -483,7 +509,7 @@ cred push github DATABASE_URL API_KEY
 <p>Unlike sources (which need elevated permissions to generate new credentials), targets only need write access to a specific resource (e.g., GitHub Actions secrets for one repository).</p>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="vault-1"><a class="header" href="#vault-1">Vault</a></h1>
-<p>The vault is your local encrypted secrets store. Each cred project has its own vault containing all secrets with rich metadata.</p>
+<p>The vault is your local encrypted secrets store. Each cred project has its own vault containing all secrets with rich metadata, organized by environment.</p>
 <h2 id="structure"><a class="header" href="#structure">Structure</a></h2>
 <p>When you run <code>cred init</code>, cred creates:</p>
 <pre><code>.cred/
@@ -493,6 +519,19 @@ cred push github DATABASE_URL API_KEY
 <p>Global configuration lives at:</p>
 <pre><code>~/.config/cred/global.toml
 </code></pre>
+<h2 id="environments"><a class="header" href="#environments">Environments</a></h2>
+<p>Secrets are organized into environments (e.g., <code>default</code>, <code>staging</code>, <code>prod</code>). This allows you to manage different configurations for different deployment contexts.</p>
+<pre><code class="language-bash"># List environments
+cred env list
+
+# Create an environment
+cred env create prod
+
+# Set a secret in an environment
+cred secret set DATABASE_URL "postgres://..." --env prod
+</code></pre>
+<p>By default, secrets are stored in the <code>default</code> environment.</p>
+<p>See <a href="#env"><code>cred env</code></a> for more details.</p>
 <h2 id="secret-metadata"><a class="header" href="#secret-metadata">Secret Metadata</a></h2>
 <p>Each secret in the vault includes:</p>
 <div class="table-wrapper">
@@ -508,6 +547,7 @@ cred push github DATABASE_URL API_KEY
 <tr><td><code>updated_at</code></td><td>When the secret was last modified</td></tr>
 <tr><td><code>description</code></td><td>Optional human-readable description</td></tr>
 <tr><td><code>source</code></td><td>Where it came from (<code>manual</code> or a source name)</td></tr>
+<tr><td><code>history</code></td><td>Up to 10 previous versions (for rollback)</td></tr>
 </tbody>
 </table>
 </div>
@@ -557,27 +597,43 @@ cred push github DATABASE_URL API_KEY
     }
 }
 </code></pre>
+<h2 id="version-history"><a class="header" href="#version-history">Version History</a></h2>
+<p>cred automatically tracks up to 10 previous versions of each secret. View history and rollback:</p>
+<pre><code class="language-bash"># View version history
+cred secret history DATABASE_URL
+
+# Rollback to previous version (0 = most recent)
+cred secret rollback DATABASE_URL --version 0 --yes
+</code></pre>
+<p>See <a href="#history"><code>cred secret history</code></a> for more details.</p>
 <h2 id="hub-and-spoke-status"><a class="header" href="#hub-and-spoke-status">Hub-and-Spoke Status</a></h2>
 <p>For a complete overview of your project:</p>
 <pre><code class="language-bash">cred status
 </code></pre>
-<pre><code>Vault: 3 secrets
+<pre><code>Vault: 5 secrets (2 environments)
 
+Environment: default
   RESEND_API_KEY       [resend]
   DATABASE_URL         [manual]
-  JWT_SECRET           [manual] [modified]
+
+Environment: prod
+  DATABASE_URL         [manual]
+  JWT_SECRET           [manual]
+  API_KEY              [manual]
 
 Sources: resend ✓
 Targets: github ✓
 </code></pre>
 <h2 id="encryption"><a class="header" href="#encryption">Encryption</a></h2>
-<p>The vault is encrypted at rest using ChaCha20-Poly1305. The encryption key is derived from your project and stored securely. See <a href="#security-model">Security Model</a> for details.</p>
+<p>The vault is encrypted at rest using ChaCha20-Poly1305. The encryption key is generated on <code>cred init</code> and stored in your OS credential store (Keychain, GNOME Keyring, etc.). See <a href="#security-model">Security Model</a> for details.</p>
 <h2 id="best-practices"><a class="header" href="#best-practices">Best Practices</a></h2>
 <ol>
 <li><strong>Add <code>.cred/</code> to <code>.gitignore</code></strong> — Never commit your vault</li>
 <li><strong>Use descriptions</strong> — Document what each secret is for</li>
+<li><strong>Use environments</strong> — Separate dev/staging/prod secrets</li>
 <li><strong>Keep backups</strong> — Export periodically with <code>cred export</code></li>
 <li><strong>Use sources when possible</strong> — Generated keys have better audit trails</li>
+<li><strong>Review history before rollback</strong> — Use <code>cred secret history</code> first</li>
 </ol>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="commands"><a class="header" href="#commands">Commands</a></h1>
@@ -607,8 +663,23 @@ Targets: github ✓
 <tr><td><a href="#list-1"><code>cred secret list</code></a></td><td>List all secrets</td></tr>
 <tr><td><a href="#remove"><code>cred secret remove</code></a></td><td>Delete a secret from vault</td></tr>
 <tr><td><a href="#describe"><code>cred secret describe</code></a></td><td>Update a secret’s description</td></tr>
+<tr><td><a href="#history"><code>cred secret history</code></a></td><td>View version history for a secret</td></tr>
+<tr><td><a href="#rollback"><code>cred secret rollback</code></a></td><td>Restore a previous version</td></tr>
 <tr><td><a href="#import"><code>cred import</code></a></td><td>Import from .env file</td></tr>
 <tr><td><a href="#export"><code>cred export</code></a></td><td>Export to .env file</td></tr>
+</tbody>
+</table>
+</div>
+<h2 id="environments-1"><a class="header" href="#environments-1">Environments</a></h2>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Command</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td><a href="#list-2"><code>cred env list</code></a></td><td>List all environments</td></tr>
+<tr><td><a href="#create"><code>cred env create</code></a></td><td>Create a new environment</td></tr>
+<tr><td><a href="#delete"><code>cred env delete</code></a></td><td>Delete an environment and its secrets</td></tr>
 </tbody>
 </table>
 </div>
@@ -686,7 +757,7 @@ Targets: github ✓
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="init"><a class="header" href="#init">init</a></h1>
 <p>Initialize a cred project.</p>
-<h2 id="cred-init"><a class="header" href="#cred-init">cred init</a></h2>
+<h2 id="usage"><a class="header" href="#usage">Usage</a></h2>
 <p>Initialize a new cred project in the current directory:</p>
 <pre><code class="language-bash">cred init
 </code></pre>
@@ -696,6 +767,25 @@ Targets: github ✓
 └── vault.enc       # Encrypted secrets vault
 </code></pre>
 <p>Run this once per project, typically at the repository root.</p>
+<h2 id="what-happens"><a class="header" href="#what-happens">What Happens</a></h2>
+<ol>
+<li>Creates the <code>.cred/</code> directory</li>
+<li>Generates a random 32-byte encryption key</li>
+<li>Stores the key in your OS credential store (Keychain, GNOME Keyring, etc.)</li>
+<li>Creates an empty encrypted vault</li>
+<li>Adds <code>.cred/</code> to <code>.gitignore</code></li>
+</ol>
+<h2 id="cicd-usage"><a class="header" href="#cicd-usage">CI/CD Usage</a></h2>
+<p>For CI environments, export your encryption key as base64:</p>
+<pre><code class="language-bash"># On your machine, get the key
+cred doctor --json | jq -r '.data.key_b64'
+</code></pre>
+<p>Then set it as a CI secret:</p>
+<pre><code class="language-yaml"># GitHub Actions example
+env:
+  CRED_MASTER_KEY_B64: ${{ secrets.CRED_MASTER_KEY }}
+</code></pre>
+<p>See <a href="#security-model">Security Model</a> for more details.</p>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="config"><a class="header" href="#config">config</a></h1>
 <p>Manage global cred configuration.</p>
@@ -765,11 +855,16 @@ Targets: github ✓
 <pre><code class="language-bash">cred status
 </code></pre>
 <p>Output:</p>
-<pre><code>Vault: 3 secrets
+<pre><code>Vault: 5 secrets (2 environments)
 
+Environment: default
   RESEND_API_KEY       [resend]
   DATABASE_URL         [manual]
+
+Environment: prod
+  DATABASE_URL         [manual]
   JWT_SECRET           [manual]
+  API_KEY              [manual]
 
 Sources: resend ✓
 Targets: github ✓
@@ -777,7 +872,8 @@ Git: edneedham/cred
 </code></pre>
 <p>This shows:</p>
 <ul>
-<li>Number of secrets in vault</li>
+<li>Total secrets and environment count</li>
+<li>Secrets grouped by environment</li>
 <li>Each secret’s source (manual or generated)</li>
 <li>Configured sources and targets</li>
 <li>Git repository (if detected)</li>
@@ -796,6 +892,9 @@ Git: edneedham/cred
 <p>With a description:</p>
 <pre><code class="language-bash">cred secret set API_KEY "sk-xxx" --description "OpenAI production key"
 cred secret set CERT_PEM "-----BEGIN..." -d "TLS certificate"
+</code></pre>
+<p>In a specific environment:</p>
+<pre><code class="language-bash">cred secret set DATABASE_URL "postgres://prod..." --env prod
 </code></pre>
 <h3 id="format-detection"><a class="header" href="#format-detection">Format Detection</a></h3>
 <p>cred auto-detects the format of your secrets:</p>
@@ -821,6 +920,9 @@ cred secret set CERT_PEM "-----BEGIN..." -d "TLS certificate"
 <p>Retrieve a secret value:</p>
 <pre><code class="language-bash">cred secret get JWT_SECRET
 </code></pre>
+<p>From a specific environment:</p>
+<pre><code class="language-bash">cred secret get JWT_SECRET --env prod
+</code></pre>
 <p>With full metadata:</p>
 <pre><code class="language-bash">cred secret get JWT_SECRET --json
 </code></pre>
@@ -845,11 +947,17 @@ cred secret set CERT_PEM "-----BEGIN..." -d "TLS certificate"
   API_KEY = ***** (OpenAI production key)
   JWT_SECRET = *****
 </code></pre>
+<p>List secrets in a specific environment:</p>
+<pre><code class="language-bash">cred secret list --env prod
+</code></pre>
 <p>Descriptions are shown inline when present.</p>
 <hr>
 <h2 id="remove"><a class="header" href="#remove">remove</a></h2>
 <p>Delete a secret from the local vault:</p>
 <pre><code class="language-bash">cred secret remove JWT_SECRET --yes
+</code></pre>
+<p>From a specific environment:</p>
+<pre><code class="language-bash">cred secret remove JWT_SECRET --env prod --yes
 </code></pre>
 <p>Output:</p>
 <pre><code>✓ Removed 'JWT_SECRET' from local vault (3 days old)
@@ -866,9 +974,45 @@ cred secret set CERT_PEM "-----BEGIN..." -d "TLS certificate"
 <pre><code class="language-bash">cred secret describe API_KEY
 </code></pre>
 <hr>
+<h2 id="history"><a class="header" href="#history">history</a></h2>
+<p>View the version history of a secret:</p>
+<pre><code class="language-bash">cred secret history DATABASE_URL
+</code></pre>
+<p>Output:</p>
+<pre><code>History for 'DATABASE_URL' in env 'default':
+
+  [current] 2025-01-03 14:30:00 (manual)
+  [0] 2025-01-02 10:15:00 (manual)
+  [1] 2025-01-01 09:00:00 (manual)
+
+Use 'cred secret rollback DATABASE_URL --version &lt;N&gt;' to restore
+</code></pre>
+<p>From a specific environment:</p>
+<pre><code class="language-bash">cred secret history DATABASE_URL --env prod
+</code></pre>
+<p>cred keeps up to 10 previous versions of each secret.</p>
+<hr>
+<h2 id="rollback"><a class="header" href="#rollback">rollback</a></h2>
+<p>Restore a secret to a previous version:</p>
+<pre><code class="language-bash">cred secret rollback DATABASE_URL --version 0 --yes
+</code></pre>
+<p>The <code>--version</code> flag specifies which historical version to restore (0 = most recent previous value).</p>
+<p>From a specific environment:</p>
+<pre><code class="language-bash">cred secret rollback DATABASE_URL --version 0 --env prod --yes
+</code></pre>
+<p>Preview before rolling back:</p>
+<pre><code class="language-bash">cred secret rollback DATABASE_URL --version 0 --dry-run
+</code></pre>
+<blockquote>
+<p><strong>Note:</strong> Rollback is a destructive operation and requires <code>--yes</code> to confirm.</p>
+</blockquote>
+<hr>
 <h2 id="import"><a class="header" href="#import">import</a></h2>
 <p>Import <code>KEY=VALUE</code> pairs from a .env file:</p>
 <pre><code class="language-bash">cred import .env
+</code></pre>
+<p>Import to a specific environment:</p>
+<pre><code class="language-bash">cred import prod.env --env prod
 </code></pre>
 <p>Existing keys are skipped by default to keep imports non-destructive.</p>
 <p>Overwrite existing keys:</p>
@@ -882,12 +1026,84 @@ cred secret set CERT_PEM "-----BEGIN..." -d "TLS certificate"
 <p>Write vault contents to a .env file:</p>
 <pre><code class="language-bash">cred export .env.backup
 </code></pre>
+<p>Export from a specific environment:</p>
+<pre><code class="language-bash">cred export prod.env --env prod
+</code></pre>
 <p>Keys are sorted alphabetically. Existing files are preserved unless forced:</p>
 <pre><code class="language-bash">cred export .env --force
 </code></pre>
 <p>Preview:</p>
 <pre><code class="language-bash">cred export .env --dry-run
 </code></pre>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="env"><a class="header" href="#env">env</a></h1>
+<p>Manage environments for organizing secrets. Environments allow you to separate secrets for different contexts (e.g., <code>dev</code>, <code>staging</code>, <code>prod</code>).</p>
+<h2 id="overview"><a class="header" href="#overview">Overview</a></h2>
+<p>By default, all secrets are stored in the <code>default</code> environment. You can create additional environments to isolate secrets for different deployment contexts.</p>
+<h2 id="list-2"><a class="header" href="#list-2">list</a></h2>
+<p>List all environments:</p>
+<pre><code class="language-bash">cred env list
+</code></pre>
+<p>Output:</p>
+<pre><code>Environments:
+  default (3 secrets)
+  staging (2 secrets)
+  prod (5 secrets)
+</code></pre>
+<hr>
+<h2 id="create"><a class="header" href="#create">create</a></h2>
+<p>Create a new environment:</p>
+<pre><code class="language-bash">cred env create staging
+</code></pre>
+<p>Output:</p>
+<pre><code>✓ Created environment 'staging'
+</code></pre>
+<hr>
+<h2 id="delete"><a class="header" href="#delete">delete</a></h2>
+<p>Delete an environment and all its secrets:</p>
+<pre><code class="language-bash">cred env delete staging --yes
+</code></pre>
+<p>Output:</p>
+<pre><code>✓ Deleted environment 'staging' (2 secrets removed)
+</code></pre>
+<p>⚠️ <strong>This is a destructive operation</strong> — requires <code>--yes</code> to confirm.</p>
+<hr>
+<h2 id="using-environments"><a class="header" href="#using-environments">Using Environments</a></h2>
+<p>Most secret commands accept an <code>--env</code> flag:</p>
+<pre><code class="language-bash"># Set a secret in the prod environment
+cred secret set DATABASE_URL "postgres://prod..." --env prod
+
+# Get a secret from staging
+cred secret get API_KEY --env staging
+
+# List secrets in a specific environment
+cred secret list --env prod
+
+# Push prod secrets to GitHub
+cred push github --env prod
+
+# Export prod secrets to a file
+cred export prod.env --env prod
+</code></pre>
+<hr>
+<h2 id="environment-strategy"><a class="header" href="#environment-strategy">Environment Strategy</a></h2>
+<p>Common patterns:</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Environment</th><th>Purpose</th></tr>
+</thead>
+<tbody>
+<tr><td><code>default</code></td><td>Development/local secrets</td></tr>
+<tr><td><code>staging</code></td><td>Pre-production testing</td></tr>
+<tr><td><code>prod</code></td><td>Production secrets</td></tr>
+<tr><td><code>ci</code></td><td>CI/CD pipeline secrets</td></tr>
+</tbody>
+</table>
+</div>
+<hr>
+<h2 id="migration-from-v05x"><a class="header" href="#migration-from-v05x">Migration from v0.5.x</a></h2>
+<p>If you’re upgrading from a version without environments, your existing secrets are automatically migrated to the <code>default</code> environment. No action required.</p>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="push"><a class="header" href="#push">push</a></h1>
 <p>Push secrets from your vault to a target platform.</p>
@@ -906,6 +1122,12 @@ cred secret set CERT_PEM "-----BEGIN..." -d "TLS certificate"
 <pre><code class="language-bash">cred push github DATABASE_URL JWT_SECRET --dry-run
 </code></pre>
 <p>Nothing is uploaded when <code>--dry-run</code> is used.</p>
+<h2 id="environment-specific-push"><a class="header" href="#environment-specific-push">Environment-Specific Push</a></h2>
+<p>Push secrets from a specific environment:</p>
+<pre><code class="language-bash">cred push github --env prod
+</code></pre>
+<p>This pushes only secrets from the <code>prod</code> environment.</p>
+<hr>
 <h2 id="options"><a class="header" href="#options">Options</a></h2>
 <div class="table-wrapper">
 <table>
@@ -913,6 +1135,7 @@ cred secret set CERT_PEM "-----BEGIN..." -d "TLS certificate"
 <tr><th>Flag</th><th>Description</th></tr>
 </thead>
 <tbody>
+<tr><td><code>--env &lt;name&gt;</code></td><td>Push from specific environment</td></tr>
 <tr><td><code>--dry-run</code></td><td>Preview changes without pushing</td></tr>
 <tr><td><code>--json</code></td><td>Machine-readable output</td></tr>
 <tr><td><code>--non-interactive</code></td><td>Fail instead of prompting</td></tr>
@@ -967,6 +1190,11 @@ cred push github
 <pre><code class="language-bash">cred prune github --all --yes
 </code></pre>
 <p>This removes all secrets that cred has pushed to this target.</p>
+<h2 id="environment-specific-prune"><a class="header" href="#environment-specific-prune">Environment-Specific Prune</a></h2>
+<p>Prune secrets from a specific environment:</p>
+<pre><code class="language-bash">cred prune github OLD_KEY --env prod --yes
+</code></pre>
+<hr>
 <h2 id="options-1"><a class="header" href="#options-1">Options</a></h2>
 <div class="table-wrapper">
 <table>
@@ -974,6 +1202,7 @@ cred push github
 <tr><th>Flag</th><th>Description</th></tr>
 </thead>
 <tbody>
+<tr><td><code>--env &lt;name&gt;</code></td><td>Prune from specific environment</td></tr>
 <tr><td><code>--dry-run</code></td><td>Preview without deleting</td></tr>
 <tr><td><code>--yes</code></td><td>Confirm destructive operation</td></tr>
 <tr><td><code>--all</code></td><td>Prune all known secrets</td></tr>
@@ -1010,8 +1239,13 @@ cred secret remove OLD_SECRET --yes
 <p>cred is designed with security as a core concern. This page explains how your secrets are protected.</p>
 <h2 id="encryption-at-rest"><a class="header" href="#encryption-at-rest">Encryption at Rest</a></h2>
 <p>Your vault (<code>.cred/vault.enc</code>) is encrypted using <strong>ChaCha20-Poly1305</strong>, a modern authenticated encryption algorithm. This provides both confidentiality and integrity protection.</p>
-<h2 id="token-storage"><a class="header" href="#token-storage">Token Storage</a></h2>
-<p>Source and target tokens (API keys, PATs) are stored in your <strong>OS credential store</strong>:</p>
+<h2 id="key-storage"><a class="header" href="#key-storage">Key Storage</a></h2>
+<p>The encryption key is:</p>
+<ul>
+<li>Randomly generated on <code>cred init</code> (32 bytes)</li>
+<li>Stored in your OS credential store</li>
+<li>Never written to disk as plaintext</li>
+</ul>
 <div class="table-wrapper">
 <table>
 <thead>
@@ -1024,6 +1258,8 @@ cred secret remove OLD_SECRET --yes
 </tbody>
 </table>
 </div>
+<h2 id="token-storage"><a class="header" href="#token-storage">Token Storage</a></h2>
+<p>Source and target tokens (API keys, PATs) are also stored in your <strong>OS credential store</strong>.</p>
 <p>Tokens are <strong>never</strong> written to plaintext files like <code>~/.config/cred/global.toml</code>.</p>
 <h2 id="what-cred-protects-against"><a class="header" href="#what-cred-protects-against">What cred Protects Against</a></h2>
 <ul>
@@ -1046,35 +1282,45 @@ cred prune github --all --dry-run
 <p>This is especially important for destructive operations.</p>
 <h2 id="best-practices-1"><a class="header" href="#best-practices-1">Best Practices</a></h2>
 <h3 id="1-never-commit-your-vault"><a class="header" href="#1-never-commit-your-vault">1. Never Commit Your Vault</a></h3>
-<p>Added to <code>.gitignore</code> on <code>cred init</code> otherwise check and add manually if needed:</p>
-<pre><code class="language-bash">echo .cred &gt;&gt; .gitignore
+<p>The <code>.cred/</code> directory is added to <code>.gitignore</code> on init. Never commit it:</p>
+<pre><code class="language-bash"># Verify it's ignored
+cat .gitignore | grep .cred
 </code></pre>
 <h3 id="2-use-least-privilege"><a class="header" href="#2-use-least-privilege">2. Use Least Privilege</a></h3>
 <ul>
 <li>For <strong>sources</strong>: Use master keys only for generation, deploy restricted keys</li>
 <li>For <strong>targets</strong>: Create fine-grained PATs with minimal permissions</li>
 </ul>
-<h3 id="3-rotation-coming-soon"><a class="header" href="#3-rotation-coming-soon">3. Rotation (coming soon)</a></h3>
-<h3 id="4-keep-backups"><a class="header" href="#4-keep-backups">4. Keep Backups</a></h3>
+<h3 id="3-keep-backups"><a class="header" href="#3-keep-backups">3. Keep Backups</a></h3>
 <p>Export your vault periodically:</p>
 <pre><code class="language-bash">cred export secrets-backup.env
 </code></pre>
 <p>Store backups securely (encrypted, offline).</p>
-<h3 id="5-audit-your-secrets"><a class="header" href="#5-audit-your-secrets">5. Audit Your Secrets</a></h3>
+<h3 id="4-audit-your-secrets"><a class="header" href="#4-audit-your-secrets">4. Audit Your Secrets</a></h3>
 <p>Review what’s in your vault:</p>
 <pre><code class="language-bash">cred status
 cred secret list
 </code></pre>
 <p>Remove secrets you no longer need.</p>
+<h2 id="cicd-integration"><a class="header" href="#cicd-integration">CI/CD Integration</a></h2>
+<p>For CI environments where the OS keyring isn’t available, use <code>CRED_MASTER_KEY_B64</code>:</p>
+<pre><code class="language-bash"># Export your key (on your machine)
+cred doctor --json | jq -r '.data.key_b64'
+
+# Set as CI secret, then use in workflow
+export CRED_MASTER_KEY_B64="your-base64-key"
+</code></pre>
+<p>⚠️ <strong>Treat <code>CRED_MASTER_KEY_B64</code> as you would any secret</strong> — it can decrypt your entire vault.</p>
 <h2 id="threat-model"><a class="header" href="#threat-model">Threat Model</a></h2>
 <p>cred is designed for:</p>
 <ul>
-<li>Individual developers</li>
-<li>Small teams with trusted members</li>
-<li>Projects that don’t require enterprise-grade access control</li>
+<li><strong>Solo developers</strong> managing secrets across projects</li>
+<li>Open-source maintainers with CI/CD secrets</li>
+<li>Projects that don’t require multi-user access control</li>
 </ul>
 <p>It is <strong>not</strong> designed for:</p>
 <ul>
+<li>Team environments with multiple users</li>
 <li>Multi-tenant environments</li>
 <li>Compliance-heavy industries (healthcare, finance) without additional controls</li>
 <li>Scenarios requiring audit trails or approval workflows</li>

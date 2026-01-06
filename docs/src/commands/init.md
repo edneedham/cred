@@ -2,7 +2,7 @@
 
 Initialize a cred project.
 
-## Basic Usage
+## Usage
 
 Initialize a new cred project in the current directory:
 
@@ -20,55 +20,29 @@ This creates:
 
 Run this once per project, typically at the repository root.
 
----
+## What Happens
 
-## Team Mode (Passphrase)
+1. Creates the `.cred/` directory
+2. Generates a random 32-byte encryption key
+3. Stores the key in your OS credential store (Keychain, GNOME Keyring, etc.)
+4. Creates an empty encrypted vault
+5. Adds `.cred/` to `.gitignore`
 
-For team collaboration, initialize with passphrase-based key derivation:
+## CI/CD Usage
 
-```bash
-cred init --passphrase
-```
-
-You'll be prompted to enter and confirm a passphrase (minimum 8 characters).
-
-This mode:
-- Derives the encryption key from a shared passphrase using Argon2id
-- Stores a random salt in `project.toml` (safe to commit)
-- Allows team members to access the vault with the same passphrase
-
-### Sharing with Your Team
-
-1. Commit the `.cred/project.toml` (but never `vault.enc`)
-2. Share the passphrase securely (password manager, encrypted message)
-3. Team members will be prompted for the passphrase on first use
-
-### CI/CD Usage
-
-Set the `CRED_PASSPHRASE` environment variable:
+For CI environments, export your encryption key as base64:
 
 ```bash
-export CRED_PASSPHRASE="your-team-passphrase"
-cred secret list
+# On your machine, get the key
+cred doctor --json | jq -r '.data.key_b64'
 ```
 
----
+Then set it as a CI secret:
 
-## Options
+```yaml
+# GitHub Actions example
+env:
+  CRED_MASTER_KEY_B64: ${{ secrets.CRED_MASTER_KEY }}
+```
 
-| Flag           | Description                              |
-| -------------- | ---------------------------------------- |
-| `--passphrase` | Use passphrase-based key (team sharing)  |
-
----
-
-## Key Modes
-
-| Mode         | Created By          | Best For           |
-| ------------ | ------------------- | ------------------ |
-| `keyring`    | `cred init`         | Solo developers    |
-| `passphrase` | `cred init --passphrase` | Teams         |
-
-You can convert between modes later with [`cred key convert`](./key.md).
-
-
+See [Security Model](../security.md) for more details.

@@ -35,10 +35,10 @@
             const path_to_root = "../";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "../searchindex-436e54db.js";
+            window.path_to_searchindex_js = "../searchindex-1d16cc28.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="../toc-535255e4.js"></script>
+        <script src="../toc-e58f5c98.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -192,6 +192,11 @@
 <pre><code class="language-bash">cred prune github --all --yes
 </code></pre>
 <p>This removes all secrets that cred has pushed to this target.</p>
+<h2 id="environment-specific-prune"><a class="header" href="#environment-specific-prune">Environment-Specific Prune</a></h2>
+<p>Prune secrets from a specific environment:</p>
+<pre><code class="language-bash">cred prune github OLD_KEY --env prod --yes
+</code></pre>
+<hr>
 <h2 id="options"><a class="header" href="#options">Options</a></h2>
 <div class="table-wrapper">
 <table>
@@ -199,6 +204,7 @@
 <tr><th>Flag</th><th>Description</th></tr>
 </thead>
 <tbody>
+<tr><td><code>--env &lt;name&gt;</code></td><td>Prune from specific environment</td></tr>
 <tr><td><code>--dry-run</code></td><td>Preview without deleting</td></tr>
 <tr><td><code>--yes</code></td><td>Confirm destructive operation</td></tr>
 <tr><td><code>--all</code></td><td>Prune all known secrets</td></tr>

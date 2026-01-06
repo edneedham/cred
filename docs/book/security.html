@@ -35,10 +35,10 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-436e54db.js";
+            window.path_to_searchindex_js = "searchindex-1d16cc28.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="toc-535255e4.js"></script>
+        <script src="toc-e58f5c98.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -178,8 +178,13 @@
 <p>cred is designed with security as a core concern. This page explains how your secrets are protected.</p>
 <h2 id="encryption-at-rest"><a class="header" href="#encryption-at-rest">Encryption at Rest</a></h2>
 <p>Your vault (<code>.cred/vault.enc</code>) is encrypted using <strong>ChaCha20-Poly1305</strong>, a modern authenticated encryption algorithm. This provides both confidentiality and integrity protection.</p>
-<h2 id="token-storage"><a class="header" href="#token-storage">Token Storage</a></h2>
-<p>Source and target tokens (API keys, PATs) are stored in your <strong>OS credential store</strong>:</p>
+<h2 id="key-storage"><a class="header" href="#key-storage">Key Storage</a></h2>
+<p>The encryption key is:</p>
+<ul>
+<li>Randomly generated on <code>cred init</code> (32 bytes)</li>
+<li>Stored in your OS credential store</li>
+<li>Never written to disk as plaintext</li>
+</ul>
 <div class="table-wrapper">
 <table>
 <thead>
@@ -192,6 +197,8 @@
 </tbody>
 </table>
 </div>
+<h2 id="token-storage"><a class="header" href="#token-storage">Token Storage</a></h2>
+<p>Source and target tokens (API keys, PATs) are also stored in your <strong>OS credential store</strong>.</p>
 <p>Tokens are <strong>never</strong> written to plaintext files like <code>~/.config/cred/global.toml</code>.</p>
 <h2 id="what-cred-protects-against"><a class="header" href="#what-cred-protects-against">What cred Protects Against</a></h2>
 <ul>
@@ -214,35 +221,45 @@ cred prune github --all --dry-run
 <p>This is especially important for destructive operations.</p>
 <h2 id="best-practices"><a class="header" href="#best-practices">Best Practices</a></h2>
 <h3 id="1-never-commit-your-vault"><a class="header" href="#1-never-commit-your-vault">1. Never Commit Your Vault</a></h3>
-<p>Added to <code>.gitignore</code> on <code>cred init</code> otherwise check and add manually if needed:</p>
-<pre><code class="language-bash">echo .cred &gt;&gt; .gitignore
+<p>The <code>.cred/</code> directory is added to <code>.gitignore</code> on init. Never commit it:</p>
+<pre><code class="language-bash"># Verify it's ignored
+cat .gitignore | grep .cred
 </code></pre>
 <h3 id="2-use-least-privilege"><a class="header" href="#2-use-least-privilege">2. Use Least Privilege</a></h3>
 <ul>
 <li>For <strong>sources</strong>: Use master keys only for generation, deploy restricted keys</li>
 <li>For <strong>targets</strong>: Create fine-grained PATs with minimal permissions</li>
 </ul>
-<h3 id="3-rotation-coming-soon"><a class="header" href="#3-rotation-coming-soon">3. Rotation (coming soon)</a></h3>
-<h3 id="4-keep-backups"><a class="header" href="#4-keep-backups">4. Keep Backups</a></h3>
+<h3 id="3-keep-backups"><a class="header" href="#3-keep-backups">3. Keep Backups</a></h3>
 <p>Export your vault periodically:</p>
 <pre><code class="language-bash">cred export secrets-backup.env
 </code></pre>
 <p>Store backups securely (encrypted, offline).</p>
-<h3 id="5-audit-your-secrets"><a class="header" href="#5-audit-your-secrets">5. Audit Your Secrets</a></h3>
+<h3 id="4-audit-your-secrets"><a class="header" href="#4-audit-your-secrets">4. Audit Your Secrets</a></h3>
 <p>Review what’s in your vault:</p>
 <pre><code class="language-bash">cred status
 cred secret list
 </code></pre>
 <p>Remove secrets you no longer need.</p>
+<h2 id="cicd-integration"><a class="header" href="#cicd-integration">CI/CD Integration</a></h2>
+<p>For CI environments where the OS keyring isn’t available, use <code>CRED_MASTER_KEY_B64</code>:</p>
+<pre><code class="language-bash"># Export your key (on your machine)
+cred doctor --json | jq -r '.data.key_b64'
+
+# Set as CI secret, then use in workflow
+export CRED_MASTER_KEY_B64="your-base64-key"
+</code></pre>
+<p>⚠️ <strong>Treat <code>CRED_MASTER_KEY_B64</code> as you would any secret</strong> — it can decrypt your entire vault.</p>
 <h2 id="threat-model"><a class="header" href="#threat-model">Threat Model</a></h2>
 <p>cred is designed for:</p>
 <ul>
-<li>Individual developers</li>
-<li>Small teams with trusted members</li>
-<li>Projects that don’t require enterprise-grade access control</li>
+<li><strong>Solo developers</strong> managing secrets across projects</li>
+<li>Open-source maintainers with CI/CD secrets</li>
+<li>Projects that don’t require multi-user access control</li>
 </ul>
 <p>It is <strong>not</strong> designed for:</p>
 <ul>
+<li>Team environments with multiple users</li>
 <li>Multi-tenant environments</li>
 <li>Compliance-heavy industries (healthcare, finance) without additional controls</li>
 <li>Scenarios requiring audit trails or approval workflows</li>

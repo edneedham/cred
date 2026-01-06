@@ -6,45 +6,22 @@ cred is designed with security as a core concern. This page explains how your se
 
 Your vault (`.cred/vault.enc`) is encrypted using **ChaCha20-Poly1305**, a modern authenticated encryption algorithm. This provides both confidentiality and integrity protection.
 
-## Key Derivation
-
-cred supports two key modes:
-
-### Keyring Mode (Default)
+## Key Storage
 
 The encryption key is:
-- Randomly generated on `cred init`
+- Randomly generated on `cred init` (32 bytes)
 - Stored in your OS credential store
-- Unique to your machine
-
-Best for: Solo developers, local-only access.
-
-### Passphrase Mode (Team Sharing)
-
-The encryption key is:
-- Derived from a shared passphrase using **Argon2id**
-- Parameters: m=19456 KiB, t=2 iterations, p=1 (OWASP recommended)
-- Salt stored in `project.toml` (safe to commit)
-
-Best for: Teams who need shared vault access.
-
-```bash
-# Initialize with passphrase
-cred init --passphrase
-
-# Or convert existing project
-cred key convert --to passphrase --yes
-```
-
-## Token Storage
-
-Source and target tokens (API keys, PATs) are stored in your **OS credential store**:
+- Never written to disk as plaintext
 
 | OS      | Backend                                 |
 | ------- | --------------------------------------- |
 | macOS   | Keychain                                |
 | Linux   | Secret Service (GNOME Keyring, KWallet) |
 | Windows | Credential Manager                      |
+
+## Token Storage
+
+Source and target tokens (API keys, PATs) are also stored in your **OS credential store**.
 
 Tokens are **never** written to plaintext files like `~/.config/cred/global.toml`.
 
@@ -76,10 +53,11 @@ This is especially important for destructive operations.
 
 ### 1. Never Commit Your Vault
 
-Added to `.gitignore` on `cred init` otherwise check and add manually if needed:
+The `.cred/` directory is added to `.gitignore` on init. Never commit it:
 
 ```bash
-echo .cred >> .gitignore
+# Verify it's ignored
+cat .gitignore | grep .cred
 ```
 
 ### 2. Use Least Privilege
@@ -87,9 +65,7 @@ echo .cred >> .gitignore
 -   For **sources**: Use master keys only for generation, deploy restricted keys
 -   For **targets**: Create fine-grained PATs with minimal permissions
 
-### 3. Rotation (coming soon)
-
-### 4. Keep Backups
+### 3. Keep Backups
 
 Export your vault periodically:
 
@@ -99,7 +75,7 @@ cred export secrets-backup.env
 
 Store backups securely (encrypted, offline).
 
-### 5. Audit Your Secrets
+### 4. Audit Your Secrets
 
 Review what's in your vault:
 
@@ -110,25 +86,31 @@ cred secret list
 
 Remove secrets you no longer need.
 
+## CI/CD Integration
+
+For CI environments where the OS keyring isn't available, use `CRED_MASTER_KEY_B64`:
+
+```bash
+# Export your key (on your machine)
+cred doctor --json | jq -r '.data.key_b64'
+
+# Set as CI secret, then use in workflow
+export CRED_MASTER_KEY_B64="your-base64-key"
+```
+
+⚠️ **Treat `CRED_MASTER_KEY_B64` as you would any secret** — it can decrypt your entire vault.
+
 ## Threat Model
 
 cred is designed for:
 
--   Individual developers
--   Small teams with trusted members
--   Projects that don't require enterprise-grade access control
+-   **Solo developers** managing secrets across projects
+-   Open-source maintainers with CI/CD secrets
+-   Projects that don't require multi-user access control
 
 It is **not** designed for:
 
+-   Team environments with multiple users
 -   Multi-tenant environments
 -   Compliance-heavy industries (healthcare, finance) without additional controls
 -   Scenarios requiring audit trails or approval workflows
-
-## Team Sharing Security
-
-When using passphrase mode:
-
--   **Passphrase strength matters** — Use 12+ characters with mixed case, numbers, symbols
--   **Share securely** — Use a password manager or encrypted channel, never plaintext
--   **Rotate when needed** — If a team member leaves, convert to a new passphrase
--   **The salt is public** — Only the passphrase must remain secret

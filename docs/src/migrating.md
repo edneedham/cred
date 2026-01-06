@@ -25,6 +25,13 @@ cred secret set DATABASE_URL "postgres://..."
 cred secret set API_KEY "sk-..."
 ```
 
+**Tip:** Use environments to organize secrets by deployment context:
+
+```bash
+cred env create prod
+cred import prod.env --env prod
+```
+
 **3. Set up the GitHub target:**
 
 ```bash

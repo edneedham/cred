@@ -17,19 +17,20 @@ Encrypted local secrets → Deployment platforms.
 
 `cred` stores encrypted secrets locally and safely pushes them to target platforms on demand.
 
-⚠️ **Status: Early Preview (v0.5.0)** — The on-disk format, CLI surface, and security model may change between minor versions.
+⚠️ **Status: Early Preview (v0.9.0)** — The on-disk format, CLI surface, and security model may change between minor versions.
 
 ### What it's not
 
 -   A hosted secrets manager
+-   A multi-user access control system
 -   A replacement for HashiCorp Vault or AWS Secrets Manager
 -   A runtime secret injector
 
 ### Who it's for
 
--   Solo developers
--   Small teams
--   Open-source maintainers
+-   **Solo developers** managing secrets across projects
+-   Open-source maintainers who need reproducible secrets
+-   Anyone who wants local-first secrets without running infrastructure
 
 ---
 
@@ -81,6 +82,8 @@ See the [Getting Started guide](https://edneedham.github.io/cred/getting-started
 ## Features
 
 -   **Encrypted vault** — Secrets stored locally with ChaCha20-Poly1305
+-   **Environments** — Organize secrets by context (dev, staging, prod)
+-   **Version history** — Track changes, rollback to previous versions
 -   **Sources** — Generate credentials from APIs (Resend)
 -   **Targets** — Push secrets to CI/CD platforms (GitHub Actions)
 -   **OS keyring** — Tokens stored in macOS Keychain, GNOME Keyring, or Windows Credential Manager

@@ -4,23 +4,33 @@ Complete reference for all cred commands.
 
 ## Project Management
 
-| Command                           | Description                               |
-| --------------------------------- | ----------------------------------------- |
-| [`cred init`](./init.md)          | Initialize a new cred project             |
-| [`cred status`](./status.md)      | Show vault, sources, and targets overview |
-| [`cred doctor`](./doctor.md)      | Check project health                      |
+| Command                      | Description                               |
+| ---------------------------- | ----------------------------------------- |
+| [`cred init`](./init.md)     | Initialize a new cred project             |
+| [`cred status`](./status.md) | Show vault, sources, and targets overview |
+| [`cred doctor`](./doctor.md) | Check project health                      |
 
 ## Secrets
 
-| Command                                        | Description                   |
-| ---------------------------------------------- | ----------------------------- |
-| [`cred secret set`](./secret.md#set)           | Add or update a secret        |
-| [`cred secret get`](./secret.md#get)           | Retrieve a secret value       |
-| [`cred secret list`](./secret.md#list)         | List all secrets              |
-| [`cred secret remove`](./secret.md#remove)     | Delete a secret from vault    |
-| [`cred secret describe`](./secret.md#describe) | Update a secret's description |
-| [`cred import`](./secret.md#import)            | Import from .env file         |
-| [`cred export`](./secret.md#export)            | Export to .env file           |
+| Command                                        | Description                       |
+| ---------------------------------------------- | --------------------------------- |
+| [`cred secret set`](./secret.md#set)           | Add or update a secret            |
+| [`cred secret get`](./secret.md#get)           | Retrieve a secret value           |
+| [`cred secret list`](./secret.md#list)         | List all secrets                  |
+| [`cred secret remove`](./secret.md#remove)     | Delete a secret from vault        |
+| [`cred secret describe`](./secret.md#describe) | Update a secret's description     |
+| [`cred secret history`](./secret.md#history)   | View version history for a secret |
+| [`cred secret rollback`](./secret.md#rollback) | Restore a previous version        |
+| [`cred import`](./secret.md#import)            | Import from .env file             |
+| [`cred export`](./secret.md#export)            | Export to .env file               |
+
+## Environments
+
+| Command                              | Description                           |
+| ------------------------------------ | ------------------------------------- |
+| [`cred env list`](./env.md#list)     | List all environments                 |
+| [`cred env create`](./env.md#create) | Create a new environment              |
+| [`cred env delete`](./env.md#delete) | Delete an environment and its secrets |
 
 ## Deployment
 

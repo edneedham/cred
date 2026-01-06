@@ -13,9 +13,7 @@ mod tests;
 mod vault;
 
 use clap::Parser;
-use cli::{
-    Cli, CliFlags, Commands, EnvAction, KeyAction, SecretAction, SetTargetArgs, SourceAction,
-};
+use cli::{Cli, CliFlags, Commands, EnvAction, SecretAction, SetTargetArgs, SourceAction};
 use error::{AppError, ExitCode};
 use io::{print_err, print_json, print_out, print_plain_err, read_token_securely, require_yes};
 use keyring::Entry;
@@ -69,43 +67,9 @@ async fn main() {
 /// Core dispatcher for all subcommands.
 async fn run(cli: Cli, flags: &CliFlags) -> Result<(), AppError> {
     match cli.command {
-        Commands::Init(args) => {
+        Commands::Init => {
             config::ensure_global_config_exists()?;
-
-            if args.passphrase {
-                // Prompt for passphrase
-                let passphrase = if flags.non_interactive {
-                    std::env::var("CRED_PASSPHRASE").map_err(|_| {
-                        AppError::user(anyhow::anyhow!(
-                            "Non-interactive mode requires CRED_PASSPHRASE env var for passphrase init"
-                        ))
-                    })?
-                } else {
-                    let pp1 =
-                        rpassword::prompt_password("Enter vault passphrase: ").map_err(|e| {
-                            AppError::user(anyhow::anyhow!("Failed to read passphrase: {}", e))
-                        })?;
-                    let pp2 = rpassword::prompt_password("Confirm passphrase: ").map_err(|e| {
-                        AppError::user(anyhow::anyhow!("Failed to read passphrase: {}", e))
-                    })?;
-
-                    if pp1 != pp2 {
-                        return Err(AppError::user(anyhow::anyhow!("Passphrases do not match")));
-                    }
-
-                    if pp1.len() < 8 {
-                        return Err(AppError::user(anyhow::anyhow!(
-                            "Passphrase must be at least 8 characters"
-                        )));
-                    }
-
-                    pp1
-                };
-
-                project::init_with_passphrase(&passphrase)?;
-            } else {
-                project::init()?;
-            }
+            project::init()?;
 
             if flags.json {
                 let payload = serde_json::json!({
@@ -1147,105 +1111,6 @@ async fn run(cli: Cli, flags: &CliFlags) -> Result<(), AppError> {
                         );
                     } else {
                         print_err(flags, &format!("Environment '{}' does not exist", name));
-                    }
-                }
-            }
-        }
-
-        Commands::Key { action } => {
-            let proj = project::Project::find()?;
-            let config = proj.load_config()?;
-
-            match action {
-                KeyAction::Status => {
-                    if flags.json {
-                        let payload = serde_json::json!({
-                            "api_version": "1",
-                            "status": "ok",
-                            "data": {
-                                "key_mode": config.key_mode.to_string(),
-                                "has_salt": config.salt.is_some(),
-                            }
-                        });
-                        print_json(&payload);
-                    } else {
-                        println!("Key mode: {}", config.key_mode);
-                        if config.key_mode == project::KeyMode::Passphrase {
-                            println!("Salt: configured (team-shareable)");
-                        } else {
-                            println!("Key stored in: System Credential Store");
-                        }
-                    }
-                }
-                KeyAction::Convert { to } => {
-                    require_yes(flags, "key convert")?;
-
-                    match to.to_lowercase().as_str() {
-                        "passphrase" => {
-                            if flags.dry_run {
-                                print_out(flags, "(dry-run) Would convert to passphrase mode");
-                                return Ok(());
-                            }
-
-                            // Prompt for passphrase
-                            let passphrase = if flags.non_interactive {
-                                std::env::var("CRED_PASSPHRASE").map_err(|_| {
-                                    AppError::user(anyhow::anyhow!(
-                                        "Non-interactive mode requires CRED_PASSPHRASE env var"
-                                    ))
-                                })?
-                            } else {
-                                let pp1 =
-                                    rpassword::prompt_password("Enter new vault passphrase: ")
-                                        .map_err(|e| {
-                                            AppError::user(anyhow::anyhow!(
-                                                "Failed to read passphrase: {}",
-                                                e
-                                            ))
-                                        })?;
-                                let pp2 = rpassword::prompt_password("Confirm passphrase: ")
-                                    .map_err(|e| {
-                                        AppError::user(anyhow::anyhow!(
-                                            "Failed to read passphrase: {}",
-                                            e
-                                        ))
-                                    })?;
-
-                                if pp1 != pp2 {
-                                    return Err(AppError::user(anyhow::anyhow!(
-                                        "Passphrases do not match"
-                                    )));
-                                }
-
-                                if pp1.len() < 8 {
-                                    return Err(AppError::user(anyhow::anyhow!(
-                                        "Passphrase must be at least 8 characters"
-                                    )));
-                                }
-
-                                pp1
-                            };
-
-                            project::convert_to_passphrase(&proj, &passphrase)?;
-                            print_out(flags, "✓ Converted to passphrase mode");
-                            print_out(flags, "  Share the passphrase out-of-band with your team.");
-                        }
-                        "keyring" => {
-                            if flags.dry_run {
-                                print_out(flags, "(dry-run) Would convert to keyring mode");
-                                return Ok(());
-                            }
-
-                            project::convert_to_keyring(&proj)?;
-                            print_out(flags, "✓ Converted to keyring mode");
-                            print_out(flags, "  Key is now stored in the System Credential Store.");
-                        }
-                        other => {
-                            return Err(AppError::user(anyhow::anyhow!(
-                                "Unknown key mode '{}'. Use 'keyring' or 'passphrase'.",
-                                other
-                            )));
-                        }
                     }
                 }
             }

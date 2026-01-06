@@ -50,6 +50,7 @@ Each secret in the vault includes:
 | `updated_at`  | When the secret was last modified              |
 | `description` | Optional human-readable description            |
 | `source`      | Where it came from (`manual` or a source name) |
+| `history`     | Up to 10 previous versions (for rollback)      |
 
 ## Secret Formats
 
@@ -111,6 +112,20 @@ cred secret get JWT_SECRET --json
 }
 ```
 
+## Version History
+
+cred automatically tracks up to 10 previous versions of each secret. View history and rollback:
+
+```bash
+# View version history
+cred secret history DATABASE_URL
+
+# Rollback to previous version (0 = most recent)
+cred secret rollback DATABASE_URL --version 0 --yes
+```
+
+See [`cred secret history`](../commands/secret.md#history) for more details.
+
 ## Hub-and-Spoke Status
 
 For a complete overview of your project:
@@ -120,11 +135,16 @@ cred status
 ```
 
 ```
-Vault: 3 secrets
+Vault: 5 secrets (2 environments)
 
+Environment: default
   RESEND_API_KEY       [resend]
   DATABASE_URL         [manual]
-  JWT_SECRET           [manual] [modified]
+
+Environment: prod
+  DATABASE_URL         [manual]
+  JWT_SECRET           [manual]
+  API_KEY              [manual]
 
 Sources: resend ✓
 Targets: github ✓
@@ -132,11 +152,13 @@ Targets: github ✓
 
 ## Encryption
 
-The vault is encrypted at rest using ChaCha20-Poly1305. The encryption key is derived from your project and stored securely. See [Security Model](../security.md) for details.
+The vault is encrypted at rest using ChaCha20-Poly1305. The encryption key is generated on `cred init` and stored in your OS credential store (Keychain, GNOME Keyring, etc.). See [Security Model](../security.md) for details.
 
 ## Best Practices
 
 1. **Add `.cred/` to `.gitignore`** — Never commit your vault
 2. **Use descriptions** — Document what each secret is for
-3. **Keep backups** — Export periodically with `cred export`
-4. **Use sources when possible** — Generated keys have better audit trails
+3. **Use environments** — Separate dev/staging/prod secrets
+4. **Keep backups** — Export periodically with `cred export`
+5. **Use sources when possible** — Generated keys have better audit trails
+6. **Review history before rollback** — Use `cred secret history` first
