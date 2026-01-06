@@ -1,6 +1,20 @@
 # Targets
 
-Targets are platforms where you **push secrets for deployment**. cred uploads your vault secrets to these platforms so your CI/CD pipelines can access them.
+Targets are platforms where you **push secrets for deployment**. cred uploads your vault secrets to these platforms so your workflows can access them directly.
+
+## How It Works
+
+```
+Your machine              Target platform          Your workflow
+ ┌─────────┐               ┌──────────────┐         ┌──────────┐
+ │  cred   │──push───────►│   GitHub     │◄────────│ workflow │
+ │ (vault) │               │   Secrets    │  reads  │          │
+ └─────────┘               └──────────────┘         └──────────┘
+```
+
+1. You run `cred push github` on your dev machine
+2. cred uploads secrets to GitHub Actions
+3. Your workflows read secrets directly from GitHub — no cred involved
 
 ## Adding a Target
 
@@ -11,12 +25,6 @@ cred target set github
 ```
 
 You will be securely prompted for a token. The token is stored in your OS credential store, not in plaintext on disk.
-
-For non-interactive use (CI):
-
-```bash
-cred target set github --token "$GITHUB_TOKEN" --non-interactive
-```
 
 ## Managing Targets
 

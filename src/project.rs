@@ -69,26 +69,8 @@ impl Project {
         Ok(config)
     }
 
-    /// Fetch the 32-byte master key for this project.
-    ///
-    /// Resolution order:
-    /// 1. `CRED_MASTER_KEY_B64` env var (CI/testing)
-    /// 2. OS keyring (default)
+    /// Fetch the 32-byte master key for this project from the OS keyring.
     pub fn get_master_key(&self) -> Result<[u8; 32]> {
-        // Check for raw key in env for CI and testing (highest priority)
-        if let Ok(b64) = std::env::var("CRED_MASTER_KEY_B64") {
-            let bytes = base64::engine::general_purpose::STANDARD
-                .decode(b64.trim())
-                .context("Invalid base64 in CRED_MASTER_KEY_B64")?;
-            if bytes.len() != 32 {
-                anyhow::bail!("CRED_MASTER_KEY_B64 must decode to 32 bytes");
-            }
-            let mut key = [0u8; 32];
-            key.copy_from_slice(&bytes);
-            return Ok(key);
-        }
-
-        // Fetch from OS keyring
         let config = self.load_config()?;
         let project_id = config
             .id

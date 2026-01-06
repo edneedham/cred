@@ -35,7 +35,7 @@
             const path_to_root = "../";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "../searchindex-1d16cc28.js";
+            window.path_to_searchindex_js = "../searchindex-f737eca9.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="../toc-e58f5c98.js"></script>
@@ -175,15 +175,24 @@
                 <div id="mdbook-content" class="content">
                     <main>
                         <h1 id="targets"><a class="header" href="#targets">Targets</a></h1>
-<p>Targets are platforms where you <strong>push secrets for deployment</strong>. cred uploads your vault secrets to these platforms so your CI/CD pipelines can access them.</p>
+<p>Targets are platforms where you <strong>push secrets for deployment</strong>. cred uploads your vault secrets to these platforms so your workflows can access them directly.</p>
+<h2 id="how-it-works"><a class="header" href="#how-it-works">How It Works</a></h2>
+<pre><code>Your machine              Target platform          Your workflow
+ ┌─────────┐               ┌──────────────┐         ┌──────────┐
+ │  cred   │──push───────►│   GitHub     │◄────────│ workflow │
+ │ (vault) │               │   Secrets    │  reads  │          │
+ └─────────┘               └──────────────┘         └──────────┘
+</code></pre>
+<ol>
+<li>You run <code>cred push github</code> on your dev machine</li>
+<li>cred uploads secrets to GitHub Actions</li>
+<li>Your workflows read secrets directly from GitHub — no cred involved</li>
+</ol>
 <h2 id="adding-a-target"><a class="header" href="#adding-a-target">Adding a Target</a></h2>
 <p>Authenticate a deployment target:</p>
 <pre><code class="language-bash">cred target set github
 </code></pre>
 <p>You will be securely prompted for a token. The token is stored in your OS credential store, not in plaintext on disk.</p>
-<p>For non-interactive use (CI):</p>
-<pre><code class="language-bash">cred target set github --token "$GITHUB_TOKEN" --non-interactive
-</code></pre>
 <h2 id="managing-targets"><a class="header" href="#managing-targets">Managing Targets</a></h2>
 <p><strong>List configured targets:</strong></p>
 <pre><code class="language-bash">cred target list

@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-1d16cc28.js";
+            window.path_to_searchindex_js = "searchindex-f737eca9.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-e58f5c98.js"></script>
@@ -176,24 +176,24 @@
                     <main>
                         <h1 id="introduction"><a class="header" href="#introduction">Introduction</a></h1>
 <h2 id="what-it-is"><a class="header" href="#what-it-is">What it is</a></h2>
-<p><strong><code>cred</code></strong> is a command-line tool that stores encrypted secrets locally and safely pushes them to target platforms on demand.</p>
+<p><strong><code>cred</code></strong> is a command-line tool that stores encrypted secrets locally and pushes them to deployment platforms on demand.</p>
 <p>⚠️ <strong>Status: Early Preview (v0.9.0)</strong></p>
 <p><code>cred</code> is currently in active development. The on-disk format, CLI surface, and security model may change between minor versions. Do not rely on it as your sole secrets backup yet.</p>
 <h2 id="what-it-is-not"><a class="header" href="#what-it-is-not">What it is <strong>not</strong></a></h2>
 <ul>
 <li>A hosted secrets manager</li>
-<li>A multi-user access control system</li>
+<li>A multi-user or multi-machine tool</li>
 <li>A replacement for HashiCorp Vault or AWS Secrets Manager</li>
 <li>A runtime secret injector for applications</li>
 </ul>
 <h2 id="who-is-this-for"><a class="header" href="#who-is-this-for">Who is this for</a></h2>
 <ul>
-<li><strong>Solo developers</strong> managing secrets across projects</li>
-<li>Open-source maintainers who need reproducible CI/CD secrets</li>
+<li><strong>Solo developers</strong> managing secrets on a single machine</li>
+<li>Open-source maintainers who push secrets to deployment platforms</li>
 <li>Anyone who wants local-first secrets without running infrastructure</li>
 </ul>
 <h2 id="why-cred-exists"><a class="header" href="#why-cred-exists">Why cred exists</a></h2>
-<p>Managing secrets across projects and CI/CD platforms is a mess and a chore.</p>
+<p>Managing secrets across projects and deployment platforms is a mess and a chore.</p>
 <p><code>cred</code> solves this by giving you:</p>
 <h3 id="1-an-encrypted-vault-per-project"><a class="header" href="#1-an-encrypted-vault-per-project"><strong>1. An Encrypted Vault per Project</strong></a></h3>
 <p>Your secrets live inside <code>.cred/vault.enc</code> as an encrypted store with per-secret metadata (format, timestamps, description, source, version history).</p>

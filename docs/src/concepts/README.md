@@ -20,7 +20,7 @@ Currently supported:
 
 ## Targets
 
-**Targets** are platforms where you push secrets for deployment. cred uploads your vault secrets to these platforms so your CI/CD pipelines can access them.
+**Targets** are platforms where you push secrets for deployment. cred uploads your vault secrets to these platforms so your workflows can access them directly.
 
 Currently supported:
 

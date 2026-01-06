@@ -5,27 +5,41 @@
 ### Breaking Changes
 
 -   **Removed passphrase mode** — cred is now single-machine only
+
     -   Removed `cred init --passphrase`
     -   Removed `cred key status` and `cred key convert` commands
     -   Removed `CRED_PASSPHRASE` environment variable support
     -   Removed `key_mode` and `salt` fields from project.toml
 
+-   **Removed `CRED_MASTER_KEY_B64`** — no more key injection
+    -   The env var for providing the master key is removed
+    -   Workflows should never run cred; they read from targets directly
+
 ### Simplified Model
 
-cred is now explicitly for **solo developers**:
+cred is now explicitly for **solo developers on a single machine**:
+
+```
+Your machine              Target platform          Your workflow
+ ┌─────────┐               ┌──────────────┐         ┌──────────┐
+ │  cred   │──push───────►│   GitHub     │◄────────│ workflow │
+ │ (vault) │               │   Secrets    │  reads  │          │
+ └─────────┘               └──────────────┘         └──────────┘
+```
 
 -   Encryption key stored in OS keyring (single machine)
 -   Push secrets to targets (GitHub Actions, etc.)
--   CI uses `CRED_MASTER_KEY_B64` env var when keyring unavailable
+-   Workflows read secrets from targets directly — no cred involved
 
 ### Why This Change
 
-The passphrase mode implied multi-machine/team access but didn't actually work:
+The previous model implied you could run cred in CI/CD, but that didn't work:
+
 -   vault.enc was gitignored, so it couldn't be shared
 -   Committing encrypted vaults has security implications
 -   The model was confusing and incomplete
 
-The new model is honest: cred stores secrets locally and pushes to targets. CI reads from targets, not from cred directly.
+The new model is honest: cred stores secrets locally and pushes to targets.
 
 ## v0.8.0
 

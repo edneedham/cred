@@ -86,31 +86,17 @@ cred secret list
 
 Remove secrets you no longer need.
 
-## CI/CD Integration
-
-For CI environments where the OS keyring isn't available, use `CRED_MASTER_KEY_B64`:
-
-```bash
-# Export your key (on your machine)
-cred doctor --json | jq -r '.data.key_b64'
-
-# Set as CI secret, then use in workflow
-export CRED_MASTER_KEY_B64="your-base64-key"
-```
-
-⚠️ **Treat `CRED_MASTER_KEY_B64` as you would any secret** — it can decrypt your entire vault.
-
 ## Threat Model
 
 cred is designed for:
 
--   **Solo developers** managing secrets across projects
--   Open-source maintainers with CI/CD secrets
+-   **Solo developers** managing secrets on a single machine
+-   Open-source maintainers who push secrets to deployment platforms
 -   Projects that don't require multi-user access control
 
 It is **not** designed for:
 
 -   Team environments with multiple users
--   Multi-tenant environments
+-   Multi-machine environments (cred is single-machine only)
 -   Compliance-heavy industries (healthcare, finance) without additional controls
 -   Scenarios requiring audit trails or approval workflows

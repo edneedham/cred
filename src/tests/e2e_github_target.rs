@@ -32,10 +32,6 @@ async fn github_push_and_prune_round_trip() -> Result<()> {
     fs::create_dir_all(tmp_path.join("home/.config")).unwrap();
     unsafe {
         env::set_var("CRED_KEYSTORE", "memory");
-        env::set_var(
-            "CRED_MASTER_KEY_B64",
-            "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
-        );
         env::set_var("HOME", tmp_path.join("home"));
         env::set_var("XDG_CONFIG_HOME", tmp_path.join("home/.config"));
     }

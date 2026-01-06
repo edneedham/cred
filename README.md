@@ -28,8 +28,8 @@ Encrypted local secrets → Deployment platforms.
 
 ### Who it's for
 
--   **Solo developers** managing secrets across projects
--   Open-source maintainers who need reproducible secrets
+-   **Solo developers** managing secrets on a single machine
+-   Open-source maintainers who push secrets to deployment platforms
 -   Anyone who wants local-first secrets without running infrastructure
 
 ---
@@ -85,7 +85,7 @@ See the [Getting Started guide](https://edneedham.github.io/cred/getting-started
 -   **Environments** — Organize secrets by context (dev, staging, prod)
 -   **Version history** — Track changes, rollback to previous versions
 -   **Sources** — Generate credentials from APIs (Resend)
--   **Targets** — Push secrets to CI/CD platforms (GitHub Actions)
+-   **Targets** — Push secrets to deployment platforms (GitHub Actions)
 -   **OS keyring** — Tokens stored in macOS Keychain, GNOME Keyring, or Windows Credential Manager
 -   **Automation-ready** — `--json`, `--dry-run`, `--non-interactive` flags
 
@@ -97,7 +97,6 @@ See the [Getting Started guide](https://edneedham.github.io/cred/getting-started
 -   [Getting Started](https://edneedham.github.io/cred/getting-started.html)
 -   [Commands Reference](https://edneedham.github.io/cred/commands/)
 -   [Security Model](https://edneedham.github.io/cred/security.html)
--   [CI/CD Integration](https://edneedham.github.io/cred/ci-cd.html)
 
 ---
 

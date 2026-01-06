@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-1d16cc28.js";
+            window.path_to_searchindex_js = "searchindex-f737eca9.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-e58f5c98.js"></script>
@@ -241,26 +241,17 @@ cat .gitignore | grep .cred
 cred secret list
 </code></pre>
 <p>Remove secrets you no longer need.</p>
-<h2 id="cicd-integration"><a class="header" href="#cicd-integration">CI/CD Integration</a></h2>
-<p>For CI environments where the OS keyring isn’t available, use <code>CRED_MASTER_KEY_B64</code>:</p>
-<pre><code class="language-bash"># Export your key (on your machine)
-cred doctor --json | jq -r '.data.key_b64'
-
-# Set as CI secret, then use in workflow
-export CRED_MASTER_KEY_B64="your-base64-key"
-</code></pre>
-<p>⚠️ <strong>Treat <code>CRED_MASTER_KEY_B64</code> as you would any secret</strong> — it can decrypt your entire vault.</p>
 <h2 id="threat-model"><a class="header" href="#threat-model">Threat Model</a></h2>
 <p>cred is designed for:</p>
 <ul>
-<li><strong>Solo developers</strong> managing secrets across projects</li>
-<li>Open-source maintainers with CI/CD secrets</li>
+<li><strong>Solo developers</strong> managing secrets on a single machine</li>
+<li>Open-source maintainers who push secrets to deployment platforms</li>
 <li>Projects that don’t require multi-user access control</li>
 </ul>
 <p>It is <strong>not</strong> designed for:</p>
 <ul>
 <li>Team environments with multiple users</li>
-<li>Multi-tenant environments</li>
+<li>Multi-machine environments (cred is single-machine only)</li>
 <li>Compliance-heavy industries (healthcare, finance) without additional controls</li>
 <li>Scenarios requiring audit trails or approval workflows</li>
 </ul>

@@ -2,7 +2,7 @@
 
 ## What it is
 
-**`cred`** is a command-line tool that stores encrypted secrets locally and safely pushes them to target platforms on demand. 
+**`cred`** is a command-line tool that stores encrypted secrets locally and pushes them to deployment platforms on demand.
 
 ⚠️ **Status: Early Preview (v0.9.0)**
 
@@ -11,19 +11,19 @@
 ## What it is **not**
 
 -   A hosted secrets manager
--   A multi-user access control system
+-   A multi-user or multi-machine tool
 -   A replacement for HashiCorp Vault or AWS Secrets Manager
 -   A runtime secret injector for applications
 
 ## Who is this for
 
--   **Solo developers** managing secrets across projects
--   Open-source maintainers who need reproducible CI/CD secrets
+-   **Solo developers** managing secrets on a single machine
+-   Open-source maintainers who push secrets to deployment platforms
 -   Anyone who wants local-first secrets without running infrastructure
 
 ## Why cred exists
 
-Managing secrets across projects and CI/CD platforms is a mess and a chore.
+Managing secrets across projects and deployment platforms is a mess and a chore.
 
 `cred` solves this by giving you:
 

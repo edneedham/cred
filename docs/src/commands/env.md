@@ -86,12 +86,11 @@ cred export prod.env --env prod
 
 Common patterns:
 
-| Environment | Purpose                    |
-| ----------- | -------------------------- |
-| `default`   | Development/local secrets  |
-| `staging`   | Pre-production testing     |
-| `prod`      | Production secrets         |
-| `ci`        | CI/CD pipeline secrets     |
+| Environment | Purpose                   |
+| ----------- | ------------------------- |
+| `default`   | Development/local secrets |
+| `staging`   | Pre-production testing    |
+| `prod`      | Production secrets        |
 
 ---
 

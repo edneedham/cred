@@ -33,6 +33,7 @@ cred push github --dry-run
 ```
 
 Then push:
+
 ```bash
 cred push github
 ```
@@ -62,6 +63,7 @@ See [env command](./commands/env.md) for more details.
 ---
 
 **Next steps:**
+
 -   [Commands Reference](./commands/README.md) — all available commands
 -   [Environments](./commands/env.md) — organize secrets by environment
 -   [Sources](./concepts/sources.md) — generate credentials from APIs like Resend

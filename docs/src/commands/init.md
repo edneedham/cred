@@ -28,21 +28,10 @@ Run this once per project, typically at the repository root.
 4. Creates an empty encrypted vault
 5. Adds `.cred/` to `.gitignore`
 
-## CI/CD Usage
+## Important Notes
 
-For CI environments, export your encryption key as base64:
-
-```bash
-# On your machine, get the key
-cred doctor --json | jq -r '.data.key_b64'
-```
-
-Then set it as a CI secret:
-
-```yaml
-# GitHub Actions example
-env:
-  CRED_MASTER_KEY_B64: ${{ secrets.CRED_MASTER_KEY }}
-```
+-   cred is **single-machine only** — the vault and encryption key stay on your dev machine
+-   Use `cred push` to deploy secrets to platforms like GitHub Actions
+-   Your CI/CD reads secrets from the target platform directly, not from cred
 
 See [Security Model](../security.md) for more details.
