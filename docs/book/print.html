@@ -36,10 +36,10 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-99705472.js";
+            window.path_to_searchindex_js = "searchindex-3f0972d8.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="toc-e58f5c98.js"></script>
+        <script src="toc-ed68b008.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -178,7 +178,7 @@
                         <h1 id="introduction"><a class="header" href="#introduction">Introduction</a></h1>
 <h2 id="what-it-is"><a class="header" href="#what-it-is">What it is</a></h2>
 <p><strong><code>cred</code></strong> is a command-line tool that stores encrypted secrets locally and pushes them to deployment platforms on demand.</p>
-<p>⚠️ <strong>Status: Early Preview (v0.10.0)</strong></p>
+<p>⚠️ <strong>Status: Early Preview (v0.11.0)</strong></p>
 <p><code>cred</code> is currently in active development. The on-disk format, CLI surface, and security model may change between minor versions. Do not rely on it as your sole secrets backup yet.</p>
 <h2 id="what-it-is-not"><a class="header" href="#what-it-is-not">What it is <strong>not</strong></a></h2>
 <ul>
@@ -719,8 +719,8 @@ Targets: github ✓
 <tr><td><a href="#describe"><code>cred secret describe</code></a></td><td>Update a secret’s description</td></tr>
 <tr><td><a href="#history"><code>cred secret history</code></a></td><td>View version history for a secret</td></tr>
 <tr><td><a href="#rollback"><code>cred secret rollback</code></a></td><td>Restore a previous version</td></tr>
-<tr><td><a href="#import"><code>cred import</code></a></td><td>Import from .env file</td></tr>
-<tr><td><a href="#export"><code>cred export</code></a></td><td>Export to .env file</td></tr>
+<tr><td><a href="#import-1"><code>cred import</code></a></td><td>Import from .env file</td></tr>
+<tr><td><a href="#export-1"><code>cred export</code></a></td><td>Export to .env file</td></tr>
 </tbody>
 </table>
 </div>
@@ -1154,6 +1154,209 @@ cred export prod.env --env prod
 <h2 id="migration-from-v05x"><a class="header" href="#migration-from-v05x">Migration from v0.5.x</a></h2>
 <p>If you’re upgrading from a version without environments, your existing secrets are automatically migrated to the <code>default</code> environment. No action required.</p>
 <div style="break-before: page; page-break-before: always;"></div>
+<h1 id="import-1"><a class="header" href="#import-1">import</a></h1>
+<p>Import secrets from a <code>.env</code> file into the local vault.</p>
+<h2 id="usage-1"><a class="header" href="#usage-1">Usage</a></h2>
+<pre><code class="language-bash">cred import &lt;path&gt; [OPTIONS]
+</code></pre>
+<h2 id="arguments"><a class="header" href="#arguments">Arguments</a></h2>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Argument</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td><code>&lt;path&gt;</code></td><td>Path to the <code>.env</code> file to import</td></tr>
+</tbody>
+</table>
+</div>
+<h2 id="options"><a class="header" href="#options">Options</a></h2>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Option</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td><code>--overwrite</code></td><td>Overwrite existing keys instead of skipping</td></tr>
+<tr><td><code>-e, --env &lt;name&gt;</code></td><td>Target environment (auto-detected from cred exports)</td></tr>
+</tbody>
+</table>
+</div>
+<h2 id="behavior"><a class="header" href="#behavior">Behavior</a></h2>
+<h3 id="plain-env-files"><a class="header" href="#plain-env-files">Plain <code>.env</code> Files</a></h3>
+<p>When importing a standard <code>.env</code> file:</p>
+<pre><code class="language-bash"># Import to default environment
+cred import .env
+
+# Import to a specific environment
+cred import .env --env prod
+</code></pre>
+<p>Secrets are imported as plain key-value pairs without metadata.</p>
+<h3 id="cred-export-files"><a class="header" href="#cred-export-files">Cred Export Files</a></h3>
+<p>When importing a file created by <code>cred export</code>:</p>
+<pre><code class="language-bash"># Import preserving environments and metadata
+cred import vault.env
+</code></pre>
+<p>Cred automatically detects export files by their header and:</p>
+<ul>
+<li>Recreates environment structure from the file</li>
+<li>Restores secret metadata (descriptions, timestamps)</li>
+<li>Creates any environments that don’t exist</li>
+</ul>
+<p>To force all secrets into a single environment:</p>
+<pre><code class="language-bash"># Override: import all secrets to staging environment
+cred import vault.env --env staging
+</code></pre>
+<h2 id="examples"><a class="header" href="#examples">Examples</a></h2>
+<pre><code class="language-bash"># Import from .env, skip existing keys
+cred import .env
+
+# Import and overwrite existing keys
+cred import .env --overwrite
+
+# Import to production environment
+cred import prod.env --env prod
+
+# Import a cred export file (auto-detects format)
+cred import teammate-vault.env
+
+# Preview what would be imported
+cred import .env --dry-run
+</code></pre>
+<h2 id="output"><a class="header" href="#output">Output</a></h2>
+<pre><code>✓ Imported .env (added 5, overwritten 0, skipped 2).
+</code></pre>
+<p>For cred export files with multiple environments:</p>
+<pre><code>✓ Imported vault.env (created 2 env(s)) (added 10, overwritten 0, skipped 0).
+</code></pre>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="export-1"><a class="header" href="#export-1">export</a></h1>
+<p>Export vault secrets to a <code>.env</code> file.</p>
+<h2 id="usage-2"><a class="header" href="#usage-2">Usage</a></h2>
+<pre><code class="language-bash">cred export &lt;path&gt; [OPTIONS]
+</code></pre>
+<h2 id="arguments-1"><a class="header" href="#arguments-1">Arguments</a></h2>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Argument</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td><code>&lt;path&gt;</code></td><td>Path to write the exported file</td></tr>
+</tbody>
+</table>
+</div>
+<h2 id="options-1"><a class="header" href="#options-1">Options</a></h2>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Option</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td><code>--force</code></td><td>Overwrite the output file if it exists</td></tr>
+<tr><td><code>-e, --env &lt;name&gt;</code></td><td>Export only this environment (exports full vault if omitted)</td></tr>
+<tr><td><code>--plain</code></td><td>Plain <code>.env</code> format (no metadata, requires <code>--env</code>)</td></tr>
+</tbody>
+</table>
+</div>
+<h2 id="export-formats"><a class="header" href="#export-formats">Export Formats</a></h2>
+<h3 id="full-vault-export-default"><a class="header" href="#full-vault-export-default">Full Vault Export (Default)</a></h3>
+<p>By default, <code>cred export</code> creates a rich export file containing all environments with metadata:</p>
+<pre><code class="language-bash">cred export vault.env
+</code></pre>
+<p>Output format:</p>
+<pre><code class="language-env"># cred-export v1
+# exported: 2025-01-07T10:30:00Z
+#
+# To import: cred import &lt;this-file&gt;
+
+# [environment: default]
+
+# [API_KEY]
+# description: Development API key
+# created: 2025-01-01T00:00:00Z
+API_KEY=sk-dev-xxx
+
+# [DATABASE_URL]
+DATABASE_URL=postgres://localhost/dev
+
+# [environment: prod]
+
+# [API_KEY]
+# description: Production API key
+# created: 2025-01-05T00:00:00Z
+API_KEY=sk-prod-xxx
+</code></pre>
+<p>This format:</p>
+<ul>
+<li>Preserves all environments</li>
+<li>Includes secret metadata (descriptions, timestamps)</li>
+<li>Can be imported by <code>cred import</code> to recreate the full vault</li>
+</ul>
+<h3 id="single-environment-export"><a class="header" href="#single-environment-export">Single Environment Export</a></h3>
+<p>Export just one environment with metadata:</p>
+<pre><code class="language-bash">cred export prod.env --env prod
+</code></pre>
+<p>Output format:</p>
+<pre><code class="language-env"># cred-export v1
+# environment: prod
+# exported: 2025-01-07T10:30:00Z
+#
+# To import: cred import &lt;this-file&gt;
+
+# [API_KEY]
+# description: Production API key
+API_KEY=sk-prod-xxx
+</code></pre>
+<h3 id="plain-export"><a class="header" href="#plain-export">Plain Export</a></h3>
+<p>Export as a standard <code>.env</code> file without metadata:</p>
+<pre><code class="language-bash">cred export .env --env default --plain
+</code></pre>
+<p>Output format:</p>
+<pre><code class="language-env">API_KEY=sk-dev-xxx
+DATABASE_URL=postgres://localhost/dev
+</code></pre>
+<p>Use this when you need a standard <code>.env</code> file for tools that don’t understand cred comments.</p>
+<h2 id="examples-1"><a class="header" href="#examples-1">Examples</a></h2>
+<pre><code class="language-bash"># Export full vault with metadata
+cred export vault.env
+
+# Export only production environment
+cred export prod.env --env prod
+
+# Export as plain .env (no metadata)
+cred export .env --env default --plain
+
+# Overwrite existing file
+cred export vault.env --force
+
+# Preview what would be exported
+cred export vault.env --dry-run
+</code></pre>
+<h2 id="output-1"><a class="header" href="#output-1">Output</a></h2>
+<pre><code>✓ Exported 10 secrets (3 environment(s)) to vault.env.
+</code></pre>
+<p>For single environment:</p>
+<pre><code>✓ Exported 5 secrets (env 'prod') to prod.env.
+</code></pre>
+<h2 id="use-cases"><a class="header" href="#use-cases">Use Cases</a></h2>
+<h3 id="sharing-secrets-with-teammates"><a class="header" href="#sharing-secrets-with-teammates">Sharing Secrets with Teammates</a></h3>
+<p>Export your vault and share the file securely:</p>
+<pre><code class="language-bash">cred export team-vault.env
+# Transfer file securely (encrypted email, secure share, etc.)
+</code></pre>
+<p>Teammate imports:</p>
+<pre><code class="language-bash">cred import team-vault.env
+</code></pre>
+<h3 id="backup"><a class="header" href="#backup">Backup</a></h3>
+<p>Create a backup of your entire vault:</p>
+<pre><code class="language-bash">cred export backup-$(date +%Y%m%d).env
+</code></pre>
+<h3 id="integration-with-other-tools"><a class="header" href="#integration-with-other-tools">Integration with Other Tools</a></h3>
+<p>When you need a standard <code>.env</code> for other tools:</p>
+<pre><code class="language-bash">cred export .env --env default --plain
+</code></pre>
+<div style="break-before: page; page-break-before: always;"></div>
 <h1 id="push"><a class="header" href="#push">push</a></h1>
 <p>Push secrets from your vault to a target platform.</p>
 <h2 id="basic-usage"><a class="header" href="#basic-usage">Basic Usage</a></h2>
@@ -1180,7 +1383,7 @@ cred export prod.env --env prod
 </code></pre>
 <p>This pushes only secrets from the <code>prod</code> environment.</p>
 <hr>
-<h2 id="options"><a class="header" href="#options">Options</a></h2>
+<h2 id="options-2"><a class="header" href="#options-2">Options</a></h2>
 <div class="table-wrapper">
 <table>
 <thead>
@@ -1258,7 +1461,7 @@ cred push github
 <pre><code class="language-bash">cred prune github OLD_KEY --env prod --yes
 </code></pre>
 <hr>
-<h2 id="options-1"><a class="header" href="#options-1">Options</a></h2>
+<h2 id="options-3"><a class="header" href="#options-3">Options</a></h2>
 <div class="table-wrapper">
 <table>
 <thead>

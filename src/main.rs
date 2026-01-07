@@ -635,18 +635,65 @@ async fn run(cli: Cli, flags: &CliFlags) -> Result<(), AppError> {
             let mut vault = vault::Vault::load(&proj.vault_path, master_key)?;
 
             let path = std::path::Path::new(&args.path);
-            let entries = envfile::parse_env_file(path)?;
-            let stats = envfile::import_entries_to_env(
-                &entries,
-                &mut vault,
-                &args.env,
-                args.overwrite,
-                flags.dry_run,
-            );
+
+            // Try to parse as cred export format first
+            let parsed = envfile::parse_cred_export(path)?;
+
+            // If user specified --env, override the detected environment(s)
+            let stats = if let Some(target_env) = &args.env {
+                // Import all secrets to the specified environment
+                let mut combined_stats = envfile::ImportStats::default();
+                for env_data in &parsed.environments {
+                    for secret in &env_data.secrets {
+                        let exists = vault.get_in_env(target_env, &secret.key).is_some();
+                        if exists {
+                            if args.overwrite {
+                                combined_stats.overwritten += 1;
+                                if !flags.dry_run {
+                                    vault.set_with_metadata_in_env(
+                                        target_env,
+                                        &secret.key,
+                                        &secret.value,
+                                        vault::SecretFormat::Raw,
+                                        secret.description.clone(),
+                                        None,
+                                        None,
+                                    );
+                                }
+                            } else {
+                                combined_stats.skipped += 1;
+                            }
+                        } else {
+                            combined_stats.added += 1;
+                            if !flags.dry_run {
+                                vault.set_with_metadata_in_env(
+                                    target_env,
+                                    &secret.key,
+                                    &secret.value,
+                                    vault::SecretFormat::Raw,
+                                    secret.description.clone(),
+                                    None,
+                                    None,
+                                );
+                            }
+                        }
+                    }
+                }
+                combined_stats
+            } else {
+                // Use the cred import function which respects environment markers
+                envfile::import_cred_export(&parsed, &mut vault, args.overwrite, flags.dry_run)
+            };
 
             if !flags.dry_run {
                 vault.save()?;
             }
+
+            let env_display = args.env.as_deref().unwrap_or(if parsed.is_cred_format {
+                "(from file)"
+            } else {
+                vault::DEFAULT_ENV
+            });
 
             if flags.json {
                 let payload = serde_json::json!({
@@ -654,19 +701,25 @@ async fn run(cli: Cli, flags: &CliFlags) -> Result<(), AppError> {
                     "status": "ok",
                     "data": {
                         "path": args.path,
-                        "env": args.env,
+                        "env": env_display,
                         "added": stats.added,
                         "overwritten": stats.overwritten,
                         "skipped": stats.skipped,
+                        "environments_created": stats.environments_created,
+                        "cred_format": parsed.is_cred_format,
                         "dry_run": flags.dry_run
                     }
                 });
                 print_json(&payload);
             } else if flags.dry_run {
-                let env_suffix = if args.env == vault::DEFAULT_ENV {
-                    String::new()
+                let env_suffix = if stats.environments_created > 0 {
+                    format!(
+                        " ({} environments)",
+                        stats.environments_created + parsed.environments.len()
+                            - stats.environments_created
+                    )
                 } else {
-                    format!(" to env '{}'", args.env)
+                    String::new()
                 };
                 print_out(
                     flags,
@@ -676,10 +729,10 @@ async fn run(cli: Cli, flags: &CliFlags) -> Result<(), AppError> {
                     ),
                 );
             } else {
-                let env_suffix = if args.env == vault::DEFAULT_ENV {
-                    String::new()
+                let env_suffix = if stats.environments_created > 0 {
+                    format!(" (created {} env(s))", stats.environments_created)
                 } else {
-                    format!(" to env '{}'", args.env)
+                    String::new()
                 };
                 print_out(
                     flags,
@@ -697,13 +750,41 @@ async fn run(cli: Cli, flags: &CliFlags) -> Result<(), AppError> {
             let vault = vault::Vault::load(&proj.vault_path, master_key)?;
 
             let path = std::path::Path::new(&args.path);
-            let count = envfile::export_env_file_from_env(
-                &vault,
-                &args.env,
-                path,
-                args.force,
-                flags.dry_run,
-            )?;
+
+            let (count, env_description) = if args.plain {
+                // Plain .env format (no metadata)
+                let env = args.env.as_deref().unwrap_or(vault::DEFAULT_ENV);
+                let c = envfile::export_env_file_from_env(
+                    &vault,
+                    env,
+                    path,
+                    args.force,
+                    flags.dry_run,
+                )?;
+                let desc = if env == vault::DEFAULT_ENV {
+                    "plain format".to_string()
+                } else {
+                    format!("plain format, env '{}'", env)
+                };
+                (c, desc)
+            } else if let Some(ref env) = args.env {
+                // Single environment with metadata
+                let c = envfile::export_env_with_metadata(
+                    &vault,
+                    env,
+                    path,
+                    args.force,
+                    flags.dry_run,
+                )?;
+                let desc = format!("env '{}'", env);
+                (c, desc)
+            } else {
+                // Full vault with metadata (default)
+                let c = envfile::export_full_vault(&vault, path, args.force, flags.dry_run)?;
+                let envs = vault.list_environments();
+                let desc = format!("{} environment(s)", envs.len());
+                (c, desc)
+            };
 
             if flags.json {
                 let payload = serde_json::json!({
@@ -713,32 +794,26 @@ async fn run(cli: Cli, flags: &CliFlags) -> Result<(), AppError> {
                         "path": args.path,
                         "env": args.env,
                         "exported": count,
+                        "plain": args.plain,
                         "dry_run": flags.dry_run
                     }
                 });
                 print_json(&payload);
             } else if flags.dry_run {
-                let env_suffix = if args.env == vault::DEFAULT_ENV {
-                    String::new()
-                } else {
-                    format!(" from env '{}'", args.env)
-                };
                 print_out(
                     flags,
                     &format!(
-                        "(dry-run) Would export {} keys{} to {}.",
-                        count, env_suffix, args.path
+                        "(dry-run) Would export {} secrets ({}) to {}.",
+                        count, env_description, args.path
                     ),
                 );
             } else {
-                let env_suffix = if args.env == vault::DEFAULT_ENV {
-                    String::new()
-                } else {
-                    format!(" from env '{}'", args.env)
-                };
                 print_out(
                     flags,
-                    &format!("✓ Exported {} keys{} to {}.", count, env_suffix, args.path),
+                    &format!(
+                        "✓ Exported {} secrets ({}) to {}.",
+                        count, env_description, args.path
+                    ),
                 );
             }
         }

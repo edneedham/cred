@@ -15,6 +15,8 @@
     -   [status](./commands/status.md)
     -   [secret](./commands/secret.md)
     -   [env](./commands/env.md)
+    -   [import](./commands/import.md)
+    -   [export](./commands/export.md)
     -   [push](./commands/push.md)
     -   [prune](./commands/prune.md)
 -   [Security Model](./security.md)

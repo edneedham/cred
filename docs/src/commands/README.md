@@ -21,8 +21,8 @@ Complete reference for all cred commands.
 | [`cred secret describe`](./secret.md#describe) | Update a secret's description     |
 | [`cred secret history`](./secret.md#history)   | View version history for a secret |
 | [`cred secret rollback`](./secret.md#rollback) | Restore a previous version        |
-| [`cred import`](./secret.md#import)            | Import from .env file             |
-| [`cred export`](./secret.md#export)            | Export to .env file               |
+| [`cred import`](./import.md)                   | Import from .env file             |
+| [`cred export`](./export.md)                   | Export to .env file               |
 
 ## Environments
 

@@ -1,5 +1,69 @@
 # Changelog
 
+## v0.11.0
+
+### Rich Export/Import
+
+Enhanced `.env` export and import with full vault support:
+
+**Export Changes:**
+
+```bash
+# Full vault export (all environments with metadata) - NEW DEFAULT
+cred export vault.env
+
+# Single environment with metadata
+cred export prod.env --env prod
+
+# Plain .env format (no metadata)
+cred export .env --env default --plain
+```
+
+**Import Changes:**
+
+```bash
+# Auto-detects cred format, recreates environments
+cred import vault.env
+
+# Override: import all secrets to specific environment
+cred import vault.env --env staging
+```
+
+**Export Format:**
+
+The new cred export format includes:
+
+-   Environment markers (`# [environment: name]`)
+-   Secret metadata (descriptions, timestamps)
+-   Format version header for compatibility
+
+Example:
+
+```env
+# cred-export v1
+# exported: 2025-01-07T10:30:00Z
+#
+# To import: cred import <this-file>
+
+# [environment: default]
+
+# [API_KEY]
+# description: Development key
+API_KEY=sk-dev-xxx
+
+# [environment: prod]
+
+# [API_KEY]
+# description: Production key
+API_KEY=sk-prod-xxx
+```
+
+### Use Cases
+
+-   **Vault backup**: Export full vault for archival
+-   **Teammate onboarding**: Share vault structure via export file
+-   **Migration**: Move secrets between machines
+
 ## v0.10.0
 
 ### New Target: Vercel

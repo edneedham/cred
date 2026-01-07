@@ -327,9 +327,9 @@ pub struct ImportArgs {
     /// Overwrite existing keys instead of skipping
     #[arg(long)]
     pub overwrite: bool,
-    /// Environment to import secrets into (defaults to "default")
-    #[arg(long, short = 'e', default_value = DEFAULT_ENV)]
-    pub env: String,
+    /// Target environment (auto-detected from cred exports, defaults to "default" for plain .env)
+    #[arg(long, short = 'e')]
+    pub env: Option<String>,
 }
 
 #[derive(Args, Debug)]
@@ -339,7 +339,10 @@ pub struct ExportArgs {
     /// Overwrite the output file if it exists
     #[arg(long)]
     pub force: bool,
-    /// Environment to export secrets from (defaults to "default")
-    #[arg(long, short = 'e', default_value = DEFAULT_ENV)]
-    pub env: String,
+    /// Export only this environment (exports full vault if omitted)
+    #[arg(long, short = 'e')]
+    pub env: Option<String>,
+    /// Plain .env format (no metadata, single environment only)
+    #[arg(long)]
+    pub plain: bool,
 }
