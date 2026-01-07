@@ -25,6 +25,7 @@ Currently supported:
 Currently supported:
 
 -   **GitHub** — Actions secrets
+-   **Vercel** — Environment variables
 
 [Learn more about Targets →](./targets.md)
 

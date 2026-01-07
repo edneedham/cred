@@ -10,6 +10,12 @@ Push all secrets to GitHub:
 cred push github
 ```
 
+Push all secrets to Vercel:
+
+```bash
+cred push vercel
+```
+
 Push specific secrets only:
 
 ```bash
@@ -46,14 +52,18 @@ This pushes only secrets from the `prod` environment.
 
 ## Options
 
-| Flag                | Description                       |
-| ------------------- | --------------------------------- |
-| `--env <name>`      | Push from specific environment    |
-| `--dry-run`         | Preview changes without pushing   |
-| `--json`            | Machine-readable output           |
-| `--non-interactive` | Fail instead of prompting         |
+| Flag                  | Description                     |
+| --------------------- | ------------------------------- |
+| `--env <name>`        | Push from specific environment  |
+| `--repo <owner/repo>` | Explicit repository (GitHub)    |
+| `--project <id>`      | Explicit project ID (Vercel)    |
+| `--dry-run`           | Preview changes without pushing |
+| `--json`              | Machine-readable output         |
+| `--non-interactive`   | Fail instead of prompting       |
 
-## Repository Detection
+## Target Detection
+
+### GitHub
 
 cred automatically detects your repository from git metadata when you're inside a git repository.
 
@@ -61,6 +71,22 @@ If you're not in a git repository, or need to push to a different repo:
 
 ```bash
 cred push github --repo owner/repo
+```
+
+### Vercel
+
+cred auto-detects your project from `.vercel/project.json` (created by `vercel link`).
+
+If you haven't linked your project:
+
+```bash
+vercel link
+```
+
+Or specify the project ID explicitly:
+
+```bash
+cred push vercel --project prj_xxxxxxxxxxxxx
 ```
 
 ## Incremental Updates

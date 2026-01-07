@@ -4,8 +4,11 @@
 #[cfg(feature = "github")]
 mod github;
 
-#[cfg(not(feature = "github"))]
-compile_error!("No targets enabled. Enable feature \"github\".");
+#[cfg(feature = "vercel")]
+mod vercel;
+
+#[cfg(not(any(feature = "github", feature = "vercel")))]
+compile_error!("No targets enabled. Enable at least one of: \"github\", \"vercel\".");
 
 use anyhow::Result;
 use clap::ValueEnum;
@@ -18,6 +21,8 @@ use std::fmt;
 pub enum Target {
     #[cfg(feature = "github")]
     Github,
+    #[cfg(feature = "vercel")]
+    Vercel,
 }
 
 impl fmt::Display for Target {
@@ -25,13 +30,17 @@ impl fmt::Display for Target {
         let s = match self {
             #[cfg(feature = "github")]
             Target::Github => "github",
+            #[cfg(feature = "vercel")]
+            Target::Vercel => "vercel",
         };
         write!(f, "{}", s)
     }
 }
 
 pub struct PushOptions {
-    pub repo: Option<String>,
+    pub repo: Option<String>,    // for GitHub
+    pub project: Option<String>, // for Vercel
+    pub env: Option<String>,     // cred environment name
 }
 
 #[allow(async_fn_in_trait)] // Async in trait is crate-internal; we accept the bound
@@ -99,6 +108,8 @@ pub trait TargetAdapter {
 pub enum TargetWrapper {
     #[cfg(feature = "github")]
     Github(github::Github),
+    #[cfg(feature = "vercel")]
+    Vercel(vercel::Vercel),
 }
 
 impl TargetAdapter for TargetWrapper {
@@ -106,6 +117,8 @@ impl TargetAdapter for TargetWrapper {
         match self {
             #[cfg(feature = "github")]
             Self::Github(p) => p.name(),
+            #[cfg(feature = "vercel")]
+            Self::Vercel(p) => p.name(),
         }
     }
 
@@ -118,6 +131,8 @@ impl TargetAdapter for TargetWrapper {
         match self {
             #[cfg(feature = "github")]
             Self::Github(p) => p.push(secrets, auth_token, options).await,
+            #[cfg(feature = "vercel")]
+            Self::Vercel(p) => p.push(secrets, auth_token, options).await,
         }
     }
 
@@ -125,6 +140,8 @@ impl TargetAdapter for TargetWrapper {
         match self {
             #[cfg(feature = "github")]
             Self::Github(p) => p.delete(keys, auth_token, options).await,
+            #[cfg(feature = "vercel")]
+            Self::Vercel(p) => p.delete(keys, auth_token, options).await,
         }
     }
 
@@ -132,6 +149,8 @@ impl TargetAdapter for TargetWrapper {
         match self {
             #[cfg(feature = "github")]
             Self::Github(p) => p.generate(env, auth_token).await,
+            #[cfg(feature = "vercel")]
+            Self::Vercel(p) => p.generate(env, auth_token).await,
         }
     }
 
@@ -139,6 +158,8 @@ impl TargetAdapter for TargetWrapper {
         match self {
             #[cfg(feature = "github")]
             Self::Github(p) => p.revoke_secret(key_name, key_value, auth_token).await,
+            #[cfg(feature = "vercel")]
+            Self::Vercel(p) => p.revoke_secret(key_name, key_value, auth_token).await,
         }
     }
 
@@ -146,6 +167,8 @@ impl TargetAdapter for TargetWrapper {
         match self {
             #[cfg(feature = "github")]
             Self::Github(p) => p.revoke_auth_token(auth_token).await,
+            #[cfg(feature = "vercel")]
+            Self::Vercel(p) => p.revoke_auth_token(auth_token).await,
         }
     }
 }
@@ -154,6 +177,8 @@ pub fn get(name: Target) -> Option<TargetWrapper> {
     match name {
         #[cfg(feature = "github")]
         Target::Github => Some(TargetWrapper::Github(github::Github)),
+        #[cfg(feature = "vercel")]
+        Target::Vercel => Some(TargetWrapper::Vercel(vercel::Vercel)),
     }
 }
 
@@ -171,6 +196,7 @@ mod tests {
         }
     }
 
+    #[cfg(feature = "github")]
     #[test]
     fn test_factory_returns_github() {
         let p = get(Target::Github);
@@ -178,11 +204,23 @@ mod tests {
         assert_eq!(p.unwrap().name(), "github");
     }
 
+    #[cfg(feature = "vercel")]
+    #[test]
+    fn test_factory_returns_vercel() {
+        let p = get(Target::Vercel);
+        assert!(p.is_some());
+        assert_eq!(p.unwrap().name(), "vercel");
+    }
+
     #[tokio::test]
     async fn test_trait_defaults_prevent_invalid_usage() {
         let p = MockTarget;
         let secrets = HashMap::new();
-        let options = PushOptions { repo: None };
+        let options = PushOptions {
+            repo: None,
+            project: None,
+            env: None,
+        };
 
         let push_result = p.push(&secrets, "token", &options).await;
         assert!(push_result.is_err());
@@ -203,6 +241,7 @@ mod tests {
         );
     }
 
+    #[cfg(feature = "github")]
     #[tokio::test]
     async fn test_target_wrapper_dispatch() {
         let p = get(Target::Github).unwrap();

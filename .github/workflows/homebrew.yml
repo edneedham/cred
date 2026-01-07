@@ -113,8 +113,6 @@ jobs:
             fail-fast: false
             matrix:
                 include:
-                    - os: macos-13
-                      arch: intel
                     - os: macos-14
                       arch: arm64_sonoma
                     - os: macos-15

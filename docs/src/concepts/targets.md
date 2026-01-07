@@ -89,8 +89,65 @@ jobs:
 
 ---
 
+## Vercel
+
+Push environment variables to Vercel projects. Secrets you push become available to your deployments.
+
+### Setup
+
+1. Create an **Access Token** at [vercel.com/account/tokens](https://vercel.com/account/tokens)
+2. Grant **Full Account** scope (required for environment variable management)
+3. Add the token to cred:
+
+```bash
+cred target set vercel
+```
+
+### Linking Your Project
+
+cred auto-detects your Vercel project from `.vercel/project.json` (created by `vercel link`). If you haven't linked:
+
+```bash
+vercel link
+```
+
+Or specify the project ID explicitly:
+
+```bash
+cred push vercel --project prj_xxxxxxxxxxxxx
+```
+
+### Environment Mapping
+
+cred environments map to Vercel targets:
+
+| cred env  | Vercel target |
+| --------- | ------------- |
+| `prod`    | `production`  |
+| `default` | `development` |
+| others    | `preview`     |
+
+```bash
+# Push to Vercel production
+cred push vercel --env prod
+
+# Push to Vercel development (default)
+cred push vercel
+```
+
+### Using Secrets in Deployments
+
+Once pushed, environment variables are automatically available in your Vercel deployments:
+
+```javascript
+// Next.js example
+const apiKey = process.env.API_KEY;
+```
+
+---
+
 ## Why Targets Use Simple Tokens
 
 Targets need **minimal permissions** — just enough to write secrets. This follows the principle of least privilege.
 
-Unlike sources (which need elevated permissions to generate new credentials), targets only need write access to a specific resource (e.g., GitHub Actions secrets for one repository).
+Unlike sources (which need elevated permissions to generate new credentials), targets only need write access to a specific resource (e.g., GitHub Actions secrets for one repository, Vercel environment variables for one project).

@@ -1,6 +1,6 @@
 [package]
 name = "cred"
-version = "0.9.0"
+version = "0.10.0"
 edition = "2024"
 description = "A command-line tool to manage secrets and environment variables locally and remotely."
 readme = "README.md"
@@ -9,8 +9,9 @@ categories = ["command-line-utilities", "development-tools"]
 license = "MIT OR Apache-2.0"
 
 [features]
-default = ["github"]
+default = ["github", "vercel"]
 github = []
+vercel = []
 
 [dependencies]
 anyhow = "1.0.100"

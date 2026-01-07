@@ -1,5 +1,32 @@
 # Changelog
 
+## v0.10.0
+
+### New Target: Vercel
+
+Push environment variables directly to Vercel projects:
+
+```bash
+cred target set vercel
+cred push vercel
+```
+
+**Features:**
+
+-   Auto-detects project from `.vercel/project.json` (created by `vercel link`)
+-   Environment mapping: `prod` → production, `default` → development, others → preview
+-   Supports `--project <id>` flag for explicit project specification
+
+**Setup:**
+
+1. Create an Access Token at vercel.com/account/tokens
+2. Run `cred target set vercel`
+3. Link your project with `vercel link` (or use `--project`)
+
+### CLI Improvements
+
+-   Added `--project` flag to `push` and `prune` commands for Vercel projects
+
 ## v0.9.0
 
 ### Breaking Changes

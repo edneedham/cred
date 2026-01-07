@@ -46,13 +46,15 @@ cred prune github OLD_KEY --env prod --yes
 
 ## Options
 
-| Flag           | Description                      |
-| -------------- | -------------------------------- |
-| `--env <name>` | Prune from specific environment  |
-| `--dry-run`    | Preview without deleting         |
-| `--yes`        | Confirm destructive operation    |
-| `--all`        | Prune all known secrets          |
-| `--json`       | Machine-readable output          |
+| Flag                  | Description                     |
+| --------------------- | ------------------------------- |
+| `--env <name>`        | Prune from specific environment |
+| `--repo <owner/repo>` | Explicit repository (GitHub)    |
+| `--project <id>`      | Explicit project ID (Vercel)    |
+| `--dry-run`           | Preview without deleting        |
+| `--yes`               | Confirm destructive operation   |
+| `--all`               | Prune all known secrets         |
+| `--json`              | Machine-readable output         |
 
 ## Safety
 

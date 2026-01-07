@@ -35,7 +35,7 @@
             const path_to_root = "../";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "../searchindex-f737eca9.js";
+            window.path_to_searchindex_js = "../searchindex-99705472.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="../toc-e58f5c98.js"></script>
@@ -233,9 +233,52 @@ cred push github DATABASE_URL API_KEY
             - run: echo "Secret is available"
 </code></pre>
 <hr>
+<h2 id="vercel"><a class="header" href="#vercel">Vercel</a></h2>
+<p>Push environment variables to Vercel projects. Secrets you push become available to your deployments.</p>
+<h3 id="setup-1"><a class="header" href="#setup-1">Setup</a></h3>
+<ol>
+<li>Create an <strong>Access Token</strong> at <a href="https://vercel.com/account/tokens">vercel.com/account/tokens</a></li>
+<li>Grant <strong>Full Account</strong> scope (required for environment variable management)</li>
+<li>Add the token to cred:</li>
+</ol>
+<pre><code class="language-bash">cred target set vercel
+</code></pre>
+<h3 id="linking-your-project"><a class="header" href="#linking-your-project">Linking Your Project</a></h3>
+<p>cred auto-detects your Vercel project from <code>.vercel/project.json</code> (created by <code>vercel link</code>). If you haven’t linked:</p>
+<pre><code class="language-bash">vercel link
+</code></pre>
+<p>Or specify the project ID explicitly:</p>
+<pre><code class="language-bash">cred push vercel --project prj_xxxxxxxxxxxxx
+</code></pre>
+<h3 id="environment-mapping"><a class="header" href="#environment-mapping">Environment Mapping</a></h3>
+<p>cred environments map to Vercel targets:</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>cred env</th><th>Vercel target</th></tr>
+</thead>
+<tbody>
+<tr><td><code>prod</code></td><td><code>production</code></td></tr>
+<tr><td><code>default</code></td><td><code>development</code></td></tr>
+<tr><td>others</td><td><code>preview</code></td></tr>
+</tbody>
+</table>
+</div>
+<pre><code class="language-bash"># Push to Vercel production
+cred push vercel --env prod
+
+# Push to Vercel development (default)
+cred push vercel
+</code></pre>
+<h3 id="using-secrets-in-deployments"><a class="header" href="#using-secrets-in-deployments">Using Secrets in Deployments</a></h3>
+<p>Once pushed, environment variables are automatically available in your Vercel deployments:</p>
+<pre><code class="language-javascript">// Next.js example
+const apiKey = process.env.API_KEY;
+</code></pre>
+<hr>
 <h2 id="why-targets-use-simple-tokens"><a class="header" href="#why-targets-use-simple-tokens">Why Targets Use Simple Tokens</a></h2>
 <p>Targets need <strong>minimal permissions</strong> — just enough to write secrets. This follows the principle of least privilege.</p>
-<p>Unlike sources (which need elevated permissions to generate new credentials), targets only need write access to a specific resource (e.g., GitHub Actions secrets for one repository).</p>
+<p>Unlike sources (which need elevated permissions to generate new credentials), targets only need write access to a specific resource (e.g., GitHub Actions secrets for one repository, Vercel environment variables for one project).</p>
 
                     </main>
 

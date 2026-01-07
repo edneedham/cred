@@ -35,7 +35,7 @@
             const path_to_root = "../";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "../searchindex-f737eca9.js";
+            window.path_to_searchindex_js = "../searchindex-99705472.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="../toc-e58f5c98.js"></script>
@@ -180,6 +180,9 @@
 <p>Push all secrets to GitHub:</p>
 <pre><code class="language-bash">cred push github
 </code></pre>
+<p>Push all secrets to Vercel:</p>
+<pre><code class="language-bash">cred push vercel
+</code></pre>
 <p>Push specific secrets only:</p>
 <pre><code class="language-bash">cred push github DATABASE_URL JWT_SECRET
 </code></pre>
@@ -205,16 +208,27 @@
 </thead>
 <tbody>
 <tr><td><code>--env &lt;name&gt;</code></td><td>Push from specific environment</td></tr>
+<tr><td><code>--repo &lt;owner/repo&gt;</code></td><td>Explicit repository (GitHub)</td></tr>
+<tr><td><code>--project &lt;id&gt;</code></td><td>Explicit project ID (Vercel)</td></tr>
 <tr><td><code>--dry-run</code></td><td>Preview changes without pushing</td></tr>
 <tr><td><code>--json</code></td><td>Machine-readable output</td></tr>
 <tr><td><code>--non-interactive</code></td><td>Fail instead of prompting</td></tr>
 </tbody>
 </table>
 </div>
-<h2 id="repository-detection"><a class="header" href="#repository-detection">Repository Detection</a></h2>
+<h2 id="target-detection"><a class="header" href="#target-detection">Target Detection</a></h2>
+<h3 id="github"><a class="header" href="#github">GitHub</a></h3>
 <p>cred automatically detects your repository from git metadata when you’re inside a git repository.</p>
 <p>If you’re not in a git repository, or need to push to a different repo:</p>
 <pre><code class="language-bash">cred push github --repo owner/repo
+</code></pre>
+<h3 id="vercel"><a class="header" href="#vercel">Vercel</a></h3>
+<p>cred auto-detects your project from <code>.vercel/project.json</code> (created by <code>vercel link</code>).</p>
+<p>If you haven’t linked your project:</p>
+<pre><code class="language-bash">vercel link
+</code></pre>
+<p>Or specify the project ID explicitly:</p>
+<pre><code class="language-bash">cred push vercel --project prj_xxxxxxxxxxxxx
 </code></pre>
 <h2 id="incremental-updates"><a class="header" href="#incremental-updates">Incremental Updates</a></h2>
 <p>cred tracks which secrets have changed since the last push. Only modified secrets are updated remotely, making pushes efficient.</p>

@@ -36,7 +36,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-f737eca9.js";
+            window.path_to_searchindex_js = "searchindex-99705472.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-e58f5c98.js"></script>
@@ -178,7 +178,7 @@
                         <h1 id="introduction"><a class="header" href="#introduction">Introduction</a></h1>
 <h2 id="what-it-is"><a class="header" href="#what-it-is">What it is</a></h2>
 <p><strong><code>cred</code></strong> is a command-line tool that stores encrypted secrets locally and pushes them to deployment platforms on demand.</p>
-<p>⚠️ <strong>Status: Early Preview (v0.9.0)</strong></p>
+<p>⚠️ <strong>Status: Early Preview (v0.10.0)</strong></p>
 <p><code>cred</code> is currently in active development. The on-disk format, CLI surface, and security model may change between minor versions. Do not rely on it as your sole secrets backup yet.</p>
 <h2 id="what-it-is-not"><a class="header" href="#what-it-is-not">What it is <strong>not</strong></a></h2>
 <ul>
@@ -224,6 +224,7 @@ cred secret rollback API_KEY --version 0 --yes
 <h4 id="supported-targets"><a class="header" href="#supported-targets">Supported targets:</a></h4>
 <ul>
 <li>GitHub (Actions secrets)</li>
+<li>Vercel (Environment variables)</li>
 </ul>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="installation"><a class="header" href="#installation">Installation</a></h1>
@@ -360,6 +361,7 @@ cred import prod.env --env prod
 <p>Currently supported:</p>
 <ul>
 <li><strong>GitHub</strong> — Actions secrets</li>
+<li><strong>Vercel</strong> — Environment variables</li>
 </ul>
 <p><a href="#targets-1">Learn more about Targets →</a></p>
 <hr>
@@ -513,9 +515,52 @@ cred push github DATABASE_URL API_KEY
             - run: echo "Secret is available"
 </code></pre>
 <hr>
+<h2 id="vercel"><a class="header" href="#vercel">Vercel</a></h2>
+<p>Push environment variables to Vercel projects. Secrets you push become available to your deployments.</p>
+<h3 id="setup-1"><a class="header" href="#setup-1">Setup</a></h3>
+<ol>
+<li>Create an <strong>Access Token</strong> at <a href="https://vercel.com/account/tokens">vercel.com/account/tokens</a></li>
+<li>Grant <strong>Full Account</strong> scope (required for environment variable management)</li>
+<li>Add the token to cred:</li>
+</ol>
+<pre><code class="language-bash">cred target set vercel
+</code></pre>
+<h3 id="linking-your-project"><a class="header" href="#linking-your-project">Linking Your Project</a></h3>
+<p>cred auto-detects your Vercel project from <code>.vercel/project.json</code> (created by <code>vercel link</code>). If you haven’t linked:</p>
+<pre><code class="language-bash">vercel link
+</code></pre>
+<p>Or specify the project ID explicitly:</p>
+<pre><code class="language-bash">cred push vercel --project prj_xxxxxxxxxxxxx
+</code></pre>
+<h3 id="environment-mapping"><a class="header" href="#environment-mapping">Environment Mapping</a></h3>
+<p>cred environments map to Vercel targets:</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>cred env</th><th>Vercel target</th></tr>
+</thead>
+<tbody>
+<tr><td><code>prod</code></td><td><code>production</code></td></tr>
+<tr><td><code>default</code></td><td><code>development</code></td></tr>
+<tr><td>others</td><td><code>preview</code></td></tr>
+</tbody>
+</table>
+</div>
+<pre><code class="language-bash"># Push to Vercel production
+cred push vercel --env prod
+
+# Push to Vercel development (default)
+cred push vercel
+</code></pre>
+<h3 id="using-secrets-in-deployments"><a class="header" href="#using-secrets-in-deployments">Using Secrets in Deployments</a></h3>
+<p>Once pushed, environment variables are automatically available in your Vercel deployments:</p>
+<pre><code class="language-javascript">// Next.js example
+const apiKey = process.env.API_KEY;
+</code></pre>
+<hr>
 <h2 id="why-targets-use-simple-tokens"><a class="header" href="#why-targets-use-simple-tokens">Why Targets Use Simple Tokens</a></h2>
 <p>Targets need <strong>minimal permissions</strong> — just enough to write secrets. This follows the principle of least privilege.</p>
-<p>Unlike sources (which need elevated permissions to generate new credentials), targets only need write access to a specific resource (e.g., GitHub Actions secrets for one repository).</p>
+<p>Unlike sources (which need elevated permissions to generate new credentials), targets only need write access to a specific resource (e.g., GitHub Actions secrets for one repository, Vercel environment variables for one project).</p>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="vault-1"><a class="header" href="#vault-1">Vault</a></h1>
 <p>The vault is your local encrypted secrets store. Each cred project has its own vault containing all secrets with rich metadata, organized by environment.</p>
@@ -1115,6 +1160,9 @@ cred export prod.env --env prod
 <p>Push all secrets to GitHub:</p>
 <pre><code class="language-bash">cred push github
 </code></pre>
+<p>Push all secrets to Vercel:</p>
+<pre><code class="language-bash">cred push vercel
+</code></pre>
 <p>Push specific secrets only:</p>
 <pre><code class="language-bash">cred push github DATABASE_URL JWT_SECRET
 </code></pre>
@@ -1140,16 +1188,27 @@ cred export prod.env --env prod
 </thead>
 <tbody>
 <tr><td><code>--env &lt;name&gt;</code></td><td>Push from specific environment</td></tr>
+<tr><td><code>--repo &lt;owner/repo&gt;</code></td><td>Explicit repository (GitHub)</td></tr>
+<tr><td><code>--project &lt;id&gt;</code></td><td>Explicit project ID (Vercel)</td></tr>
 <tr><td><code>--dry-run</code></td><td>Preview changes without pushing</td></tr>
 <tr><td><code>--json</code></td><td>Machine-readable output</td></tr>
 <tr><td><code>--non-interactive</code></td><td>Fail instead of prompting</td></tr>
 </tbody>
 </table>
 </div>
-<h2 id="repository-detection"><a class="header" href="#repository-detection">Repository Detection</a></h2>
+<h2 id="target-detection"><a class="header" href="#target-detection">Target Detection</a></h2>
+<h3 id="github-1"><a class="header" href="#github-1">GitHub</a></h3>
 <p>cred automatically detects your repository from git metadata when you’re inside a git repository.</p>
 <p>If you’re not in a git repository, or need to push to a different repo:</p>
 <pre><code class="language-bash">cred push github --repo owner/repo
+</code></pre>
+<h3 id="vercel-1"><a class="header" href="#vercel-1">Vercel</a></h3>
+<p>cred auto-detects your project from <code>.vercel/project.json</code> (created by <code>vercel link</code>).</p>
+<p>If you haven’t linked your project:</p>
+<pre><code class="language-bash">vercel link
+</code></pre>
+<p>Or specify the project ID explicitly:</p>
+<pre><code class="language-bash">cred push vercel --project prj_xxxxxxxxxxxxx
 </code></pre>
 <h2 id="incremental-updates"><a class="header" href="#incremental-updates">Incremental Updates</a></h2>
 <p>cred tracks which secrets have changed since the last push. Only modified secrets are updated remotely, making pushes efficient.</p>
@@ -1207,6 +1266,8 @@ cred push github
 </thead>
 <tbody>
 <tr><td><code>--env &lt;name&gt;</code></td><td>Prune from specific environment</td></tr>
+<tr><td><code>--repo &lt;owner/repo&gt;</code></td><td>Explicit repository (GitHub)</td></tr>
+<tr><td><code>--project &lt;id&gt;</code></td><td>Explicit project ID (Vercel)</td></tr>
 <tr><td><code>--dry-run</code></td><td>Preview without deleting</td></tr>
 <tr><td><code>--yes</code></td><td>Confirm destructive operation</td></tr>
 <tr><td><code>--all</code></td><td>Prune all known secrets</td></tr>

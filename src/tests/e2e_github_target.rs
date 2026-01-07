@@ -53,6 +53,8 @@ async fn github_push_and_prune_round_trip() -> Result<()> {
     let gh = targets::get(targets::Target::Github).expect("github target");
     let opts = targets::PushOptions {
         repo: Some(full_repo.clone()),
+        project: None,
+        env: None,
     };
 
     gh.push(&secrets, &token, &opts).await?;

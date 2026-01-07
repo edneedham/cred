@@ -860,7 +860,11 @@ async fn run(cli: Cli, flags: &CliFlags) -> Result<(), AppError> {
                 flags,
                 &format!("📦 Pushing {} secrets{}...", filtered.len(), env_suffix),
             );
-            let options = targets::PushOptions { repo };
+            let options = targets::PushOptions {
+                repo,
+                project: args.project.clone(),
+                env: Some(args.env.clone()),
+            };
             if let Err(e) = target_impl.push(&filtered, &token, &options).await {
                 print_err(flags, &format!("x Failed to push: {}", e));
             } else {
@@ -974,7 +978,11 @@ async fn run(cli: Cli, flags: &CliFlags) -> Result<(), AppError> {
                 flags,
                 &format!("Deleting from Remote ({}){}...", args.target, env_suffix),
             );
-            let options = targets::PushOptions { repo };
+            let options = targets::PushOptions {
+                repo,
+                project: args.project.clone(),
+                env: Some(args.env.clone()),
+            };
 
             // ATOMIC: Remote fail stops local delete
             target_impl.delete(&keys_to_prune, &token, &options).await?;
