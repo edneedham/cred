@@ -16,6 +16,12 @@ Push all secrets to Vercel:
 cred push vercel
 ```
 
+Push all secrets to Fly.io:
+
+```bash
+cred push fly
+```
+
 Push specific secrets only:
 
 ```bash
@@ -57,6 +63,7 @@ This pushes only secrets from the `prod` environment.
 | `--env <name>`        | Push from specific environment  |
 | `--repo <owner/repo>` | Explicit repository (GitHub)    |
 | `--project <id>`      | Explicit project ID (Vercel)    |
+| `--app <name>`        | Explicit app name (Fly.io)      |
 | `--dry-run`           | Preview changes without pushing |
 | `--json`              | Machine-readable output         |
 | `--non-interactive`   | Fail instead of prompting       |
@@ -88,6 +95,24 @@ Or specify the project ID explicitly:
 ```bash
 cred push vercel --project prj_xxxxxxxxxxxxx
 ```
+
+### Fly.io
+
+cred auto-detects your app from `fly.toml` (created by `fly launch`).
+
+If you haven't launched your app:
+
+```bash
+fly launch
+```
+
+Or specify the app name explicitly:
+
+```bash
+cred push fly --app my-app-name
+```
+
+**Note:** After pushing secrets to Fly.io, run `fly deploy` or `fly secrets deploy` to apply changes.
 
 ## Incremental Updates
 

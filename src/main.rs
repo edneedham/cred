@@ -938,6 +938,7 @@ async fn run(cli: Cli, flags: &CliFlags) -> Result<(), AppError> {
             let options = targets::PushOptions {
                 repo,
                 project: args.project.clone(),
+                app: args.app.clone(),
                 env: Some(args.env.clone()),
             };
             if let Err(e) = target_impl.push(&filtered, &token, &options).await {
@@ -1056,6 +1057,7 @@ async fn run(cli: Cli, flags: &CliFlags) -> Result<(), AppError> {
             let options = targets::PushOptions {
                 repo,
                 project: args.project.clone(),
+                app: args.app.clone(),
                 env: Some(args.env.clone()),
             };
 

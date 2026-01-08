@@ -35,7 +35,7 @@
             const path_to_root = "../";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "../searchindex-3f0972d8.js";
+            window.path_to_searchindex_js = "../searchindex-e68e8388.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="../toc-ed68b008.js"></script>
@@ -274,6 +274,48 @@ cred push vercel
 <p>Once pushed, environment variables are automatically available in your Vercel deployments:</p>
 <pre><code class="language-javascript">// Next.js example
 const apiKey = process.env.API_KEY;
+</code></pre>
+<hr>
+<h2 id="flyio"><a class="header" href="#flyio">Fly.io</a></h2>
+<p>Push secrets to Fly.io apps. Secrets you push become available to your deployed applications.</p>
+<h3 id="setup-2"><a class="header" href="#setup-2">Setup</a></h3>
+<ol>
+<li>Create a <strong>Personal Access Token</strong> at <a href="https://fly.io/user/personal_access_tokens">fly.io/user/personal_access_tokens</a></li>
+<li>Add the token to cred:</li>
+</ol>
+<pre><code class="language-bash">cred target set fly
+</code></pre>
+<h3 id="linking-your-app"><a class="header" href="#linking-your-app">Linking Your App</a></h3>
+<p>cred auto-detects your Fly.io app from <code>fly.toml</code> (created by <code>fly launch</code>). If you haven’t launched:</p>
+<pre><code class="language-bash">fly launch
+</code></pre>
+<p>Or specify the app name explicitly:</p>
+<pre><code class="language-bash">cred push fly --app my-app-name
+</code></pre>
+<h3 id="pushing-secrets-1"><a class="header" href="#pushing-secrets-1">Pushing Secrets</a></h3>
+<pre><code class="language-bash"># Push all secrets
+cred push fly
+
+# Push specific secrets
+cred push fly DATABASE_URL API_KEY
+
+# Push to a specific app
+cred push fly --app my-app-name
+</code></pre>
+<h3 id="applying-secrets"><a class="header" href="#applying-secrets">Applying Secrets</a></h3>
+<p>After pushing secrets, Fly.io requires a deployment to apply them:</p>
+<pre><code class="language-bash">fly deploy
+# or
+fly secrets deploy
+</code></pre>
+<h3 id="using-secrets-in-your-app"><a class="header" href="#using-secrets-in-your-app">Using Secrets in Your App</a></h3>
+<p>Once deployed, secrets are available as environment variables:</p>
+<pre><code class="language-javascript">// Node.js example
+const apiKey = process.env.API_KEY;
+</code></pre>
+<pre><code class="language-python"># Python example
+import os
+api_key = os.environ.get("API_KEY")
 </code></pre>
 <hr>
 <h2 id="why-targets-use-simple-tokens"><a class="header" href="#why-targets-use-simple-tokens">Why Targets Use Simple Tokens</a></h2>

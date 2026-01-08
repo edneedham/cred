@@ -54,6 +54,7 @@ async fn github_push_and_prune_round_trip() -> Result<()> {
     let opts = targets::PushOptions {
         repo: Some(full_repo.clone()),
         project: None,
+        app: None,
         env: None,
     };
 

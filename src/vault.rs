@@ -429,6 +429,7 @@ impl Vault {
     }
 
     /// Check if an environment exists.
+    #[allow(dead_code)] // Public API for future use
     pub fn has_environment(&self, env: &str) -> bool {
         self.environments.contains_key(env)
     }
@@ -600,6 +601,7 @@ impl Vault {
     }
 
     /// Get the history of a secret in a specific environment.
+    #[allow(dead_code)] // Public API for future use
     pub fn get_history_in_env(&self, env: &str, key: &str) -> Option<&Vec<HistoricalValue>> {
         self.environments
             .get(env)

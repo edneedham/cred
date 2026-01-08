@@ -7,8 +7,11 @@ mod github;
 #[cfg(feature = "vercel")]
 mod vercel;
 
-#[cfg(not(any(feature = "github", feature = "vercel")))]
-compile_error!("No targets enabled. Enable at least one of: \"github\", \"vercel\".");
+#[cfg(feature = "fly")]
+mod fly;
+
+#[cfg(not(any(feature = "github", feature = "vercel", feature = "fly")))]
+compile_error!("No targets enabled. Enable at least one of: \"github\", \"vercel\", \"fly\".");
 
 use anyhow::Result;
 use clap::ValueEnum;
@@ -23,6 +26,8 @@ pub enum Target {
     Github,
     #[cfg(feature = "vercel")]
     Vercel,
+    #[cfg(feature = "fly")]
+    Fly,
 }
 
 impl fmt::Display for Target {
@@ -32,6 +37,8 @@ impl fmt::Display for Target {
             Target::Github => "github",
             #[cfg(feature = "vercel")]
             Target::Vercel => "vercel",
+            #[cfg(feature = "fly")]
+            Target::Fly => "fly",
         };
         write!(f, "{}", s)
     }
@@ -40,6 +47,7 @@ impl fmt::Display for Target {
 pub struct PushOptions {
     pub repo: Option<String>,    // for GitHub
     pub project: Option<String>, // for Vercel
+    pub app: Option<String>,     // for Fly.io
     pub env: Option<String>,     // cred environment name
 }
 
@@ -110,6 +118,8 @@ pub enum TargetWrapper {
     Github(github::Github),
     #[cfg(feature = "vercel")]
     Vercel(vercel::Vercel),
+    #[cfg(feature = "fly")]
+    Fly(fly::Fly),
 }
 
 impl TargetAdapter for TargetWrapper {
@@ -119,6 +129,8 @@ impl TargetAdapter for TargetWrapper {
             Self::Github(p) => p.name(),
             #[cfg(feature = "vercel")]
             Self::Vercel(p) => p.name(),
+            #[cfg(feature = "fly")]
+            Self::Fly(p) => p.name(),
         }
     }
 
@@ -133,6 +145,8 @@ impl TargetAdapter for TargetWrapper {
             Self::Github(p) => p.push(secrets, auth_token, options).await,
             #[cfg(feature = "vercel")]
             Self::Vercel(p) => p.push(secrets, auth_token, options).await,
+            #[cfg(feature = "fly")]
+            Self::Fly(p) => p.push(secrets, auth_token, options).await,
         }
     }
 
@@ -142,6 +156,8 @@ impl TargetAdapter for TargetWrapper {
             Self::Github(p) => p.delete(keys, auth_token, options).await,
             #[cfg(feature = "vercel")]
             Self::Vercel(p) => p.delete(keys, auth_token, options).await,
+            #[cfg(feature = "fly")]
+            Self::Fly(p) => p.delete(keys, auth_token, options).await,
         }
     }
 
@@ -151,6 +167,8 @@ impl TargetAdapter for TargetWrapper {
             Self::Github(p) => p.generate(env, auth_token).await,
             #[cfg(feature = "vercel")]
             Self::Vercel(p) => p.generate(env, auth_token).await,
+            #[cfg(feature = "fly")]
+            Self::Fly(p) => p.generate(env, auth_token).await,
         }
     }
 
@@ -160,6 +178,8 @@ impl TargetAdapter for TargetWrapper {
             Self::Github(p) => p.revoke_secret(key_name, key_value, auth_token).await,
             #[cfg(feature = "vercel")]
             Self::Vercel(p) => p.revoke_secret(key_name, key_value, auth_token).await,
+            #[cfg(feature = "fly")]
+            Self::Fly(p) => p.revoke_secret(key_name, key_value, auth_token).await,
         }
     }
 
@@ -169,6 +189,8 @@ impl TargetAdapter for TargetWrapper {
             Self::Github(p) => p.revoke_auth_token(auth_token).await,
             #[cfg(feature = "vercel")]
             Self::Vercel(p) => p.revoke_auth_token(auth_token).await,
+            #[cfg(feature = "fly")]
+            Self::Fly(p) => p.revoke_auth_token(auth_token).await,
         }
     }
 }
@@ -179,6 +201,8 @@ pub fn get(name: Target) -> Option<TargetWrapper> {
         Target::Github => Some(TargetWrapper::Github(github::Github)),
         #[cfg(feature = "vercel")]
         Target::Vercel => Some(TargetWrapper::Vercel(vercel::Vercel)),
+        #[cfg(feature = "fly")]
+        Target::Fly => Some(TargetWrapper::Fly(fly::Fly)),
     }
 }
 
@@ -212,6 +236,14 @@ mod tests {
         assert_eq!(p.unwrap().name(), "vercel");
     }
 
+    #[cfg(feature = "fly")]
+    #[test]
+    fn test_factory_returns_fly() {
+        let p = get(Target::Fly);
+        assert!(p.is_some());
+        assert_eq!(p.unwrap().name(), "fly");
+    }
+
     #[tokio::test]
     async fn test_trait_defaults_prevent_invalid_usage() {
         let p = MockTarget;
@@ -219,6 +251,7 @@ mod tests {
         let options = PushOptions {
             repo: None,
             project: None,
+            app: None,
             env: None,
         };
 

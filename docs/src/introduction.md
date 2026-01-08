@@ -4,7 +4,7 @@
 
 **`cred`** is a command-line tool that stores encrypted secrets locally and pushes them to deployment platforms on demand.
 
-⚠️ **Status: Early Preview (v0.11.0)**
+⚠️ **Status: Early Preview (v0.12.0)**
 
 `cred` is currently in active development. The on-disk format, CLI surface, and security model may change between minor versions. Do not rely on it as your sole secrets backup yet.
 
@@ -23,7 +23,7 @@
 
 ## Why cred exists
 
-Managing secrets across projects and deployment platforms is a mess and a chore.
+Managing secrets in projects and deployment platforms is a mess and a chore.
 
 `cred` solves this by giving you:
 
@@ -69,3 +69,4 @@ Your encryption key is stored in your OS credential store (Keychain, GNOME Keyri
 
 -   GitHub (Actions secrets)
 -   Vercel (Environment variables)
+-   Fly.io (App secrets)

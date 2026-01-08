@@ -146,6 +146,73 @@ const apiKey = process.env.API_KEY;
 
 ---
 
+## Fly.io
+
+Push secrets to Fly.io apps. Secrets you push become available to your deployed applications.
+
+### Setup
+
+1. Create a **Personal Access Token** at [fly.io/user/personal_access_tokens](https://fly.io/user/personal_access_tokens)
+2. Add the token to cred:
+
+```bash
+cred target set fly
+```
+
+### Linking Your App
+
+cred auto-detects your Fly.io app from `fly.toml` (created by `fly launch`). If you haven't launched:
+
+```bash
+fly launch
+```
+
+Or specify the app name explicitly:
+
+```bash
+cred push fly --app my-app-name
+```
+
+### Pushing Secrets
+
+```bash
+# Push all secrets
+cred push fly
+
+# Push specific secrets
+cred push fly DATABASE_URL API_KEY
+
+# Push to a specific app
+cred push fly --app my-app-name
+```
+
+### Applying Secrets
+
+After pushing secrets, Fly.io requires a deployment to apply them:
+
+```bash
+fly deploy
+# or
+fly secrets deploy
+```
+
+### Using Secrets in Your App
+
+Once deployed, secrets are available as environment variables:
+
+```javascript
+// Node.js example
+const apiKey = process.env.API_KEY;
+```
+
+```python
+# Python example
+import os
+api_key = os.environ.get("API_KEY")
+```
+
+---
+
 ## Why Targets Use Simple Tokens
 
 Targets need **minimal permissions** — just enough to write secrets. This follows the principle of least privilege.

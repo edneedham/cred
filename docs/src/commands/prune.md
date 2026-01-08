@@ -51,6 +51,7 @@ cred prune github OLD_KEY --env prod --yes
 | `--env <name>`        | Prune from specific environment |
 | `--repo <owner/repo>` | Explicit repository (GitHub)    |
 | `--project <id>`      | Explicit project ID (Vercel)    |
+| `--app <name>`        | Explicit app name (Fly.io)      |
 | `--dry-run`           | Preview without deleting        |
 | `--yes`               | Confirm destructive operation   |
 | `--all`               | Prune all known secrets         |

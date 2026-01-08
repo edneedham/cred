@@ -1,5 +1,34 @@
 # Changelog
 
+## v0.12.0
+
+### New Target: Fly.io
+
+Push secrets directly to Fly.io apps:
+
+```bash
+cred target set fly
+cred push fly
+```
+
+**Features:**
+
+-   Auto-detects app from `fly.toml` (created by `fly launch`)
+-   Supports `--app <name>` flag for explicit app specification
+-   Uses Fly.io GraphQL API with `SetSecrets` and `UnsetSecrets` mutations
+
+**Setup:**
+
+1. Create a Personal Access Token at fly.io/user/personal_access_tokens
+2. Run `cred target set fly`
+3. Launch your app with `fly launch` (or use `--app`)
+
+**Note:** After pushing secrets, run `fly deploy` or `fly secrets deploy` to apply changes.
+
+### CLI Improvements
+
+-   Added `--app` flag to `push` and `prune` commands for Fly.io apps
+
 ## v0.11.0
 
 ### Rich Export/Import

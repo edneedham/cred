@@ -35,7 +35,7 @@
             const path_to_root = "../";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "../searchindex-3f0972d8.js";
+            window.path_to_searchindex_js = "../searchindex-e68e8388.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="../toc-ed68b008.js"></script>
@@ -183,6 +183,9 @@
 <p>Push all secrets to Vercel:</p>
 <pre><code class="language-bash">cred push vercel
 </code></pre>
+<p>Push all secrets to Fly.io:</p>
+<pre><code class="language-bash">cred push fly
+</code></pre>
 <p>Push specific secrets only:</p>
 <pre><code class="language-bash">cred push github DATABASE_URL JWT_SECRET
 </code></pre>
@@ -210,6 +213,7 @@
 <tr><td><code>--env &lt;name&gt;</code></td><td>Push from specific environment</td></tr>
 <tr><td><code>--repo &lt;owner/repo&gt;</code></td><td>Explicit repository (GitHub)</td></tr>
 <tr><td><code>--project &lt;id&gt;</code></td><td>Explicit project ID (Vercel)</td></tr>
+<tr><td><code>--app &lt;name&gt;</code></td><td>Explicit app name (Fly.io)</td></tr>
 <tr><td><code>--dry-run</code></td><td>Preview changes without pushing</td></tr>
 <tr><td><code>--json</code></td><td>Machine-readable output</td></tr>
 <tr><td><code>--non-interactive</code></td><td>Fail instead of prompting</td></tr>
@@ -230,6 +234,15 @@
 <p>Or specify the project ID explicitly:</p>
 <pre><code class="language-bash">cred push vercel --project prj_xxxxxxxxxxxxx
 </code></pre>
+<h3 id="flyio"><a class="header" href="#flyio">Fly.io</a></h3>
+<p>cred auto-detects your app from <code>fly.toml</code> (created by <code>fly launch</code>).</p>
+<p>If you haven’t launched your app:</p>
+<pre><code class="language-bash">fly launch
+</code></pre>
+<p>Or specify the app name explicitly:</p>
+<pre><code class="language-bash">cred push fly --app my-app-name
+</code></pre>
+<p><strong>Note:</strong> After pushing secrets to Fly.io, run <code>fly deploy</code> or <code>fly secrets deploy</code> to apply changes.</p>
 <h2 id="incremental-updates"><a class="header" href="#incremental-updates">Incremental Updates</a></h2>
 <p>cred tracks which secrets have changed since the last push. Only modified secrets are updated remotely, making pushes efficient.</p>
 <h2 id="workflow-example"><a class="header" href="#workflow-example">Workflow Example</a></h2>

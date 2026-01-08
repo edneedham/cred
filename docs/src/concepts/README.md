@@ -26,6 +26,7 @@ Currently supported:
 
 -   **GitHub** — Actions secrets
 -   **Vercel** — Environment variables
+-   **Fly.io** — App secrets
 
 [Learn more about Targets →](./targets.md)
 

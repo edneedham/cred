@@ -17,7 +17,7 @@ Encrypted local secrets → Deployment platforms.
 
 `cred` stores encrypted secrets locally and safely pushes them to target platforms on demand.
 
-⚠️ **Status: Early Preview (v0.11.0)** — The on-disk format, CLI surface, and security model may change between minor versions.
+⚠️ **Status: Early Preview (v0.12.0)** — The on-disk format, CLI surface, and security model may change between minor versions.
 
 ### What it's not
 
@@ -85,7 +85,7 @@ See the [Getting Started guide](https://edneedham.github.io/cred/getting-started
 -   **Environments** — Organize secrets by context (dev, staging, prod)
 -   **Version history** — Track changes, rollback to previous versions
 -   **Sources** — Generate credentials from APIs (Resend)
--   **Targets** — Push secrets to deployment platforms (GitHub Actions, Vercel)
+-   **Targets** — Push secrets to deployment platforms (GitHub Actions, Vercel, Fly.io)
 -   **OS keyring** — Tokens stored in macOS Keychain, GNOME Keyring, or Windows Credential Manager
 -   **Automation-ready** — `--json`, `--dry-run`, `--non-interactive` flags
 

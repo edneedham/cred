@@ -23,7 +23,9 @@ pub struct ParsedSecret {
     pub key: String,
     pub value: String,
     pub description: Option<String>,
+    #[allow(dead_code)] // Reserved for future import metadata preservation
     pub created_at: Option<String>,
+    #[allow(dead_code)] // Reserved for future import metadata preservation
     pub updated_at: Option<String>,
 }
 
@@ -85,7 +87,8 @@ pub fn parse_cred_export(path: &Path) -> Result<ParsedExport, AppError> {
     let lines: Vec<&str> = content.lines().collect();
 
     // Check if this is a cred export file
-    let is_cred_format = lines.first().map(|l| l.trim()) == Some("# cred-export v1");
+    let expected_header = format!("# cred-export {}", EXPORT_VERSION);
+    let is_cred_format = lines.first().map(|l| l.trim()) == Some(expected_header.as_str());
 
     if !is_cred_format {
         // Fall back to simple parsing into default environment
@@ -138,7 +141,7 @@ pub fn parse_cred_export(path: &Path) -> Result<ParsedExport, AppError> {
         let trimmed = line.trim();
 
         // Skip header lines
-        if trimmed == "# cred-export v1"
+        if trimmed == expected_header
             || trimmed.starts_with("# exported:")
             || trimmed.starts_with("# environment:")
             || trimmed.starts_with("# To import:")
@@ -391,7 +394,7 @@ pub fn export_full_vault(
     let mut body = String::new();
 
     // Header
-    body.push_str("# cred-export v1\n");
+    body.push_str(&format!("# cred-export {}\n", EXPORT_VERSION));
     body.push_str(&format!("# exported: {}\n", Utc::now().to_rfc3339()));
     body.push_str("#\n");
     body.push_str("# To import: cred import <this-file>\n");
@@ -439,7 +442,7 @@ pub fn export_env_with_metadata(
     let mut body = String::new();
 
     // Header
-    body.push_str("# cred-export v1\n");
+    body.push_str(&format!("# cred-export {}\n", EXPORT_VERSION));
     body.push_str(&format!("# environment: {}\n", env));
     body.push_str(&format!("# exported: {}\n", Utc::now().to_rfc3339()));
     body.push_str("#\n");

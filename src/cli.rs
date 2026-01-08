@@ -124,6 +124,10 @@ pub struct PushArgs {
     #[arg(long)]
     pub project: Option<String>,
 
+    /// Explicit app name (for Fly.io; auto-detected from fly.toml if omitted)
+    #[arg(long)]
+    pub app: Option<String>,
+
     /// Environment to push secrets from (defaults to "default")
     #[arg(long, short = 'e', default_value = DEFAULT_ENV)]
     pub env: String,
@@ -145,6 +149,10 @@ pub struct PruneArgs {
     /// Explicit project ID (for Vercel; auto-detected from .vercel/project.json if omitted)
     #[arg(long)]
     pub project: Option<String>,
+
+    /// Explicit app name (for Fly.io; auto-detected from fly.toml if omitted)
+    #[arg(long)]
+    pub app: Option<String>,
 
     /// Prune all known keys (requires --yes unless dry-run)
     #[arg(long)]
