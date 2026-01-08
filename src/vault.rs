@@ -649,14 +649,18 @@ impl Vault {
     }
 
     // ========== Backward-Compatible Methods (Default Environment) ==========
+    // These methods operate on the default environment for backward compatibility.
+    // They are used by tests and the public API but may not be called in the main CLI.
 
     /// Insert or overwrite a secret in the default environment.
     /// Automatically detects format and updates timestamps. Source defaults to "manual".
+    #[allow(dead_code)] // Used by tests and public API
     pub fn set(&mut self, key: &str, value: &str) {
         self.set_in_env(DEFAULT_ENV, key, value)
     }
 
     /// Insert or overwrite a secret with explicit metadata in the default environment.
+    #[allow(dead_code)] // Used by tests and public API
     pub fn set_with_metadata(
         &mut self,
         key: &str,
@@ -678,16 +682,19 @@ impl Vault {
     }
 
     /// Fetch a secret value by key from the default environment.
+    #[allow(dead_code)] // Used by tests and public API
     pub fn get(&self, key: &str) -> Option<&String> {
         self.get_in_env(DEFAULT_ENV, key)
     }
 
     /// Fetch the full secret entry by key from the default environment.
+    #[allow(dead_code)] // Used by tests and public API
     pub fn get_entry(&self, key: &str) -> Option<&SecretEntry> {
         self.get_entry_in_env(DEFAULT_ENV, key)
     }
 
     /// Remove a secret from the default environment, returning the prior value if present.
+    #[allow(dead_code)] // Used by tests and public API
     pub fn remove(&mut self, key: &str) -> Option<String> {
         self.remove_in_env(DEFAULT_ENV, key)
     }
@@ -698,6 +705,7 @@ impl Vault {
     }
 
     /// List secrets in the default environment (key → value only, for backward compatibility).
+    #[allow(dead_code)] // Used by tests and public API
     pub fn list(&self) -> HashMap<String, String> {
         self.list_in_env(DEFAULT_ENV)
     }
@@ -713,6 +721,7 @@ impl Vault {
     }
 
     /// Update the description for an existing secret in the default environment.
+    #[allow(dead_code)] // Used by tests and public API
     pub fn set_description(&mut self, key: &str, description: Option<String>) -> bool {
         self.set_description_in_env(DEFAULT_ENV, key, description)
     }

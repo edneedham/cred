@@ -1,5 +1,17 @@
 # Changelog
 
+## v0.12.1
+
+### Bug Fixes
+
+-   **Fixed CI e2e tests failing on keystore access**: The `project.rs` module now uses the shared keystore abstraction from `config.rs`, respecting the `CRED_KEYSTORE` environment variable. This fixes "No matching entry found in secure storage" errors in CI environments.
+
+### Internal
+
+-   Unified keystore backend: Project encryption keys now use the same pluggable keystore as target/source tokens (memory, file, or system keyring)
+-   Fixed unused code warnings throughout the codebase
+-   Used `EXPORT_VERSION` constant consistently in export file generation
+
 ## v0.12.0
 
 ### New Target: Fly.io

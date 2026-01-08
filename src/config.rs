@@ -368,7 +368,9 @@ pub fn remove_source_token(source: &str) -> Result<()> {
 
 // ---------- Keystore backends ----------
 
-mod keystore {
+/// Public keystore access for project keys.
+/// Uses the same backend selection as target/source tokens.
+pub mod keystore {
     use super::*;
 
     /// Pluggable secret storage backend for target tokens.

@@ -1,9 +1,9 @@
 //! Project discovery, git detection, repo binding, and project status helpers.
+use crate::config;
 use crate::error::{RepoBindingError, RepoBindingErrorKind};
 use anyhow::anyhow;
 use anyhow::{Context, Result, bail};
 use base64::{Engine, engine::general_purpose::STANDARD as BASE64};
-use keyring::Entry;
 use rand::RngCore;
 use serde::{Deserialize, Serialize};
 use std::env;
@@ -69,17 +69,16 @@ impl Project {
         Ok(config)
     }
 
-    /// Fetch the 32-byte master key for this project from the OS keyring.
+    /// Fetch the 32-byte master key for this project from the keystore.
     pub fn get_master_key(&self) -> Result<[u8; 32]> {
-        let config = self.load_config()?;
-        let project_id = config
+        let cfg = self.load_config()?;
+        let project_id = cfg
             .id
             .ok_or_else(|| anyhow::anyhow!("Project ID missing in project.toml"))?;
-        let entry = Entry::new("cred-cli", &project_id.to_string())?;
+        let auth_ref = format!("cred:project:{}", project_id);
 
-        let key_b64 = entry
-            .get_password()
-            .context("Encryption key not found in System Credential Store.")?;
+        let key_b64 = config::keystore::get(&auth_ref)?
+            .ok_or_else(|| anyhow::anyhow!("Encryption key not found in credential store."))?;
 
         let key_vec = BASE64
             .decode(key_b64)
@@ -146,14 +145,10 @@ id = "{}"
     let mut key = [0u8; 32];
     rand::rng().fill_bytes(&mut key);
 
-    // Service: "cred-cli", User: project_id
-    let entry = Entry::new("cred-cli", &project_id.to_string())?;
-
-    // Keyring stores strings, so we base64 encode the raw key
+    // Store key in keystore (respects CRED_KEYSTORE env var)
+    let auth_ref = format!("cred:project:{}", project_id);
     let key_b64 = BASE64.encode(key);
-    entry
-        .set_password(&key_b64)
-        .context("Failed to save key to the System Credential Store")?;
+    config::keystore::set(&auth_ref, &key_b64).context("Failed to save key to credential store")?;
 
     key.fill(0);
 
