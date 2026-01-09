@@ -1,5 +1,15 @@
 # Changelog
 
+## v0.12.2
+
+### Bug Fixes
+
+-   **Fixed keyring not storing credentials on macOS**: Added required platform-specific feature flags (`apple-native`, `windows-native`, `sync-secret-service`) to the keyring crate. Without these, the keyring crate silently fails to store credentials.
+
+### Internal
+
+-   Keyring now uses `cred-cli` as the service name consistently across the codebase
+
 ## v0.12.1
 
 ### Bug Fixes

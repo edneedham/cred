@@ -75,7 +75,7 @@ impl Project {
         let project_id = cfg
             .id
             .ok_or_else(|| anyhow::anyhow!("Project ID missing in project.toml"))?;
-        let auth_ref = format!("cred:project:{}", project_id);
+        let auth_ref = project_id.to_string();
 
         let key_b64 = config::keystore::get(&auth_ref)?
             .ok_or_else(|| anyhow::anyhow!("Encryption key not found in credential store."))?;
@@ -146,11 +146,9 @@ id = "{}"
     rand::rng().fill_bytes(&mut key);
 
     // Store key in keystore (respects CRED_KEYSTORE env var)
-    let auth_ref = format!("cred:project:{}", project_id);
+    let auth_ref = project_id.to_string();
     let key_b64 = BASE64.encode(key);
     config::keystore::set(&auth_ref, &key_b64).context("Failed to save key to credential store")?;
-
-    key.fill(0);
 
     // Create an empty encrypted vault to ensure presence
     {
@@ -158,6 +156,8 @@ id = "{}"
         let v = vault::Vault::load(&vault_path, key)?;
         v.save()?;
     }
+
+    key.fill(0); // Zero key after vault is created
 
     update_gitignore(root)?;
 

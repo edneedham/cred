@@ -424,7 +424,7 @@ pub mod keystore {
                 keystore_file_write(&path, &key, auth_ref, token)
             }
             KeystoreBackend::Keyring => {
-                let entry = Entry::new("cred-target", auth_ref)?;
+                let entry = Entry::new("cred-cli", auth_ref)?;
                 entry.set_password(token)?;
                 Ok(())
             }
@@ -441,7 +441,7 @@ pub mod keystore {
             }
             KeystoreBackend::File { path, key } => keystore_file_read(&path, &key, auth_ref),
             KeystoreBackend::Keyring => {
-                let entry = Entry::new("cred-target", auth_ref)?;
+                let entry = Entry::new("cred-cli", auth_ref)?;
                 match entry.get_password() {
                     Ok(pw) => Ok(Some(pw)),
                     Err(_) => Ok(None),
@@ -464,7 +464,7 @@ pub mod keystore {
                 Ok(())
             }
             KeystoreBackend::Keyring => {
-                let entry = Entry::new("cred-target", auth_ref)?;
+                let entry = Entry::new("cred-cli", auth_ref)?;
                 let _ = entry.set_password("");
                 Ok(())
             }

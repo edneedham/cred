@@ -1,6 +1,6 @@
 [package]
 name = "cred"
-version = "0.12.1"
+version = "0.12.2"
 edition = "2024"
 description = "A command-line tool to manage secrets and environment variables locally and remotely."
 readme = "README.md"
@@ -20,7 +20,7 @@ base64 = "0.22.1"
 chacha20poly1305 = "0.10.1"
 clap = { version = "4.5.53", features = ["derive"] }
 dirs = "6.0.0"
-keyring = "3.6.3"
+keyring = { version = "3.6.3", features = ["apple-native", "windows-native", "sync-secret-service"] }
 rand = "0.9.2"
 reqwest = { version = "0.12.24", features = ["json"] }
 rpassword = "7.4.0"
