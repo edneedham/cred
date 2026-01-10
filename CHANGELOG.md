@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.12.3
+
+### Bug Fixes
+
+-   **Fixed Linux CI build**: Added `libdbus-1-dev` dependency to CI workflow for the `sync-secret-service` keyring feature on Linux.
+
 ## v0.12.2
 
 ### Bug Fixes
