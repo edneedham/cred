@@ -18,6 +18,7 @@ pub struct CliFlags {
 
 #[derive(Parser)]
 #[command(name = "cred")]
+#[command(version)]
 #[command(about = "Local-first credential manager", long_about = None)]
 pub struct Cli {
     /// Output JSON (machine-readable); no prose/tables

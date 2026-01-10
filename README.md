@@ -17,7 +17,7 @@ Encrypted local secrets → Deployment platforms.
 
 `cred` stores encrypted secrets locally and safely pushes them to target platforms on demand.
 
-⚠️ **Status: Early Preview (v0.12.3)** — The on-disk format, CLI surface, and security model may change between minor versions.
+⚠️ **Status: Early Preview (v0.12.4)** — The on-disk format, CLI surface, and security model may change between minor versions.
 
 ### What it's not
 

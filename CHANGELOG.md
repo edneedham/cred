@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.12.4
+
+### Features
+
+-   **Added `--version` / `-V` flag**: Users can now check which version of cred they're running.
+
 ## v0.12.3
 
 ### Bug Fixes
