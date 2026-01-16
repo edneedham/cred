@@ -26,6 +26,12 @@
 
 -   Existing secrets are **unscoped** by default (no behavior change until you add scopes).
 
+## v0.14.1
+
+### Bug Fixes
+
+-   **CI formatting fix** — Apply `cargo fmt --all` so the CI `cargo fmt --all -- --check` step passes.
+
 ## v0.13.0
 
 ### Breaking Changes

@@ -1235,7 +1235,10 @@ Use --force to override, or adjust scopes with `cred secret set <KEY> <VALUE> --
                     });
                     print_json(&payload);
                 } else {
-                    print_out(flags, &format!("No secrets eligible to prune for target '{}'.", target_name));
+                    print_out(
+                        flags,
+                        &format!("No secrets eligible to prune for target '{}'.", target_name),
+                    );
                 }
                 return Ok(());
             }
