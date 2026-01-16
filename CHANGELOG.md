@@ -1,5 +1,19 @@
 # Changelog
 
+## v0.14.1
+
+### Bug Fixes
+
+-   **CI formatting fix** — Apply `cargo fmt --all` so the CI `cargo fmt --all -- --check` step passes.
+
+### Improvements
+
+-   **`cred target set` now also binds** — After storing the token, cred ensures the target identifier is bound in `.cred/project.toml`.
+    -   GitHub: uses `git_repo`/git remote if available
+    -   Vercel: uses `.vercel/project.json` if available
+    -   Fly: uses `fly.toml` if available
+    -   Otherwise prompts interactively, or errors in `--non-interactive` with a `cred target bind ...` hint
+
 ## v0.14.0
 
 ### New Features
@@ -25,12 +39,6 @@
 ### Notes
 
 -   Existing secrets are **unscoped** by default (no behavior change until you add scopes).
-
-## v0.14.1
-
-### Bug Fixes
-
--   **CI formatting fix** — Apply `cargo fmt --all` so the CI `cargo fmt --all -- --check` step passes.
 
 ## v0.13.0
 

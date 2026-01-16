@@ -161,6 +161,7 @@ impl Project {
     }
 
     /// List all targets configured for this project (with bindings).
+    #[allow(dead_code)]
     pub fn list_targets(&self) -> Result<Vec<(String, String, bool)>> {
         let cfg = self.load_config()?;
         let mut result = Vec::new();

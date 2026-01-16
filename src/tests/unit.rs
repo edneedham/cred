@@ -1,5 +1,6 @@
 #[cfg(test)]
 mod tests {
+    use crate::{cli::CliFlags, ensure_target_binding_after_set, targets};
     use crate::{config, envfile, error, project, vault};
     use rand::RngCore;
     use std::fs;
@@ -115,6 +116,150 @@ mod tests {
         assert!(cfg.git_root.is_none());
         // No github target binding when no git
         assert!(cfg.targets.get("github").is_none());
+    }
+
+    #[test]
+    fn test_target_set_auto_binds_vercel_from_project_json() {
+        let dir = tempdir().unwrap();
+        let root = dir.path();
+
+        // Set up vercel link file before init
+        fs::create_dir_all(root.join(".vercel")).unwrap();
+        fs::write(
+            root.join(".vercel/project.json"),
+            r#"{"projectId":"prj_test123"}"#,
+        )
+        .unwrap();
+
+        project::init_at(root).unwrap();
+        std::env::set_current_dir(root).unwrap();
+
+        let proj = project::Project {
+            vault_path: root.join(".cred/vault.enc"),
+            config_path: root.join(".cred/project.toml"),
+        };
+
+        // Remove any existing binding to force ensure logic
+        let mut cfg = proj.load_config().unwrap();
+        cfg.targets.remove("vercel");
+        proj.save_config(&cfg).unwrap();
+
+        let flags = CliFlags {
+            json: false,
+            non_interactive: true,
+            dry_run: false,
+            yes: false,
+            no_color: true,
+        };
+
+        ensure_target_binding_after_set(&proj, targets::Target::Vercel, &flags).unwrap();
+        let cfg2 = proj.load_config().unwrap();
+        assert_eq!(cfg2.targets.get("vercel"), Some(&"prj_test123".to_string()));
+    }
+
+    #[test]
+    fn test_target_set_auto_binds_fly_from_fly_toml() {
+        let dir = tempdir().unwrap();
+        let root = dir.path();
+
+        fs::write(root.join("fly.toml"), "app = \"my-fly-app\"\n").unwrap();
+        project::init_at(root).unwrap();
+        std::env::set_current_dir(root).unwrap();
+
+        let proj = project::Project {
+            vault_path: root.join(".cred/vault.enc"),
+            config_path: root.join(".cred/project.toml"),
+        };
+
+        // Remove any existing binding to force ensure logic
+        let mut cfg = proj.load_config().unwrap();
+        cfg.targets.remove("fly");
+        proj.save_config(&cfg).unwrap();
+
+        let flags = CliFlags {
+            json: false,
+            non_interactive: true,
+            dry_run: false,
+            yes: false,
+            no_color: true,
+        };
+
+        ensure_target_binding_after_set(&proj, targets::Target::Fly, &flags).unwrap();
+        let cfg2 = proj.load_config().unwrap();
+        assert_eq!(cfg2.targets.get("fly"), Some(&"my-fly-app".to_string()));
+    }
+
+    #[test]
+    fn test_target_set_auto_binds_github_from_git_repo() {
+        let dir = tempdir().unwrap();
+        let root = dir.path();
+
+        Command::new("git")
+            .args(["init"])
+            .current_dir(root)
+            .output()
+            .unwrap();
+        Command::new("git")
+            .args(["remote", "add", "origin", "git@github.com:org/repo.git"])
+            .current_dir(root)
+            .output()
+            .unwrap();
+
+        project::init_at(root).unwrap();
+        std::env::set_current_dir(root).unwrap();
+
+        let proj = project::Project {
+            vault_path: root.join(".cred/vault.enc"),
+            config_path: root.join(".cred/project.toml"),
+        };
+
+        // Remove binding but keep git_repo to ensure we re-bind from git_repo
+        let mut cfg = proj.load_config().unwrap();
+        assert_eq!(cfg.git_repo, Some("org/repo".to_string()));
+        cfg.targets.remove("github");
+        proj.save_config(&cfg).unwrap();
+
+        let flags = CliFlags {
+            json: false,
+            non_interactive: true,
+            dry_run: false,
+            yes: false,
+            no_color: true,
+        };
+
+        ensure_target_binding_after_set(&proj, targets::Target::Github, &flags).unwrap();
+        let cfg2 = proj.load_config().unwrap();
+        assert_eq!(cfg2.targets.get("github"), Some(&"org/repo".to_string()));
+    }
+
+    #[test]
+    fn test_target_set_non_interactive_errors_when_no_binding_detected() {
+        let dir = tempdir().unwrap();
+        let root = dir.path();
+
+        project::init_at(root).unwrap();
+        std::env::set_current_dir(root).unwrap();
+
+        let proj = project::Project {
+            vault_path: root.join(".cred/vault.enc"),
+            config_path: root.join(".cred/project.toml"),
+        };
+
+        let flags = CliFlags {
+            json: false,
+            non_interactive: true,
+            dry_run: false,
+            yes: false,
+            no_color: true,
+        };
+
+        let err =
+            ensure_target_binding_after_set(&proj, targets::Target::Vercel, &flags).unwrap_err();
+        assert!(
+            err.error
+                .to_string()
+                .contains("Run: cred target bind vercel <identifier>")
+        );
     }
 
     // Project name uses directory name.

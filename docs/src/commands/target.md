@@ -44,6 +44,11 @@ cred target set github --token ghp_xxxxx
 -   Must be inside a cred project (`cred init` first)
 -   Tokens are stored in OS credential store, scoped to this project
 -   Each project can have different tokens for the same target
+-   `target set` also ensures a **binding** exists (repo/app/projectId):
+    -   If a binding is already present in `.cred/project.toml`, it is kept.
+    -   Otherwise cred tries to auto-detect from project files.
+    -   If detection fails, cred prompts you for the identifier.
+    -   With `--non-interactive`, cred errors and tells you to run `cred target bind <target> <identifier>`.
 
 ---
 

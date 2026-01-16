@@ -18,6 +18,8 @@ use error::{AppError, ExitCode};
 use io::{print_err, print_json, print_out, print_plain_err, read_token_securely, require_yes};
 use keyring::Entry;
 use sources::SourceAdapter;
+use std::io as stdio;
+use std::io::Write as _;
 use std::process;
 use targets::TargetAdapter;
 use zeroize::Zeroize;
@@ -127,9 +129,44 @@ async fn run(cli: Cli, flags: &CliFlags) -> Result<(), AppError> {
                 // Show project-level targets if in a project
                 match project::Project::find() {
                     Ok(proj) => {
-                        let targets = proj.list_targets()?;
+                        let cfg = proj.load_config()?;
+
+                        // Build a combined view:
+                        // - Anything bound in project.toml
+                        // - Anything authenticated (token exists) even if unbound
+                        let mut rows: Vec<(String, Option<String>, bool)> = Vec::new();
+
+                        // Bound targets
+                        for (name, identifier) in &cfg.targets {
+                            let has_token = proj.has_target_token(name);
+                            rows.push((name.clone(), Some(identifier.clone()), has_token));
+                        }
+
+                        // Token-only targets (no binding)
+                        let supported: Vec<String> = {
+                            let mut v = Vec::new();
+                            #[cfg(feature = "github")]
+                            v.push(targets::Target::Github.to_string());
+                            #[cfg(feature = "vercel")]
+                            v.push(targets::Target::Vercel.to_string());
+                            #[cfg(feature = "fly")]
+                            v.push(targets::Target::Fly.to_string());
+                            v
+                        };
+
+                        for name in supported {
+                            let already = rows.iter().any(|(n, _, _)| n == &name);
+                            if already {
+                                continue;
+                            }
+                            if proj.has_target_token(&name) {
+                                rows.push((name, None, true));
+                            }
+                        }
+
+                        rows.sort_by(|a, b| a.0.cmp(&b.0));
                         if flags.json {
-                            let targets_data: Vec<serde_json::Value> = targets
+                            let targets_data: Vec<serde_json::Value> = rows
                                 .iter()
                                 .map(|(name, identifier, has_token)| {
                                     serde_json::json!({
@@ -146,16 +183,24 @@ async fn run(cli: Cli, flags: &CliFlags) -> Result<(), AppError> {
                             });
                             print_json(&payload);
                         } else {
-                            if targets.is_empty() {
+                            if rows.is_empty() {
                                 println!("No targets configured for this project.");
                                 println!(
                                     "Run 'cred target bind <target> <identifier>' to add one."
                                 );
                             } else {
                                 println!("Project Targets:");
-                                for (name, identifier, has_token) in targets {
+                                for (name, identifier, has_token) in rows {
                                     let auth_status = if has_token { "✓" } else { "✗" };
-                                    println!("  {} {} = {} ", auth_status, name, identifier);
+                                    match identifier {
+                                        Some(id) => {
+                                            println!("  {} {} = {} ", auth_status, name, id)
+                                        }
+                                        None => println!(
+                                            "  {} {} = (unbound)  [run: cred target bind {} <identifier>]",
+                                            auth_status, name, name
+                                        ),
+                                    }
                                 }
                                 println!();
                                 println!("Run 'cred target set <target>' to authenticate.");
@@ -1554,6 +1599,7 @@ fn handle_target_set(args: SetTargetArgs, flags: &CliFlags) -> Result<(), AppErr
     if let Some(token) = args.token {
         proj.set_target_token(&target_name, &token)
             .map_err(AppError::auth)?;
+        ensure_target_binding_after_set(&proj, args.name, flags)?;
         print_out(
             flags,
             &format!("Target '{}' authenticated for this project.", args.name),
@@ -1565,11 +1611,106 @@ fn handle_target_set(args: SetTargetArgs, flags: &CliFlags) -> Result<(), AppErr
     let mut token = read_token_securely(None, flags)?;
     proj.set_target_token(&target_name, &token)
         .map_err(AppError::auth)?;
+    ensure_target_binding_after_set(&proj, args.name, flags)?;
     print_out(
         flags,
         &format!("Target '{}' authenticated for this project.", args.name),
     );
     token.zeroize();
+    Ok(())
+}
+
+/// After `target set`, ensure the project has a binding (identifier) for the target.
+/// Resolution order:
+/// 1) existing project.toml binding
+/// 2) auto-detection from project files
+/// 3) interactive prompt (unless --non-interactive)
+pub(crate) fn ensure_target_binding_after_set(
+    proj: &project::Project,
+    target: targets::Target,
+    flags: &CliFlags,
+) -> Result<(), AppError> {
+    let target_name = target.to_string();
+
+    // If already bound, keep it
+    if let Ok(cfg) = proj.load_config() {
+        if cfg.targets.contains_key(&target_name) {
+            return Ok(());
+        }
+    }
+
+    // Resolve project root (parent of `.cred/`)
+    let project_root = proj
+        .config_path
+        .parent()
+        .and_then(|p| p.parent())
+        .ok_or_else(|| AppError::user(anyhow::anyhow!("Could not resolve project root")))?;
+
+    // Auto-detect binding
+    let detected: Option<String> = match target {
+        #[cfg(feature = "github")]
+        targets::Target::Github => {
+            // Prefer recorded git_repo if present
+            proj.load_config()
+                .ok()
+                .and_then(|c| c.git_repo)
+                .or_else(|| project::detect_git(None).and_then(|g| g.repo_slug))
+        }
+        #[cfg(feature = "vercel")]
+        targets::Target::Vercel => project::detect_vercel_project(project_root),
+        #[cfg(feature = "fly")]
+        targets::Target::Fly => project::detect_fly_app(project_root),
+    };
+
+    if let Some(id) = detected {
+        proj.set_target_binding(&target_name, &id)
+            .map_err(AppError::user)?;
+        if !flags.json {
+            print_out(flags, &format!("✓ Bound {} = {}", target_name, id));
+        }
+        return Ok(());
+    }
+
+    if flags.non_interactive {
+        return Err(AppError::user(anyhow::anyhow!(
+            "No binding detected for '{}'. Run: cred target bind {} <identifier>",
+            target_name,
+            target_name
+        )));
+    }
+
+    // Interactive prompt for identifier
+    let prompt = match target {
+        #[cfg(feature = "github")]
+        targets::Target::Github => "Enter GitHub repo (owner/repo): ",
+        #[cfg(feature = "vercel")]
+        targets::Target::Vercel => "Enter Vercel project id (prj_...): ",
+        #[cfg(feature = "fly")]
+        targets::Target::Fly => "Enter Fly app name: ",
+    };
+
+    if !flags.json {
+        print_out(flags, "No binding detected automatically.");
+    }
+    eprint!("{}", prompt);
+    stdio::stderr().flush().ok();
+
+    let mut input = String::new();
+    stdio::stdin()
+        .read_line(&mut input)
+        .map_err(|e| AppError::user(anyhow::anyhow!("Failed to read input: {}", e)))?;
+    let identifier = input.trim().to_string();
+    if identifier.is_empty() {
+        return Err(AppError::user(anyhow::anyhow!(
+            "Identifier cannot be empty"
+        )));
+    }
+
+    proj.set_target_binding(&target_name, &identifier)
+        .map_err(AppError::user)?;
+    if !flags.json {
+        print_out(flags, &format!("✓ Bound {} = {}", target_name, identifier));
+    }
     Ok(())
 }
 
