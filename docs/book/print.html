@@ -36,7 +36,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-856ce2a4.js";
+            window.path_to_searchindex_js = "searchindex-ff7ad443.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-0787347d.js"></script>
@@ -178,7 +178,7 @@
                         <h1 id="introduction"><a class="header" href="#introduction">Introduction</a></h1>
 <h2 id="what-it-is"><a class="header" href="#what-it-is">What it is</a></h2>
 <p><strong><code>cred</code></strong> is a command-line tool that stores encrypted secrets locally and pushes them to deployment platforms on demand.</p>
-<p>⚠️ <strong>Status: Early Preview (v0.13.0)</strong></p>
+<p>⚠️ <strong>Status: Early Preview (v0.14.0)</strong></p>
 <p><code>cred</code> is currently in active development. The on-disk format, CLI surface, and security model may change between minor versions. Do not rely on it as your sole secrets backup yet.</p>
 <h2 id="what-it-is-not"><a class="header" href="#what-it-is-not">What it is <strong>not</strong></a></h2>
 <ul>
@@ -311,9 +311,26 @@ cred push github --env prod
 </ul>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="migrating"><a class="header" href="#migrating">Migrating</a></h1>
+<h2 id="upgrading-from-v013x-to-v0140"><a class="header" href="#upgrading-from-v013x-to-v0140">Upgrading from v0.13.x to v0.14.0</a></h2>
+<p>v0.14.0 introduces <strong>first-class target scoping</strong> for secrets.</p>
+<h3 id="what-changed"><a class="header" href="#what-changed">What Changed</a></h3>
+<ul>
+<li>Secrets can now be scoped to specific targets via <code>cred secret set --targets ...</code></li>
+<li><code>cred push</code> / <code>cred prune</code> respect those scopes by default</li>
+<li>Existing secrets are <strong>unscoped</strong> by default (no behavior change until you add scopes)</li>
+</ul>
+<h3 id="recommended-migration"><a class="header" href="#recommended-migration">Recommended Migration</a></h3>
+<p>For projects where some targets are “frontend only” (e.g. Vercel), start scoping the relevant secrets:</p>
+<pre><code class="language-bash"># Public frontend variables (Vercel only)
+cred secret set NEXT_PUBLIC_API_URL "https://..." --targets vercel
+
+# Backend secrets (GitHub only)
+cred secret set DATABASE_URL "postgres://..." --targets github
+</code></pre>
+<p>If you ever need to override scoping for a one-off push/prune, use <code>--force</code>.</p>
 <h2 id="upgrading-from-v012x-to-v0130"><a class="header" href="#upgrading-from-v012x-to-v0130">Upgrading from v0.12.x to v0.13.0</a></h2>
 <p>v0.13.0 introduces <strong>per-project target tokens</strong>. Your existing vaults and secrets are unchanged, but target authentication needs to be re-configured.</p>
-<h3 id="what-changed"><a class="header" href="#what-changed">What Changed</a></h3>
+<h3 id="what-changed-1"><a class="header" href="#what-changed-1">What Changed</a></h3>
 <div class="table-wrapper">
 <table>
 <thead>
@@ -541,6 +558,17 @@ cred target bind fly my-app
 cred target bind vercel prj_xxxxx
 </code></pre>
 <p>Once bound, you don’t need <code>--repo</code>, <code>--app</code>, or <code>--project</code> flags when pushing.</p>
+<h2 id="target-scoped-secrets-v0140"><a class="header" href="#target-scoped-secrets-v0140">Target-Scoped Secrets (v0.14.0+)</a></h2>
+<p>Secrets can optionally be <strong>scoped to specific targets</strong>. This is useful when, for example, your Vercel target is “frontend only” and you want to avoid pushing backend secrets there.</p>
+<ul>
+<li><strong>Unscoped secrets (default)</strong>: eligible for all targets</li>
+<li><strong>Scoped secrets</strong>: only eligible for the listed targets</li>
+</ul>
+<p>Set scopes when writing a secret:</p>
+<pre><code class="language-bash">cred secret set NEXT_PUBLIC_API_URL "https://..." --targets vercel
+cred secret set DATABASE_URL "postgres://..." --targets github,fly
+</code></pre>
+<p><code>cred push &lt;target&gt;</code> and <code>cred prune &lt;target&gt;</code> respect these scopes by default. Use <code>--force</code> to override.</p>
 <h2 id="adding-a-target"><a class="header" href="#adding-a-target">Adding a Target</a></h2>
 <p>Authenticate a deployment target (must be inside a cred project):</p>
 <pre><code class="language-bash">cred target set github
@@ -1090,14 +1118,18 @@ Run 'cred target set &lt;target&gt;' to authenticate.
 <pre><code class="language-bash">cred target list --json
 </code></pre>
 <pre><code class="language-json">{
-  "api_version": "1",
-  "status": "ok",
-  "data": {
-    "targets": [
-      {"name": "github", "identifier": "owner/repo", "authenticated": true},
-      {"name": "fly", "identifier": "my-app", "authenticated": false}
-    ]
-  }
+    "api_version": "1",
+    "status": "ok",
+    "data": {
+        "targets": [
+            {
+                "name": "github",
+                "identifier": "owner/repo",
+                "authenticated": true
+            },
+            { "name": "fly", "identifier": "my-app", "authenticated": false }
+        ]
+    }
 }
 </code></pre>
 <hr>
@@ -1243,6 +1275,18 @@ Git: edneedham/cred
 <h2 id="set-1"><a class="header" href="#set-1">set</a></h2>
 <p>Add or update a secret:</p>
 <pre><code class="language-bash">cred secret set DATABASE_URL "postgres://user:pass@localhost:5432/db"
+</code></pre>
+<h3 id="target-scopes-v0140"><a class="header" href="#target-scopes-v0140">Target Scopes (v0.14.0+)</a></h3>
+<p>Scope a secret to specific deployment targets. This helps prevent accidentally pushing backend-only secrets to frontend targets.</p>
+<p>Unscoped secrets (default) are eligible for <strong>all</strong> targets.</p>
+<pre><code class="language-bash"># Only push this to Vercel
+cred secret set NEXT_PUBLIC_API_URL "https://..." --targets vercel
+
+# Push this to GitHub and Fly only
+cred secret set DATABASE_URL "postgres://..." --targets github,fly
+</code></pre>
+<p>Clear scopes (make unscoped again):</p>
+<pre><code class="language-bash">cred secret set DATABASE_URL "postgres://..." --clear-targets
 </code></pre>
 <p>With a description:</p>
 <pre><code class="language-bash">cred secret set API_KEY "sk-xxx" --description "OpenAI production key"
@@ -1703,12 +1747,21 @@ cred export vault.env --dry-run
 <tr><td><code>--repo &lt;owner/repo&gt;</code></td><td>Explicit repository (GitHub)</td></tr>
 <tr><td><code>--project &lt;id&gt;</code></td><td>Explicit project ID (Vercel)</td></tr>
 <tr><td><code>--app &lt;name&gt;</code></td><td>Explicit app name (Fly.io)</td></tr>
+<tr><td><code>--force</code></td><td>Ignore per-secret target scopes</td></tr>
 <tr><td><code>--dry-run</code></td><td>Preview changes without pushing</td></tr>
 <tr><td><code>--json</code></td><td>Machine-readable output</td></tr>
 <tr><td><code>--non-interactive</code></td><td>Fail instead of prompting</td></tr>
 </tbody>
 </table>
 </div>
+<h2 id="target-scopes-v0140-1"><a class="header" href="#target-scopes-v0140-1">Target Scopes (v0.14.0+)</a></h2>
+<p>If a secret is scoped to specific targets, <code>cred push &lt;target&gt;</code> will:</p>
+<ul>
+<li>Include unscoped secrets</li>
+<li>Include secrets scoped to <code>&lt;target&gt;</code></li>
+<li>Skip (or refuse, if explicitly requested) secrets scoped to other targets</li>
+</ul>
+<p>If you explicitly request a key that isn’t scoped to the target, cred refuses by default. Use <code>--force</code> to override.</p>
 <h2 id="target-resolution"><a class="header" href="#target-resolution">Target Resolution</a></h2>
 <p>cred resolves target identifiers in this order:</p>
 <ol>
@@ -1797,6 +1850,7 @@ cred push github
 <tr><td><code>--repo &lt;owner/repo&gt;</code></td><td>Explicit repository (GitHub)</td></tr>
 <tr><td><code>--project &lt;id&gt;</code></td><td>Explicit project ID (Vercel)</td></tr>
 <tr><td><code>--app &lt;name&gt;</code></td><td>Explicit app name (Fly.io)</td></tr>
+<tr><td><code>--force</code></td><td>Ignore per-secret target scopes</td></tr>
 <tr><td><code>--dry-run</code></td><td>Preview without deleting</td></tr>
 <tr><td><code>--yes</code></td><td>Confirm destructive operation</td></tr>
 <tr><td><code>--all</code></td><td>Prune all known secrets</td></tr>

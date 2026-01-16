@@ -35,7 +35,7 @@
             const path_to_root = "../";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "../searchindex-856ce2a4.js";
+            window.path_to_searchindex_js = "../searchindex-ff7ad443.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="../toc-0787347d.js"></script>
@@ -215,6 +215,17 @@ cred target bind fly my-app
 cred target bind vercel prj_xxxxx
 </code></pre>
 <p>Once bound, you don’t need <code>--repo</code>, <code>--app</code>, or <code>--project</code> flags when pushing.</p>
+<h2 id="target-scoped-secrets-v0140"><a class="header" href="#target-scoped-secrets-v0140">Target-Scoped Secrets (v0.14.0+)</a></h2>
+<p>Secrets can optionally be <strong>scoped to specific targets</strong>. This is useful when, for example, your Vercel target is “frontend only” and you want to avoid pushing backend secrets there.</p>
+<ul>
+<li><strong>Unscoped secrets (default)</strong>: eligible for all targets</li>
+<li><strong>Scoped secrets</strong>: only eligible for the listed targets</li>
+</ul>
+<p>Set scopes when writing a secret:</p>
+<pre><code class="language-bash">cred secret set NEXT_PUBLIC_API_URL "https://..." --targets vercel
+cred secret set DATABASE_URL "postgres://..." --targets github,fly
+</code></pre>
+<p><code>cred push &lt;target&gt;</code> and <code>cred prune &lt;target&gt;</code> respect these scopes by default. Use <code>--force</code> to override.</p>
 <h2 id="adding-a-target"><a class="header" href="#adding-a-target">Adding a Target</a></h2>
 <p>Authenticate a deployment target (must be inside a cred project):</p>
 <pre><code class="language-bash">cred target set github

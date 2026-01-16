@@ -53,6 +53,22 @@ cred target bind vercel prj_xxxxx
 
 Once bound, you don't need `--repo`, `--app`, or `--project` flags when pushing.
 
+## Target-Scoped Secrets (v0.14.0+)
+
+Secrets can optionally be **scoped to specific targets**. This is useful when, for example, your Vercel target is “frontend only” and you want to avoid pushing backend secrets there.
+
+-   **Unscoped secrets (default)**: eligible for all targets
+-   **Scoped secrets**: only eligible for the listed targets
+
+Set scopes when writing a secret:
+
+```bash
+cred secret set NEXT_PUBLIC_API_URL "https://..." --targets vercel
+cred secret set DATABASE_URL "postgres://..." --targets github,fly
+```
+
+`cred push <target>` and `cred prune <target>` respect these scopes by default. Use `--force` to override.
+
 ## Adding a Target
 
 Authenticate a deployment target (must be inside a cred project):

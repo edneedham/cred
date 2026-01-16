@@ -1,5 +1,31 @@
 # Changelog
 
+## v0.14.0
+
+### New Features
+
+-   **First-class target scoping for secrets** — Secrets can now be scoped to specific targets (e.g., only Vercel). Unscoped secrets remain eligible for all targets.
+-   **`cred secret set --targets ...`** — Set per-secret target scopes (repeatable or comma-separated):
+
+    ```bash
+    cred secret set NEXT_PUBLIC_API_URL "https://..." --targets vercel
+    cred secret set DATABASE_URL "postgres://..." --targets github,fly
+    ```
+
+-   **`cred secret set --clear-targets`** — Clear scopes (make secret unscoped again).
+-   **`cred push` / `cred prune` now respect secret scopes by default**
+    -   If you try to explicitly push/prune a key that is not scoped to that target, cred refuses.
+    -   Use `--force` to override.
+
+### CLI Changes
+
+-   `cred push <target> --force` — Ignore per-secret scopes and push requested keys anyway.
+-   `cred prune <target> --force` — Ignore per-secret scopes and prune requested keys anyway.
+
+### Notes
+
+-   Existing secrets are **unscoped** by default (no behavior change until you add scopes).
+
 ## v0.13.0
 
 ### Breaking Changes

@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-856ce2a4.js";
+            window.path_to_searchindex_js = "searchindex-ff7ad443.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-0787347d.js"></script>
@@ -175,9 +175,26 @@
                 <div id="mdbook-content" class="content">
                     <main>
                         <h1 id="migrating"><a class="header" href="#migrating">Migrating</a></h1>
+<h2 id="upgrading-from-v013x-to-v0140"><a class="header" href="#upgrading-from-v013x-to-v0140">Upgrading from v0.13.x to v0.14.0</a></h2>
+<p>v0.14.0 introduces <strong>first-class target scoping</strong> for secrets.</p>
+<h3 id="what-changed"><a class="header" href="#what-changed">What Changed</a></h3>
+<ul>
+<li>Secrets can now be scoped to specific targets via <code>cred secret set --targets ...</code></li>
+<li><code>cred push</code> / <code>cred prune</code> respect those scopes by default</li>
+<li>Existing secrets are <strong>unscoped</strong> by default (no behavior change until you add scopes)</li>
+</ul>
+<h3 id="recommended-migration"><a class="header" href="#recommended-migration">Recommended Migration</a></h3>
+<p>For projects where some targets are “frontend only” (e.g. Vercel), start scoping the relevant secrets:</p>
+<pre><code class="language-bash"># Public frontend variables (Vercel only)
+cred secret set NEXT_PUBLIC_API_URL "https://..." --targets vercel
+
+# Backend secrets (GitHub only)
+cred secret set DATABASE_URL "postgres://..." --targets github
+</code></pre>
+<p>If you ever need to override scoping for a one-off push/prune, use <code>--force</code>.</p>
 <h2 id="upgrading-from-v012x-to-v0130"><a class="header" href="#upgrading-from-v012x-to-v0130">Upgrading from v0.12.x to v0.13.0</a></h2>
 <p>v0.13.0 introduces <strong>per-project target tokens</strong>. Your existing vaults and secrets are unchanged, but target authentication needs to be re-configured.</p>
-<h3 id="what-changed"><a class="header" href="#what-changed">What Changed</a></h3>
+<h3 id="what-changed-1"><a class="header" href="#what-changed-1">What Changed</a></h3>
 <div class="table-wrapper">
 <table>
 <thead>

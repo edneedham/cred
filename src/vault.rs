@@ -123,6 +123,11 @@ pub struct SecretEntry {
     /// Previous versions of this secret (newest first, max 10)
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub history: Vec<HistoricalValue>,
+    /// Optional target scopes for this secret.
+    /// - None: unscoped (eligible for all targets)
+    /// - Some(vec): only eligible for listed targets (e.g. ["github", "vercel"])
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub targets: Option<Vec<String>>,
 }
 
 impl Zeroize for SecretEntry {
@@ -132,6 +137,7 @@ impl Zeroize for SecretEntry {
         self.description.zeroize();
         self.source.zeroize();
         self.source_id.zeroize();
+        self.targets.zeroize();
         for h in &mut self.history {
             h.zeroize();
         }
@@ -249,6 +255,7 @@ impl Vault {
                     source: None, // Unknown origin for migrated secrets
                     source_id: None,
                     history: Vec::new(),
+                    targets: None,
                 };
                 (k, entry)
             })
@@ -469,6 +476,7 @@ impl Vault {
                         source: Some("manual".to_string()),
                         source_id: None,
                         history: Vec::new(),
+                        targets: None,
                     },
                 );
             }
@@ -485,6 +493,11 @@ impl Vault {
         description: Option<String>,
         source: Option<String>,
         source_id: Option<String>,
+        // Target scope update:
+        // - None: do not modify targets
+        // - Some(None): clear targets (unscoped)
+        // - Some(Some(vec)): set targets to vec
+        targets: Option<Option<Vec<String>>>,
     ) {
         let now = Utc::now();
         let secrets = self.environments.entry(env.to_string()).or_default();
@@ -515,6 +528,9 @@ impl Vault {
                 if source_id.is_some() {
                     entry.source_id = source_id;
                 }
+                if let Some(t) = targets {
+                    entry.targets = t;
+                }
             }
             None => {
                 secrets.insert(
@@ -529,6 +545,7 @@ impl Vault {
                         source: source.or_else(|| Some("manual".to_string())),
                         source_id,
                         history: Vec::new(),
+                        targets: targets.flatten(),
                     },
                 );
             }
@@ -678,6 +695,7 @@ impl Vault {
             description,
             source,
             source_id,
+            None,
         )
     }
 

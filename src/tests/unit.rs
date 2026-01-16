@@ -644,6 +644,17 @@ mod tests {
             None,
             None,
         );
+        // Scope this secret to GitHub only
+        v.set_with_metadata_in_env(
+            vault::DEFAULT_ENV,
+            "API_KEY",
+            "sk-test-123",
+            SecretFormat::Raw,
+            Some("Production API key".to_string()),
+            None,
+            None,
+            Some(Some(vec!["github".to_string()])),
+        );
         v.save().unwrap();
 
         let v2 = vault::Vault::load(&vault_path, key).unwrap();
@@ -654,6 +665,7 @@ mod tests {
         assert_eq!(entry.description, Some("Production API key".to_string()));
         // Hash is computed on save
         assert!(entry.hash.is_some());
+        assert_eq!(entry.targets, Some(vec!["github".to_string()]));
     }
 
     // get_entry returns full metadata; get returns just value.

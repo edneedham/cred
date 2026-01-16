@@ -1,5 +1,29 @@
 # Migrating
 
+## Upgrading from v0.13.x to v0.14.0
+
+v0.14.0 introduces **first-class target scoping** for secrets.
+
+### What Changed
+
+-   Secrets can now be scoped to specific targets via `cred secret set --targets ...`
+-   `cred push` / `cred prune` respect those scopes by default
+-   Existing secrets are **unscoped** by default (no behavior change until you add scopes)
+
+### Recommended Migration
+
+For projects where some targets are “frontend only” (e.g. Vercel), start scoping the relevant secrets:
+
+```bash
+# Public frontend variables (Vercel only)
+cred secret set NEXT_PUBLIC_API_URL "https://..." --targets vercel
+
+# Backend secrets (GitHub only)
+cred secret set DATABASE_URL "postgres://..." --targets github
+```
+
+If you ever need to override scoping for a one-off push/prune, use `--force`.
+
 ## Upgrading from v0.12.x to v0.13.0
 
 v0.13.0 introduces **per-project target tokens**. Your existing vaults and secrets are unchanged, but target authentication needs to be re-configured.

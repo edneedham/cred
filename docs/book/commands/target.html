@@ -35,7 +35,7 @@
             const path_to_root = "../";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "../searchindex-856ce2a4.js";
+            window.path_to_searchindex_js = "../searchindex-ff7ad443.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="../toc-0787347d.js"></script>
@@ -260,14 +260,18 @@ Run 'cred target set &lt;target&gt;' to authenticate.
 <pre><code class="language-bash">cred target list --json
 </code></pre>
 <pre><code class="language-json">{
-  "api_version": "1",
-  "status": "ok",
-  "data": {
-    "targets": [
-      {"name": "github", "identifier": "owner/repo", "authenticated": true},
-      {"name": "fly", "identifier": "my-app", "authenticated": false}
-    ]
-  }
+    "api_version": "1",
+    "status": "ok",
+    "data": {
+        "targets": [
+            {
+                "name": "github",
+                "identifier": "owner/repo",
+                "authenticated": true
+            },
+            { "name": "fly", "identifier": "my-app", "authenticated": false }
+        ]
+    }
 }
 </code></pre>
 <hr>

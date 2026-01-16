@@ -234,6 +234,8 @@ async fn run(cli: Cli, flags: &CliFlags) -> Result<(), AppError> {
                     description,
                     format,
                     env,
+                    targets,
+                    clear_targets,
                 } => {
                     if flags.dry_run {
                         println!("(dry-run) Would set {} in env '{}'", key, env);
@@ -241,6 +243,13 @@ async fn run(cli: Cli, flags: &CliFlags) -> Result<(), AppError> {
                     }
                     // Use explicit format if provided, otherwise auto-detect
                     let fmt = format.unwrap_or_else(|| vault::Vault::detect_format(&value));
+                    let targets_update: Option<Option<Vec<String>>> = if clear_targets {
+                        Some(None)
+                    } else if let Some(ts) = targets {
+                        Some(Some(ts.into_iter().map(|t| t.to_string()).collect()))
+                    } else {
+                        None
+                    };
                     vault.set_with_metadata_in_env(
                         &env,
                         &key,
@@ -249,6 +258,7 @@ async fn run(cli: Cli, flags: &CliFlags) -> Result<(), AppError> {
                         description,
                         None,
                         None,
+                        targets_update,
                     );
                     vault.save()?;
                     if env == vault::DEFAULT_ENV {
@@ -740,6 +750,7 @@ async fn run(cli: Cli, flags: &CliFlags) -> Result<(), AppError> {
                                         secret.description.clone(),
                                         None,
                                         None,
+                                        None,
                                     );
                                 }
                             } else {
@@ -754,6 +765,7 @@ async fn run(cli: Cli, flags: &CliFlags) -> Result<(), AppError> {
                                     &secret.value,
                                     vault::SecretFormat::Raw,
                                     secret.description.clone(),
+                                    None,
                                     None,
                                     None,
                                 );
@@ -990,11 +1002,37 @@ async fn run(cli: Cli, flags: &CliFlags) -> Result<(), AppError> {
                 vault.list_in_env(&args.env).keys().cloned().collect()
             };
 
-            let mut filtered = std::collections::HashMap::new();
-            for k in keys_to_push {
-                if let Some(val) = vault.get_in_env(&args.env, &k) {
-                    filtered.insert(k, val.clone());
+            let explicit_keys = !args.keys.is_empty();
+            let target_name = args.target.to_string();
+
+            let allows_target = |entry: &vault::SecretEntry| -> bool {
+                match entry.targets.as_ref() {
+                    None => true, // unscoped
+                    Some(ts) => ts.iter().any(|t| t.eq_ignore_ascii_case(&target_name)),
                 }
+            };
+
+            let mut filtered = std::collections::HashMap::new();
+            let mut blocked: Vec<String> = Vec::new();
+            for k in keys_to_push {
+                if let Some(entry) = vault.get_entry_in_env(&args.env, &k) {
+                    if !args.force && !allows_target(entry) {
+                        blocked.push(k);
+                        continue;
+                    }
+                    filtered.insert(k, entry.value.clone());
+                }
+            }
+
+            if !blocked.is_empty() && explicit_keys && !args.force {
+                blocked.sort();
+                return Err(AppError::user(anyhow::anyhow!(
+                    "Refusing to push {} key(s) not scoped to target '{}': {:?}. \
+Use --force to override, or set scopes with `cred secret set <KEY> <VALUE> --targets ...`.",
+                    blocked.len(),
+                    target_name,
+                    blocked
+                )));
             }
 
             if filtered.is_empty() {
@@ -1021,6 +1059,20 @@ async fn run(cli: Cli, flags: &CliFlags) -> Result<(), AppError> {
                     print_out(flags, &format!("No secrets to push{}.", env_suffix));
                 }
                 return Ok(());
+            }
+
+            if !blocked.is_empty() && !flags.json && !explicit_keys && !args.force {
+                let mut b = blocked.clone();
+                b.sort();
+                print_out(
+                    flags,
+                    &format!(
+                        "Skipped {} secret(s) not scoped to {}: {:?}",
+                        b.len(),
+                        target_name,
+                        b
+                    ),
+                );
             }
 
             if flags.dry_run {
@@ -1125,13 +1177,66 @@ async fn run(cli: Cli, flags: &CliFlags) -> Result<(), AppError> {
                 ks.sort();
                 ks
             } else if !args.keys.is_empty() {
-                args.keys
+                args.keys.clone()
             } else {
                 print_err(flags, "Error: Specify keys to prune or use --all.");
                 return Ok(());
             };
 
             if keys_to_prune.is_empty() {
+                return Ok(());
+            }
+
+            let explicit_keys = !args.all && !args.keys.is_empty();
+            let target_name = args.target.to_string();
+            let allows_target = |entry: &vault::SecretEntry| -> bool {
+                match entry.targets.as_ref() {
+                    None => true,
+                    Some(ts) => ts.iter().any(|t| t.eq_ignore_ascii_case(&target_name)),
+                }
+            };
+
+            // Filter keys based on target scopes unless --force is set
+            let mut blocked: Vec<String> = Vec::new();
+            let mut allowed_keys: Vec<String> = Vec::new();
+            for k in keys_to_prune.iter() {
+                if let Some(entry) = vault.get_entry_in_env(&args.env, k) {
+                    if !args.force && !allows_target(entry) {
+                        blocked.push(k.clone());
+                    } else {
+                        allowed_keys.push(k.clone());
+                    }
+                }
+            }
+
+            if !blocked.is_empty() && explicit_keys && !args.force {
+                let mut b = blocked.clone();
+                b.sort();
+                return Err(AppError::user(anyhow::anyhow!(
+                    "Refusing to prune {} key(s) not scoped to target '{}': {:?}. \
+Use --force to override, or adjust scopes with `cred secret set <KEY> <VALUE> --targets ...`.",
+                    b.len(),
+                    target_name,
+                    b
+                )));
+            }
+
+            if allowed_keys.is_empty() && !args.force {
+                if flags.json {
+                    let payload = serde_json::json!({
+                        "api_version": "1",
+                        "status": "ok",
+                        "data": {
+                            "target": format!("{}", args.target),
+                            "env": args.env,
+                            "repo": serde_json::Value::Null,
+                            "will_delete": []
+                        }
+                    });
+                    print_json(&payload);
+                } else {
+                    print_out(flags, &format!("No secrets eligible to prune for target '{}'.", target_name));
+                }
                 return Ok(());
             }
 
@@ -1177,7 +1282,7 @@ async fn run(cli: Cli, flags: &CliFlags) -> Result<(), AppError> {
 
             if effective_dry {
                 if flags.json {
-                    let mut keys_sorted = keys_to_prune.clone();
+                    let mut keys_sorted = allowed_keys.clone();
                     keys_sorted.sort();
                     let payload = serde_json::json!({
                         "api_version": "1",
@@ -1191,7 +1296,7 @@ async fn run(cli: Cli, flags: &CliFlags) -> Result<(), AppError> {
                     });
                     print_json(&payload);
                 } else {
-                    let mut keys_sorted = keys_to_prune.clone();
+                    let mut keys_sorted = allowed_keys.clone();
                     keys_sorted.sort();
                     print_out(flags, "(dry-run) Prune skipped (no remote mutation).");
                     print_out(flags, &format!("Target: {}", args.target));
@@ -1223,7 +1328,7 @@ async fn run(cli: Cli, flags: &CliFlags) -> Result<(), AppError> {
             };
 
             // ATOMIC: Remote fail stops local delete
-            target_impl.delete(&keys_to_prune, &token, &options).await?;
+            target_impl.delete(&allowed_keys, &token, &options).await?;
 
             print_out(flags, "✓ Remote delete successful (local vault unchanged).");
         }
@@ -1856,6 +1961,7 @@ async fn handle_source_action(action: SourceAction, flags: &CliFlags) -> Result<
                 args.description,
                 Some(source_name.clone()),
                 credential.id.clone(),
+                None,
             );
             v.save()?;
 

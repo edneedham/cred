@@ -306,6 +306,7 @@ pub fn import_cred_export(
                             secret.description.clone(),
                             None, // source
                             None, // source_id
+                            None, // targets
                         );
                     }
                 } else {
@@ -322,6 +323,7 @@ pub fn import_cred_export(
                         secret.description.clone(),
                         None, // source
                         None, // source_id
+                        None, // targets
                     );
                 }
             }

@@ -10,6 +10,26 @@ Add or update a secret:
 cred secret set DATABASE_URL "postgres://user:pass@localhost:5432/db"
 ```
 
+### Target Scopes (v0.14.0+)
+
+Scope a secret to specific deployment targets. This helps prevent accidentally pushing backend-only secrets to frontend targets.
+
+Unscoped secrets (default) are eligible for **all** targets.
+
+```bash
+# Only push this to Vercel
+cred secret set NEXT_PUBLIC_API_URL "https://..." --targets vercel
+
+# Push this to GitHub and Fly only
+cred secret set DATABASE_URL "postgres://..." --targets github,fly
+```
+
+Clear scopes (make unscoped again):
+
+```bash
+cred secret set DATABASE_URL "postgres://..." --clear-targets
+```
+
 With a description:
 
 ```bash

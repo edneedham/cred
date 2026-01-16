@@ -66,9 +66,20 @@ This pushes only secrets from the `prod` environment.
 | `--repo <owner/repo>` | Explicit repository (GitHub)    |
 | `--project <id>`      | Explicit project ID (Vercel)    |
 | `--app <name>`        | Explicit app name (Fly.io)      |
+| `--force`             | Ignore per-secret target scopes |
 | `--dry-run`           | Preview changes without pushing |
 | `--json`              | Machine-readable output         |
 | `--non-interactive`   | Fail instead of prompting       |
+
+## Target Scopes (v0.14.0+)
+
+If a secret is scoped to specific targets, `cred push <target>` will:
+
+-   Include unscoped secrets
+-   Include secrets scoped to `<target>`
+-   Skip (or refuse, if explicitly requested) secrets scoped to other targets
+
+If you explicitly request a key that isn't scoped to the target, cred refuses by default. Use `--force` to override.
 
 ## Target Resolution
 

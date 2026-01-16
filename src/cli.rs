@@ -129,6 +129,10 @@ pub struct PushArgs {
     #[arg(long)]
     pub app: Option<String>,
 
+    /// Ignore per-secret target scopes and push requested keys anyway
+    #[arg(long)]
+    pub force: bool,
+
     /// Environment to push secrets from (defaults to "default")
     #[arg(long, short = 'e', default_value = DEFAULT_ENV)]
     pub env: String,
@@ -154,6 +158,10 @@ pub struct PruneArgs {
     /// Explicit app name (for Fly.io; auto-detected from fly.toml if omitted)
     #[arg(long)]
     pub app: Option<String>,
+
+    /// Ignore per-secret target scopes and prune requested keys anyway
+    #[arg(long)]
+    pub force: bool,
 
     /// Prune all known keys (requires --yes unless dry-run)
     #[arg(long)]
@@ -282,6 +290,14 @@ pub enum SecretAction {
         /// Environment to set the secret in (defaults to "default")
         #[arg(long, short = 'e', default_value = DEFAULT_ENV)]
         env: String,
+        /// Target scopes for this secret (repeatable or comma-separated).
+        /// If omitted, existing scopes are preserved (or secret is unscoped if new).
+        /// Examples: --targets github --targets vercel  OR  --targets github,vercel
+        #[arg(long, value_delimiter = ',', num_args = 1..)]
+        targets: Option<Vec<Target>>,
+        /// Clear any existing target scopes (make secret unscoped / eligible for all targets)
+        #[arg(long)]
+        clear_targets: bool,
     },
     /// Get a secret value
     Get {

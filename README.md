@@ -17,7 +17,7 @@ Encrypted local secrets → Deployment platforms.
 
 `cred` stores encrypted secrets locally and safely pushes them to target platforms on demand.
 
-⚠️ **Status: Early Preview (v0.13.0)** — The on-disk format, CLI surface, and security model may change between minor versions.
+⚠️ **Status: Early Preview (v0.14.0)** — The on-disk format, CLI surface, and security model may change between minor versions.
 
 ### What it's not
 
@@ -70,6 +70,9 @@ cred target set github
 
 # Store a secret
 cred secret set DATABASE_URL "postgres://..."
+
+# Optional: scope a secret to a target (v0.14.0+)
+cred secret set NEXT_PUBLIC_API_URL "https://..." --targets vercel
 
 # Push to GitHub (no --repo needed, uses saved binding)
 cred push github

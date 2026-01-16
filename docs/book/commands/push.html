@@ -35,7 +35,7 @@
             const path_to_root = "../";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "../searchindex-856ce2a4.js";
+            window.path_to_searchindex_js = "../searchindex-ff7ad443.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="../toc-0787347d.js"></script>
@@ -215,12 +215,21 @@
 <tr><td><code>--repo &lt;owner/repo&gt;</code></td><td>Explicit repository (GitHub)</td></tr>
 <tr><td><code>--project &lt;id&gt;</code></td><td>Explicit project ID (Vercel)</td></tr>
 <tr><td><code>--app &lt;name&gt;</code></td><td>Explicit app name (Fly.io)</td></tr>
+<tr><td><code>--force</code></td><td>Ignore per-secret target scopes</td></tr>
 <tr><td><code>--dry-run</code></td><td>Preview changes without pushing</td></tr>
 <tr><td><code>--json</code></td><td>Machine-readable output</td></tr>
 <tr><td><code>--non-interactive</code></td><td>Fail instead of prompting</td></tr>
 </tbody>
 </table>
 </div>
+<h2 id="target-scopes-v0140"><a class="header" href="#target-scopes-v0140">Target Scopes (v0.14.0+)</a></h2>
+<p>If a secret is scoped to specific targets, <code>cred push &lt;target&gt;</code> will:</p>
+<ul>
+<li>Include unscoped secrets</li>
+<li>Include secrets scoped to <code>&lt;target&gt;</code></li>
+<li>Skip (or refuse, if explicitly requested) secrets scoped to other targets</li>
+</ul>
+<p>If you explicitly request a key that isn’t scoped to the target, cred refuses by default. Use <code>--force</code> to override.</p>
 <h2 id="target-resolution"><a class="header" href="#target-resolution">Target Resolution</a></h2>
 <p>cred resolves target identifiers in this order:</p>
 <ol>
