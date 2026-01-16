@@ -6,6 +6,7 @@ use anyhow::{Context, Result, bail};
 use base64::{Engine, engine::general_purpose::STANDARD as BASE64};
 use rand::RngCore;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::env;
 use std::fs;
 use std::io::Write;
@@ -23,6 +24,9 @@ pub struct ProjectConfig {
     pub id: Option<Uuid>,
     pub git_root: Option<String>,
     pub git_repo: Option<String>,
+    /// Per-target identifiers (e.g., "github" -> "owner/repo", "fly" -> "app-name")
+    #[serde(default)]
+    pub targets: HashMap<String, String>,
 }
 
 /// Holds paths to project resources under `.cred/`.
@@ -98,11 +102,122 @@ impl Project {
     pub fn add_key_to_scopes(&self, _scope_names: &[String], _key: &str) -> Result<()> {
         Ok(())
     }
+
+    /// Save the project configuration to `.cred/project.toml`.
+    pub fn save_config(&self, cfg: &ProjectConfig) -> Result<()> {
+        let toml_string = toml::to_string_pretty(cfg)?;
+        fs::write(&self.config_path, toml_string)?;
+        Ok(())
+    }
+
+    /// Get a target binding (identifier) from the project config.
+    #[allow(dead_code)]
+    pub fn get_target_binding(&self, target: &str) -> Result<Option<String>> {
+        let cfg = self.load_config()?;
+        Ok(cfg.targets.get(target).cloned())
+    }
+
+    /// Set a target binding (identifier) in the project config.
+    pub fn set_target_binding(&self, target: &str, identifier: &str) -> Result<()> {
+        let mut cfg = self.load_config()?;
+        cfg.targets
+            .insert(target.to_string(), identifier.to_string());
+        self.save_config(&cfg)
+    }
+
+    /// Get a project-level target token from the keystore.
+    pub fn get_target_token(&self, target: &str) -> Result<Option<String>> {
+        let cfg = self.load_config()?;
+        let project_id = cfg
+            .id
+            .ok_or_else(|| anyhow::anyhow!("Project ID missing in project.toml"))?;
+        let auth_ref = format!("cred:project:{}:target:{}", project_id, target);
+        config::keystore::get(&auth_ref)
+    }
+
+    /// Set a project-level target token in the keystore.
+    pub fn set_target_token(&self, target: &str, token: &str) -> Result<()> {
+        let cfg = self.load_config()?;
+        let project_id = cfg
+            .id
+            .ok_or_else(|| anyhow::anyhow!("Project ID missing in project.toml"))?;
+        let auth_ref = format!("cred:project:{}:target:{}", project_id, target);
+        config::keystore::set(&auth_ref, token)
+    }
+
+    /// Remove a project-level target token from the keystore.
+    pub fn remove_target_token(&self, target: &str) -> Result<()> {
+        let cfg = self.load_config()?;
+        let project_id = cfg
+            .id
+            .ok_or_else(|| anyhow::anyhow!("Project ID missing in project.toml"))?;
+        let auth_ref = format!("cred:project:{}:target:{}", project_id, target);
+        config::keystore::remove(&auth_ref)
+    }
+
+    /// Check if a project-level target token exists.
+    pub fn has_target_token(&self, target: &str) -> bool {
+        self.get_target_token(target).ok().flatten().is_some()
+    }
+
+    /// List all targets configured for this project (with bindings).
+    pub fn list_targets(&self) -> Result<Vec<(String, String, bool)>> {
+        let cfg = self.load_config()?;
+        let mut result = Vec::new();
+        for (target, identifier) in &cfg.targets {
+            let has_token = self.has_target_token(target);
+            result.push((target.clone(), identifier.clone(), has_token));
+        }
+        result.sort_by(|a, b| a.0.cmp(&b.0));
+        Ok(result)
+    }
 }
 
 pub fn init() -> Result<()> {
     let current_dir = env::current_dir().context("Failed to get current directory")?;
     init_at(&current_dir)
+}
+
+/// Detect Fly.io app name from fly.toml if present.
+pub fn detect_fly_app(root: &Path) -> Option<String> {
+    let fly_toml = root.join("fly.toml");
+    if fly_toml.exists() {
+        if let Ok(content) = fs::read_to_string(&fly_toml) {
+            if let Ok(parsed) = toml::from_str::<toml::Value>(&content) {
+                if let Some(app) = parsed.get("app").and_then(|v| v.as_str()) {
+                    return Some(app.to_string());
+                }
+            }
+        }
+    }
+    None
+}
+
+/// Detect Vercel project ID from .vercel/project.json or vercel.json if present.
+pub fn detect_vercel_project(root: &Path) -> Option<String> {
+    // Try .vercel/project.json first (created by `vercel link`)
+    let vercel_project_json = root.join(".vercel/project.json");
+    if vercel_project_json.exists() {
+        if let Ok(content) = fs::read_to_string(&vercel_project_json) {
+            if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&content) {
+                if let Some(id) = parsed.get("projectId").and_then(|v| v.as_str()) {
+                    return Some(id.to_string());
+                }
+            }
+        }
+    }
+    // Fall back to vercel.json
+    let vercel_json = root.join("vercel.json");
+    if vercel_json.exists() {
+        if let Ok(content) = fs::read_to_string(&vercel_json) {
+            if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&content) {
+                if let Some(id) = parsed.get("projectId").and_then(|v| v.as_str()) {
+                    return Some(id.to_string());
+                }
+            }
+        }
+    }
+    None
 }
 
 /// Initialize a project at the given root, creating `.cred/`, key, vault, and project.toml.
@@ -115,6 +230,13 @@ pub fn init_at(root: &Path) -> Result<()> {
 
     let project_id = Uuid::new_v4();
 
+    // Use directory name as project name
+    let project_name = root
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("my-project")
+        .to_string();
+
     let git_info = detect_git(Some(root));
     if git_info.is_none() {
         println!("⚠️  This directory is not part of a git repository.");
@@ -122,6 +244,28 @@ pub fn init_at(root: &Path) -> Result<()> {
     }
     let git_root = git_info.as_ref().map(|g| g.root.clone());
     let git_repo = git_info.as_ref().and_then(|g| g.repo_slug.clone());
+
+    // Auto-detect target identifiers
+    let mut targets: HashMap<String, String> = HashMap::new();
+    let mut detected_targets: Vec<String> = Vec::new();
+
+    // GitHub from git remote
+    if let Some(ref repo) = git_repo {
+        targets.insert("github".to_string(), repo.clone());
+        detected_targets.push(format!("github: {}", repo));
+    }
+
+    // Fly.io from fly.toml
+    if let Some(app) = detect_fly_app(root) {
+        targets.insert("fly".to_string(), app.clone());
+        detected_targets.push(format!("fly: {}", app));
+    }
+
+    // Vercel from .vercel/project.json or vercel.json
+    if let Some(project) = detect_vercel_project(root) {
+        targets.insert("vercel".to_string(), project.clone());
+        detected_targets.push(format!("vercel: {}", project));
+    }
 
     let git_root_line = git_root
         .as_ref()
@@ -132,13 +276,26 @@ pub fn init_at(root: &Path) -> Result<()> {
         .map(|p| format!("git_repo = \"{}\"\n", p))
         .unwrap_or_default();
 
+    // Build targets TOML section
+    let targets_section = if targets.is_empty() {
+        String::new()
+    } else {
+        let mut lines = vec!["\n[targets]".to_string()];
+        let mut sorted_targets: Vec<_> = targets.iter().collect();
+        sorted_targets.sort_by_key(|(k, _)| *k);
+        for (k, v) in sorted_targets {
+            lines.push(format!("{} = \"{}\"", k, v));
+        }
+        lines.join("\n")
+    };
+
     let project_toml = format!(
         r#"# Cred Project Configuration
-name = "my-project"
+name = "{}"
 version = "0.1.0"
 id = "{}"
-{}{}"#,
-        project_id, git_root_line, git_repo_line
+{}{}{}"#,
+        project_name, project_id, git_root_line, git_repo_line, targets_section
     );
     fs::write(cred_dir.join("project.toml"), project_toml)?;
 
@@ -166,11 +323,20 @@ id = "{}"
         "🔑 Encryption key generated and stored in the System Credential Store (ID: {})",
         project_id
     );
+
+    if !detected_targets.is_empty() {
+        println!("📍 Detected targets:");
+        for target in &detected_targets {
+            println!("   {}", target);
+        }
+        println!("\n   Run 'cred target set <target>' to authenticate each target.");
+    }
+
     Ok(())
 }
 
 /// Resolve repo to use for CLI operations, validating detected/bound/provided combinations.
-/// Resolve repo to use for CLI operations, validating detected/bound/provided combinations.
+#[allow(dead_code)]
 pub fn resolve_repo_binding(
     detected: Option<String>,
     bound: Option<String>,

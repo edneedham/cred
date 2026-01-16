@@ -178,12 +178,23 @@ pub enum ConfigAction {
 
 #[derive(Subcommand, Debug)]
 pub enum TargetAction {
-    /// Authenticate with a target (store token)
+    /// Authenticate with a target (store token for this project)
     Set(SetTargetArgs),
-    /// List configured targets
+    /// Bind a target identifier to this project (e.g., repo for github, app for fly)
+    Bind(BindTargetArgs),
+    /// List configured targets for this project
     List,
     /// Revoke a target's authentication token (Logout)
     Revoke { name: Target },
+}
+
+#[derive(Args, Debug)]
+pub struct BindTargetArgs {
+    /// The target to bind
+    pub name: Target,
+
+    /// The target identifier (repo for github, project for vercel, app for fly)
+    pub identifier: String,
 }
 
 #[derive(Args, Debug)]

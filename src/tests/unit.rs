@@ -92,6 +92,8 @@ mod tests {
                 .to_string()
         });
         assert_eq!(actual_root, Some(expected_root));
+        // GitHub target binding should also be populated
+        assert_eq!(cfg.targets.get("github"), Some(&"org/repo".to_string()));
     }
 
     // When no git, binding fields stay empty (no false positives).
@@ -111,6 +113,178 @@ mod tests {
         let cfg = proj.load_config().unwrap();
         assert!(cfg.git_repo.is_none());
         assert!(cfg.git_root.is_none());
+        // No github target binding when no git
+        assert!(cfg.targets.get("github").is_none());
+    }
+
+    // Project name uses directory name.
+    #[test]
+    fn test_project_name_from_directory() {
+        let dir = tempdir().unwrap();
+        let root = dir.path();
+
+        let result = project::init_at(root);
+        assert!(result.is_ok());
+
+        let cred_dir = root.join(".cred");
+        let proj = project::Project {
+            vault_path: cred_dir.join("vault.enc"),
+            config_path: cred_dir.join("project.toml"),
+        };
+        let cfg = proj.load_config().unwrap();
+        // Project name should be the directory name
+        let expected_name = root.file_name().unwrap().to_str().unwrap();
+        assert_eq!(cfg.name, Some(expected_name.to_string()));
+    }
+
+    // Fly.io app detection from fly.toml
+    #[test]
+    fn test_fly_app_detection() {
+        let dir = tempdir().unwrap();
+        let root = dir.path();
+
+        // Create fly.toml
+        fs::write(root.join("fly.toml"), "app = \"my-fly-app\"\n").unwrap();
+
+        let result = project::init_at(root);
+        assert!(result.is_ok());
+
+        let cred_dir = root.join(".cred");
+        let proj = project::Project {
+            vault_path: cred_dir.join("vault.enc"),
+            config_path: cred_dir.join("project.toml"),
+        };
+        let cfg = proj.load_config().unwrap();
+        assert_eq!(cfg.targets.get("fly"), Some(&"my-fly-app".to_string()));
+    }
+
+    // Vercel project detection from .vercel/project.json
+    #[test]
+    fn test_vercel_project_detection() {
+        let dir = tempdir().unwrap();
+        let root = dir.path();
+
+        // Create .vercel/project.json
+        fs::create_dir(root.join(".vercel")).unwrap();
+        fs::write(
+            root.join(".vercel/project.json"),
+            r#"{"projectId": "prj_test123"}"#,
+        )
+        .unwrap();
+
+        let result = project::init_at(root);
+        assert!(result.is_ok());
+
+        let cred_dir = root.join(".cred");
+        let proj = project::Project {
+            vault_path: cred_dir.join("vault.enc"),
+            config_path: cred_dir.join("project.toml"),
+        };
+        let cfg = proj.load_config().unwrap();
+        assert_eq!(cfg.targets.get("vercel"), Some(&"prj_test123".to_string()));
+    }
+
+    // Target binding can be set and retrieved
+    #[test]
+    fn test_target_binding_set_get() {
+        let dir = tempdir().unwrap();
+        let root = dir.path();
+
+        project::init_at(root).unwrap();
+
+        let cred_dir = root.join(".cred");
+        let proj = project::Project {
+            vault_path: cred_dir.join("vault.enc"),
+            config_path: cred_dir.join("project.toml"),
+        };
+
+        // Set a target binding
+        proj.set_target_binding("github", "test/repo").unwrap();
+
+        // Verify it was saved
+        let cfg = proj.load_config().unwrap();
+        assert_eq!(cfg.targets.get("github"), Some(&"test/repo".to_string()));
+    }
+
+    // Per-project target tokens are isolated
+    #[test]
+    fn test_per_project_target_tokens() {
+        unsafe {
+            std::env::set_var("CRED_KEYSTORE", "memory");
+        }
+
+        let dir1 = tempdir().unwrap();
+        let dir2 = tempdir().unwrap();
+
+        project::init_at(dir1.path()).unwrap();
+        project::init_at(dir2.path()).unwrap();
+
+        let proj1 = project::Project {
+            vault_path: dir1.path().join(".cred/vault.enc"),
+            config_path: dir1.path().join(".cred/project.toml"),
+        };
+        let proj2 = project::Project {
+            vault_path: dir2.path().join(".cred/vault.enc"),
+            config_path: dir2.path().join(".cred/project.toml"),
+        };
+
+        // Set different tokens for same target in different projects
+        proj1.set_target_token("github", "token_project1").unwrap();
+        proj2.set_target_token("github", "token_project2").unwrap();
+
+        // Verify tokens are isolated
+        assert_eq!(
+            proj1.get_target_token("github").unwrap(),
+            Some("token_project1".to_string())
+        );
+        assert_eq!(
+            proj2.get_target_token("github").unwrap(),
+            Some("token_project2".to_string())
+        );
+
+        // Verify has_target_token works
+        assert!(proj1.has_target_token("github"));
+        assert!(!proj1.has_target_token("vercel"));
+
+        // Verify remove works
+        proj1.remove_target_token("github").unwrap();
+        assert!(!proj1.has_target_token("github"));
+        // proj2's token should be unaffected
+        assert!(proj2.has_target_token("github"));
+    }
+
+    // list_targets returns correct data
+    #[test]
+    fn test_list_targets() {
+        unsafe {
+            std::env::set_var("CRED_KEYSTORE", "memory");
+        }
+
+        let dir = tempdir().unwrap();
+        let root = dir.path();
+
+        // Create fly.toml for auto-detection
+        fs::write(root.join("fly.toml"), "app = \"test-app\"\n").unwrap();
+
+        project::init_at(root).unwrap();
+
+        let proj = project::Project {
+            vault_path: root.join(".cred/vault.enc"),
+            config_path: root.join(".cred/project.toml"),
+        };
+
+        // Set token for fly
+        proj.set_target_token("fly", "test-token").unwrap();
+
+        let targets = proj.list_targets().unwrap();
+
+        // Should have fly target with token
+        let fly_target = targets.iter().find(|(name, _, _)| name == "fly");
+        assert!(fly_target.is_some());
+        let (name, identifier, has_token) = fly_target.unwrap();
+        assert_eq!(name, "fly");
+        assert_eq!(identifier, "test-app");
+        assert!(has_token);
     }
 
     #[test]

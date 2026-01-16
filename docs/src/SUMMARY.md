@@ -10,6 +10,7 @@
     -   [Vault](./concepts/vault.md)
 -   [Commands](./commands/README.md)
     -   [init](./commands/init.md)
+    -   [target](./commands/target.md)
     -   [config](./commands/config.md)
     -   [doctor](./commands/doctor.md)
     -   [status](./commands/status.md)

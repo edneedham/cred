@@ -275,6 +275,8 @@ fn default_config() -> GlobalConfig {
 }
 
 /// Persist a target token reference in config and store the token via keystore backend.
+/// Note: As of v0.13.0, per-project tokens are preferred. This is kept for backwards compatibility.
+#[allow(dead_code)]
 pub fn set_target_token(target: &str, token: &str) -> Result<()> {
     let mut config = load()?;
     let auth_ref = format!("cred:target:{}:default", target);

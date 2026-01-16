@@ -1,4 +1,42 @@
-# Migrating Existing Secrets
+# Migrating
+
+## Upgrading from v0.12.x to v0.13.0
+
+v0.13.0 introduces **per-project target tokens**. Your existing vaults and secrets are unchanged, but target authentication needs to be re-configured.
+
+### What Changed
+
+| Before (v0.12.x)                    | After (v0.13.0)                      |
+| ----------------------------------- | ------------------------------------ |
+| One global token per target         | Per-project tokens                   |
+| `cred target set` stored globally   | `cred target set` stores per-project |
+| `--repo`/`--app` flags often needed | Target bindings saved in project     |
+
+### Migration Steps
+
+In each of your cred projects:
+
+```bash
+cd your-project
+
+# Re-authenticate targets (tokens now stored per-project)
+cred target set github --token <your-fine-grained-pat>
+
+# Verify target bindings were auto-detected or set them manually
+cred target list
+
+# If needed, bind targets manually
+cred target bind github owner/repo
+cred target bind fly my-app
+```
+
+### Why This Change?
+
+Modern fine-grained tokens (like GitHub PATs) are scoped to specific repos. A token for `repo-a` cannot access `repo-b`. Per-project token storage properly supports this security model.
+
+---
+
+## Migrating Existing Secrets to cred
 
 If you choose to migrate to cred instead of continuing with manual `.env` files you'll need the original values from wherever you stored them (password manager, `.env` files, etc.).
 

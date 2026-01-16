@@ -36,10 +36,10 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-f9cf7638.js";
+            window.path_to_searchindex_js = "searchindex-856ce2a4.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="toc-ed68b008.js"></script>
+        <script src="toc-0787347d.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -178,7 +178,7 @@
                         <h1 id="introduction"><a class="header" href="#introduction">Introduction</a></h1>
 <h2 id="what-it-is"><a class="header" href="#what-it-is">What it is</a></h2>
 <p><strong><code>cred</code></strong> is a command-line tool that stores encrypted secrets locally and pushes them to deployment platforms on demand.</p>
-<p>⚠️ <strong>Status: Early Preview (v0.12.4)</strong></p>
+<p>⚠️ <strong>Status: Early Preview (v0.13.0)</strong></p>
 <p><code>cred</code> is currently in active development. The on-disk format, CLI surface, and security model may change between minor versions. Do not rely on it as your sole secrets backup yet.</p>
 <h2 id="what-it-is-not"><a class="header" href="#what-it-is-not">What it is <strong>not</strong></a></h2>
 <ul>
@@ -263,10 +263,18 @@ sudo mv cred-* /usr/local/bin/cred
 <pre><code class="language-bash">cred init
 </code></pre>
 <p>This creates <code>.cred/vault.enc</code> in your project and stores the encryption key in your OS credential store.</p>
-<h2 id="2-add-a-target"><a class="header" href="#2-add-a-target">2. Add a target</a></h2>
+<p>cred automatically detects targets from your project:</p>
+<pre><code>Initialized new cred project at .cred/
+🔑 Encryption key generated and stored in the System Credential Store
+📍 Detected targets:
+   github: owner/repo
+
+   Run 'cred target set &lt;target&gt;' to authenticate each target.
+</code></pre>
+<h2 id="2-authenticate-a-target"><a class="header" href="#2-authenticate-a-target">2. Authenticate a target</a></h2>
 <pre><code class="language-bash">cred target set github
 </code></pre>
-<p>You’ll be prompted for a fine-grained PAT with <strong>Actions secrets</strong> permission.</p>
+<p>You’ll be prompted for a fine-grained PAT with <strong>Actions secrets</strong> permission. The token is stored per-project, so each project can use different tokens (important for fine-grained PATs scoped to specific repos).</p>
 <h2 id="3-store-a-secret"><a class="header" href="#3-store-a-secret">3. Store a secret</a></h2>
 <pre><code class="language-bash">cred secret set DATABASE_URL "postgres://user:pass@localhost/db"
 </code></pre>
@@ -277,6 +285,7 @@ sudo mv cred-* /usr/local/bin/cred
 <p>Then push:</p>
 <pre><code class="language-bash">cred push github
 </code></pre>
+<p>No <code>--repo</code> flag needed — cred uses the target binding saved during init.</p>
 <p>Done! Your secret is now in GitHub Actions.</p>
 <hr>
 <h2 id="working-with-environments"><a class="header" href="#working-with-environments">Working with Environments</a></h2>
@@ -301,9 +310,42 @@ cred push github --env prod
 <li><a href="#security-model">Security Model</a> — how your secrets are protected</li>
 </ul>
 <div style="break-before: page; page-break-before: always;"></div>
-<h1 id="migrating-existing-secrets"><a class="header" href="#migrating-existing-secrets">Migrating Existing Secrets</a></h1>
+<h1 id="migrating"><a class="header" href="#migrating">Migrating</a></h1>
+<h2 id="upgrading-from-v012x-to-v0130"><a class="header" href="#upgrading-from-v012x-to-v0130">Upgrading from v0.12.x to v0.13.0</a></h2>
+<p>v0.13.0 introduces <strong>per-project target tokens</strong>. Your existing vaults and secrets are unchanged, but target authentication needs to be re-configured.</p>
+<h3 id="what-changed"><a class="header" href="#what-changed">What Changed</a></h3>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Before (v0.12.x)</th><th>After (v0.13.0)</th></tr>
+</thead>
+<tbody>
+<tr><td>One global token per target</td><td>Per-project tokens</td></tr>
+<tr><td><code>cred target set</code> stored globally</td><td><code>cred target set</code> stores per-project</td></tr>
+<tr><td><code>--repo</code>/<code>--app</code> flags often needed</td><td>Target bindings saved in project</td></tr>
+</tbody>
+</table>
+</div>
+<h3 id="migration-steps"><a class="header" href="#migration-steps">Migration Steps</a></h3>
+<p>In each of your cred projects:</p>
+<pre><code class="language-bash">cd your-project
+
+# Re-authenticate targets (tokens now stored per-project)
+cred target set github --token &lt;your-fine-grained-pat&gt;
+
+# Verify target bindings were auto-detected or set them manually
+cred target list
+
+# If needed, bind targets manually
+cred target bind github owner/repo
+cred target bind fly my-app
+</code></pre>
+<h3 id="why-this-change"><a class="header" href="#why-this-change">Why This Change?</a></h3>
+<p>Modern fine-grained tokens (like GitHub PATs) are scoped to specific repos. A token for <code>repo-a</code> cannot access <code>repo-b</code>. Per-project token storage properly supports this security model.</p>
+<hr>
+<h2 id="migrating-existing-secrets-to-cred"><a class="header" href="#migrating-existing-secrets-to-cred">Migrating Existing Secrets to cred</a></h2>
 <p>If you choose to migrate to cred instead of continuing with manual <code>.env</code> files you’ll need the original values from wherever you stored them (password manager, <code>.env</code> files, etc.).</p>
-<h2 id="migration-steps"><a class="header" href="#migration-steps">Migration Steps</a></h2>
+<h2 id="migration-steps-1"><a class="header" href="#migration-steps-1">Migration Steps</a></h2>
 <p><strong>1. Initialize cred:</strong></p>
 <pre><code class="language-bash">cred init
 </code></pre>
@@ -472,14 +514,48 @@ cred push github
 <li>cred uploads secrets to GitHub Actions</li>
 <li>Your workflows read secrets directly from GitHub — no cred involved</li>
 </ol>
+<h2 id="per-project-tokens"><a class="header" href="#per-project-tokens">Per-Project Tokens</a></h2>
+<p><strong>As of v0.13.0</strong>, target tokens are stored <strong>per-project</strong>, not globally. This properly supports fine-grained tokens (like GitHub PATs scoped to specific repos).</p>
+<p>Each project has its own:</p>
+<ul>
+<li><strong>Target bindings</strong> — the identifier for each target (repo, app, project ID)</li>
+<li><strong>Target tokens</strong> — authentication credentials stored in OS keyring</li>
+</ul>
+<p>This means:</p>
+<ul>
+<li>Project A can use a GitHub PAT scoped to <code>owner/repo-a</code></li>
+<li>Project B can use a different PAT scoped to <code>owner/repo-b</code></li>
+<li>No token conflicts or accidental cross-project access</li>
+</ul>
+<h2 id="target-bindings"><a class="header" href="#target-bindings">Target Bindings</a></h2>
+<p>Target bindings are saved in <code>.cred/project.toml</code> during <code>cred init</code> (auto-detected) or via <code>cred target bind</code>:</p>
+<pre><code class="language-toml"># .cred/project.toml
+[targets]
+github = "owner/repo"
+fly = "my-app"
+vercel = "prj_xxxxx"
+</code></pre>
+<p><strong>Bind a target manually:</strong></p>
+<pre><code class="language-bash">cred target bind github owner/repo
+cred target bind fly my-app
+cred target bind vercel prj_xxxxx
+</code></pre>
+<p>Once bound, you don’t need <code>--repo</code>, <code>--app</code>, or <code>--project</code> flags when pushing.</p>
 <h2 id="adding-a-target"><a class="header" href="#adding-a-target">Adding a Target</a></h2>
-<p>Authenticate a deployment target:</p>
+<p>Authenticate a deployment target (must be inside a cred project):</p>
 <pre><code class="language-bash">cred target set github
 </code></pre>
-<p>You will be securely prompted for a token. The token is stored in your OS credential store, not in plaintext on disk.</p>
+<p>You will be securely prompted for a token. The token is stored in your OS credential store, scoped to this project.</p>
 <h2 id="managing-targets"><a class="header" href="#managing-targets">Managing Targets</a></h2>
-<p><strong>List configured targets:</strong></p>
+<p><strong>List configured targets for this project:</strong></p>
 <pre><code class="language-bash">cred target list
+</code></pre>
+<p>Output shows binding and authentication status:</p>
+<pre><code>Project Targets:
+  ✓ github = owner/repo
+  ✗ fly = my-app
+
+Run 'cred target set &lt;target&gt;' to authenticate.
 </code></pre>
 <p><strong>Revoke a target:</strong></p>
 <pre><code class="language-bash">cred target revoke github --yes
@@ -816,9 +892,10 @@ Targets: github ✓
 <tr><th>Command</th><th>Description</th></tr>
 </thead>
 <tbody>
-<tr><td><code>cred target set</code></td><td>Configure a deployment target</td></tr>
-<tr><td><code>cred target list</code></td><td>List configured targets</td></tr>
-<tr><td><code>cred target revoke</code></td><td>Remove a target</td></tr>
+<tr><td><a href="#target-set"><code>cred target set</code></a></td><td>Authenticate with a target</td></tr>
+<tr><td><a href="#target-bind"><code>cred target bind</code></a></td><td>Bind target identifier to project</td></tr>
+<tr><td><a href="#target-list"><code>cred target list</code></a></td><td>List configured targets</td></tr>
+<tr><td><a href="#target-revoke"><code>cred target revoke</code></a></td><td>Remove a target’s token</td></tr>
 </tbody>
 </table>
 </div>
@@ -861,7 +938,7 @@ Targets: github ✓
 </code></pre>
 <p>This creates:</p>
 <pre><code>.cred/
-├── project.toml    # Project configuration
+├── project.toml    # Project configuration (includes target bindings)
 └── vault.enc       # Encrypted secrets vault
 </code></pre>
 <p>Run this once per project, typically at the repository root.</p>
@@ -872,14 +949,198 @@ Targets: github ✓
 <li>Stores the key in your OS credential store (Keychain, GNOME Keyring, etc.)</li>
 <li>Creates an empty encrypted vault</li>
 <li>Adds <code>.cred/</code> to <code>.gitignore</code></li>
+<li><strong>Auto-detects target bindings</strong> from your project</li>
 </ol>
+<h2 id="auto-detection"><a class="header" href="#auto-detection">Auto-Detection</a></h2>
+<p>cred automatically detects and saves target bindings during init:</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Target</th><th>Detection Source</th></tr>
+</thead>
+<tbody>
+<tr><td>GitHub</td><td>Git remote (<code>git@github.com:owner/repo.git</code>)</td></tr>
+<tr><td>Fly.io</td><td><code>fly.toml</code> (<code>app = "my-app"</code>)</td></tr>
+<tr><td>Vercel</td><td><code>.vercel/project.json</code> (<code>projectId</code>)</td></tr>
+</tbody>
+</table>
+</div>
+<p>Example output:</p>
+<pre><code>Initialized new cred project at .cred/
+🔑 Encryption key generated and stored in the System Credential Store
+📍 Detected targets:
+   github: owner/repo
+   fly: my-app
+
+   Run 'cred target set &lt;target&gt;' to authenticate each target.
+</code></pre>
+<p>These bindings are saved in <code>.cred/project.toml</code>:</p>
+<pre><code class="language-toml">name = "my-project"
+version = "0.1.0"
+id = "..."
+git_repo = "owner/repo"
+
+[targets]
+github = "owner/repo"
+fly = "my-app"
+</code></pre>
+<h2 id="project-name"><a class="header" href="#project-name">Project Name</a></h2>
+<p>The project name defaults to the <strong>directory name</strong> where you run <code>cred init</code>.</p>
+<h2 id="next-steps"><a class="header" href="#next-steps">Next Steps</a></h2>
+<p>After init, authenticate your targets:</p>
+<pre><code class="language-bash">cred target set github    # Prompts for fine-grained PAT
+cred target set fly       # Prompts for Fly.io token
+</code></pre>
+<p>Then you can push without specifying <code>--repo</code> or <code>--app</code>:</p>
+<pre><code class="language-bash">cred push github    # Uses saved binding
+cred push fly       # Uses saved binding
+</code></pre>
 <h2 id="important-notes"><a class="header" href="#important-notes">Important Notes</a></h2>
 <ul>
 <li>cred is <strong>single-machine only</strong> — the vault and encryption key stay on your dev machine</li>
 <li>Use <code>cred push</code> to deploy secrets to platforms like GitHub Actions</li>
 <li>Your CI/CD reads secrets from the target platform directly, not from cred</li>
+<li>Target tokens are stored <strong>per-project</strong> to support fine-grained tokens</li>
 </ul>
 <p>See <a href="#security-model">Security Model</a> for more details.</p>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="target"><a class="header" href="#target">target</a></h1>
+<p>Manage deployment targets for this project.</p>
+<h2 id="overview"><a class="header" href="#overview">Overview</a></h2>
+<p>Target commands manage:</p>
+<ul>
+<li><strong>Authentication</strong> — tokens for each target platform</li>
+<li><strong>Bindings</strong> — identifiers (repo, app, project ID) for each target</li>
+</ul>
+<p>Both tokens and bindings are stored <strong>per-project</strong>, enabling fine-grained tokens scoped to specific resources.</p>
+<hr>
+<h2 id="target-set"><a class="header" href="#target-set">target set</a></h2>
+<p>Authenticate with a target platform.</p>
+<pre><code class="language-bash">cred target set &lt;target&gt;
+</code></pre>
+<h3 id="examples"><a class="header" href="#examples">Examples</a></h3>
+<pre><code class="language-bash"># Authenticate with GitHub (prompts for token)
+cred target set github
+
+# Provide token directly (for automation)
+cred target set github --token ghp_xxxxx
+</code></pre>
+<h3 id="supported-targets-1"><a class="header" href="#supported-targets-1">Supported Targets</a></h3>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Target</th><th>Token Type</th></tr>
+</thead>
+<tbody>
+<tr><td><code>github</code></td><td>Fine-grained PAT with Actions secrets permission</td></tr>
+<tr><td><code>vercel</code></td><td>Access Token from vercel.com/account/tokens</td></tr>
+<tr><td><code>fly</code></td><td>Personal Access Token from fly.io/user/personal_access_tokens</td></tr>
+</tbody>
+</table>
+</div>
+<h3 id="notes"><a class="header" href="#notes">Notes</a></h3>
+<ul>
+<li>Must be inside a cred project (<code>cred init</code> first)</li>
+<li>Tokens are stored in OS credential store, scoped to this project</li>
+<li>Each project can have different tokens for the same target</li>
+</ul>
+<hr>
+<h2 id="target-bind"><a class="header" href="#target-bind">target bind</a></h2>
+<p>Bind a target identifier to this project.</p>
+<pre><code class="language-bash">cred target bind &lt;target&gt; &lt;identifier&gt;
+</code></pre>
+<h3 id="examples-1"><a class="header" href="#examples-1">Examples</a></h3>
+<pre><code class="language-bash"># Bind GitHub repo
+cred target bind github owner/repo
+
+# Bind Fly.io app
+cred target bind fly my-app-name
+
+# Bind Vercel project
+cred target bind vercel prj_xxxxxxxxxxxxx
+</code></pre>
+<h3 id="when-to-use"><a class="header" href="#when-to-use">When to Use</a></h3>
+<ul>
+<li>When auto-detection during <code>cred init</code> didn’t find your target</li>
+<li>When you want to override the auto-detected binding</li>
+<li>When setting up a new target after init</li>
+</ul>
+<p>Bindings are saved in <code>.cred/project.toml</code>:</p>
+<pre><code class="language-toml">[targets]
+github = "owner/repo"
+fly = "my-app-name"
+</code></pre>
+<hr>
+<h2 id="target-list"><a class="header" href="#target-list">target list</a></h2>
+<p>List targets configured for this project.</p>
+<pre><code class="language-bash">cred target list
+</code></pre>
+<h3 id="output"><a class="header" href="#output">Output</a></h3>
+<pre><code>Project Targets:
+  ✓ github = owner/repo
+  ✗ fly = my-app
+
+Run 'cred target set &lt;target&gt;' to authenticate.
+</code></pre>
+<ul>
+<li>✓ = authenticated (token stored)</li>
+<li>✗ = binding exists but not authenticated</li>
+</ul>
+<h3 id="json-output"><a class="header" href="#json-output">JSON Output</a></h3>
+<pre><code class="language-bash">cred target list --json
+</code></pre>
+<pre><code class="language-json">{
+  "api_version": "1",
+  "status": "ok",
+  "data": {
+    "targets": [
+      {"name": "github", "identifier": "owner/repo", "authenticated": true},
+      {"name": "fly", "identifier": "my-app", "authenticated": false}
+    ]
+  }
+}
+</code></pre>
+<hr>
+<h2 id="target-revoke"><a class="header" href="#target-revoke">target revoke</a></h2>
+<p>Remove a target’s authentication token.</p>
+<pre><code class="language-bash">cred target revoke &lt;target&gt; --yes
+</code></pre>
+<h3 id="examples-2"><a class="header" href="#examples-2">Examples</a></h3>
+<pre><code class="language-bash"># Revoke GitHub token
+cred target revoke github --yes
+
+# Dry-run to preview
+cred target revoke github --dry-run
+</code></pre>
+<h3 id="notes-1"><a class="header" href="#notes-1">Notes</a></h3>
+<ul>
+<li>Requires <code>--yes</code> flag (destructive operation)</li>
+<li>Only removes the token; the binding remains in project.toml</li>
+<li>For some targets (GitHub), attempts remote token revocation first</li>
+</ul>
+<hr>
+<h2 id="workflow-example"><a class="header" href="#workflow-example">Workflow Example</a></h2>
+<pre><code class="language-bash"># Initialize project (auto-detects GitHub from git remote)
+cred init
+
+# Authenticate GitHub with fine-grained PAT
+cred target set github
+
+# Add a Fly.io app binding
+cred target bind fly my-app
+
+# Authenticate Fly.io
+cred target set fly
+
+# List all targets
+cred target list
+
+# Push to GitHub (no --repo needed)
+cred push github
+
+# Push to Fly.io (no --app needed)
+cred push fly
+</code></pre>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="config"><a class="header" href="#config">config</a></h1>
 <p>Manage global cred configuration.</p>
@@ -972,7 +1233,7 @@ Git: edneedham/cred
 <li>Configured sources and targets</li>
 <li>Git repository (if detected)</li>
 </ul>
-<h2 id="json-output"><a class="header" href="#json-output">JSON Output</a></h2>
+<h2 id="json-output-1"><a class="header" href="#json-output-1">JSON Output</a></h2>
 <p>For machine-readable output:</p>
 <pre><code class="language-bash">cred status --json
 </code></pre>
@@ -1132,7 +1393,7 @@ Use 'cred secret rollback DATABASE_URL --version &lt;N&gt;' to restore
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="env"><a class="header" href="#env">env</a></h1>
 <p>Manage environments for organizing secrets. Environments allow you to separate secrets for different contexts (e.g., <code>dev</code>, <code>staging</code>, <code>prod</code>).</p>
-<h2 id="overview"><a class="header" href="#overview">Overview</a></h2>
+<h2 id="overview-1"><a class="header" href="#overview-1">Overview</a></h2>
 <p>By default, all secrets are stored in the <code>default</code> environment. You can create additional environments to isolate secrets for different deployment contexts.</p>
 <h2 id="list-2"><a class="header" href="#list-2">list</a></h2>
 <p>List all environments:</p>
@@ -1251,7 +1512,7 @@ cred import vault.env
 <pre><code class="language-bash"># Override: import all secrets to staging environment
 cred import vault.env --env staging
 </code></pre>
-<h2 id="examples"><a class="header" href="#examples">Examples</a></h2>
+<h2 id="examples-3"><a class="header" href="#examples-3">Examples</a></h2>
 <pre><code class="language-bash"># Import from .env, skip existing keys
 cred import .env
 
@@ -1267,7 +1528,7 @@ cred import teammate-vault.env
 # Preview what would be imported
 cred import .env --dry-run
 </code></pre>
-<h2 id="output"><a class="header" href="#output">Output</a></h2>
+<h2 id="output-1"><a class="header" href="#output-1">Output</a></h2>
 <pre><code>✓ Imported .env (added 5, overwritten 0, skipped 2).
 </code></pre>
 <p>For cred export files with multiple environments:</p>
@@ -1361,7 +1622,7 @@ API_KEY=sk-prod-xxx
 DATABASE_URL=postgres://localhost/dev
 </code></pre>
 <p>Use this when you need a standard <code>.env</code> file for tools that don’t understand cred comments.</p>
-<h2 id="examples-1"><a class="header" href="#examples-1">Examples</a></h2>
+<h2 id="examples-4"><a class="header" href="#examples-4">Examples</a></h2>
 <pre><code class="language-bash"># Export full vault with metadata
 cred export vault.env
 
@@ -1377,7 +1638,7 @@ cred export vault.env --force
 # Preview what would be exported
 cred export vault.env --dry-run
 </code></pre>
-<h2 id="output-1"><a class="header" href="#output-1">Output</a></h2>
+<h2 id="output-2"><a class="header" href="#output-2">Output</a></h2>
 <pre><code>✓ Exported 10 secrets (3 environment(s)) to vault.env.
 </code></pre>
 <p>For single environment:</p>
@@ -1413,6 +1674,7 @@ cred export vault.env --dry-run
 <p>Push all secrets to Fly.io:</p>
 <pre><code class="language-bash">cred push fly
 </code></pre>
+<p>No <code>--repo</code>, <code>--app</code>, or <code>--project</code> flags needed — cred uses the target bindings saved in your project.</p>
 <p>Push specific secrets only:</p>
 <pre><code class="language-bash">cred push github DATABASE_URL JWT_SECRET
 </code></pre>
@@ -1447,32 +1709,38 @@ cred export vault.env --dry-run
 </tbody>
 </table>
 </div>
-<h2 id="target-detection"><a class="header" href="#target-detection">Target Detection</a></h2>
+<h2 id="target-resolution"><a class="header" href="#target-resolution">Target Resolution</a></h2>
+<p>cred resolves target identifiers in this order:</p>
+<ol>
+<li><strong>CLI flag</strong> (<code>--repo</code>, <code>--app</code>, <code>--project</code>) — highest priority</li>
+<li><strong>Project binding</strong> (saved in <code>.cred/project.toml</code>)</li>
+<li><strong>Auto-detection</strong> (git remote, fly.toml, etc.) — fallback</li>
+</ol>
 <h3 id="github-1"><a class="header" href="#github-1">GitHub</a></h3>
-<p>cred automatically detects your repository from git metadata when you’re inside a git repository.</p>
-<p>If you’re not in a git repository, or need to push to a different repo:</p>
-<pre><code class="language-bash">cred push github --repo owner/repo
+<p>Target binding is auto-detected from git remote during <code>cred init</code>, or set manually:</p>
+<pre><code class="language-bash">cred target bind github owner/repo
+</code></pre>
+<p>Override with CLI flag if needed:</p>
+<pre><code class="language-bash">cred push github --repo different/repo
 </code></pre>
 <h3 id="vercel-1"><a class="header" href="#vercel-1">Vercel</a></h3>
-<p>cred auto-detects your project from <code>.vercel/project.json</code> (created by <code>vercel link</code>).</p>
-<p>If you haven’t linked your project:</p>
-<pre><code class="language-bash">vercel link
+<p>Target binding is auto-detected from <code>.vercel/project.json</code> during <code>cred init</code>, or set manually:</p>
+<pre><code class="language-bash">cred target bind vercel prj_xxxxxxxxxxxxx
 </code></pre>
-<p>Or specify the project ID explicitly:</p>
-<pre><code class="language-bash">cred push vercel --project prj_xxxxxxxxxxxxx
+<p>Override with CLI flag if needed:</p>
+<pre><code class="language-bash">cred push vercel --project prj_other
 </code></pre>
 <h3 id="flyio-1"><a class="header" href="#flyio-1">Fly.io</a></h3>
-<p>cred auto-detects your app from <code>fly.toml</code> (created by <code>fly launch</code>).</p>
-<p>If you haven’t launched your app:</p>
-<pre><code class="language-bash">fly launch
+<p>Target binding is auto-detected from <code>fly.toml</code> during <code>cred init</code>, or set manually:</p>
+<pre><code class="language-bash">cred target bind fly my-app-name
 </code></pre>
-<p>Or specify the app name explicitly:</p>
-<pre><code class="language-bash">cred push fly --app my-app-name
+<p>Override with CLI flag if needed:</p>
+<pre><code class="language-bash">cred push fly --app different-app
 </code></pre>
 <p><strong>Note:</strong> After pushing secrets to Fly.io, run <code>fly deploy</code> or <code>fly secrets deploy</code> to apply changes.</p>
 <h2 id="incremental-updates"><a class="header" href="#incremental-updates">Incremental Updates</a></h2>
 <p>cred tracks which secrets have changed since the last push. Only modified secrets are updated remotely, making pushes efficient.</p>
-<h2 id="workflow-example"><a class="header" href="#workflow-example">Workflow Example</a></h2>
+<h2 id="workflow-example-1"><a class="header" href="#workflow-example-1">Workflow Example</a></h2>
 <pre><code class="language-bash"># Add a secret
 cred secret set DATABASE_URL "postgres://..."
 
@@ -1552,7 +1820,7 @@ cred push github
 </tbody>
 </table>
 </div>
-<h2 id="workflow-example-1"><a class="header" href="#workflow-example-1">Workflow Example</a></h2>
+<h2 id="workflow-example-2"><a class="header" href="#workflow-example-2">Workflow Example</a></h2>
 <p>Remove a secret completely:</p>
 <pre><code class="language-bash"># Remove from GitHub first
 cred prune github OLD_SECRET --yes
@@ -1666,22 +1934,6 @@ cred secret list
         <template id=fa-play><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 384 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M73 39c-14.8-9.1-33.4-9.4-48.5-.9S0 62.6 0 80V432c0 17.4 9.4 33.4 24.5 41.9s33.7 8.1 48.5-.9L361 297c14.3-8.7 23-24.2 23-41s-8.7-32.2-23-41L73 39z"/></svg></span></template>
         <template id=fa-clock-rotate-left><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M75 75L41 41C25.9 25.9 0 36.6 0 57.9V168c0 13.3 10.7 24 24 24H134.1c21.4 0 32.1-25.9 17-41l-30.8-30.8C155 85.5 203 64 256 64c106 0 192 86 192 192s-86 192-192 192c-40.8 0-78.6-12.7-109.7-34.4c-14.5-10.1-34.4-6.6-44.6 7.9s-6.6 34.4 7.9 44.6C151.2 495 201.7 512 256 512c141.4 0 256-114.6 256-256S397.4 0 256 0C185.3 0 121.3 28.7 75 75zm181 53c-13.3 0-24 10.7-24 24V256c0 6.4 2.5 12.5 7 17l72 72c9.4 9.4 24.6 9.4 33.9 0s9.4-24.6 0-33.9l-65-65V152c0-13.3-10.7-24-24-24z"/></svg></span></template>
 
-        <!-- Livereload script (if served using the cli tool) -->
-        <script>
-            const wsProtocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
-            const wsAddress = wsProtocol + "//" + location.host + "/" + "__livereload";
-            const socket = new WebSocket(wsAddress);
-            socket.onmessage = function (event) {
-                if (event.data === "reload") {
-                    socket.close();
-                    location.reload();
-                }
-            };
-
-            window.onbeforeunload = function() {
-                socket.close();
-            }
-        </script>
 
 
         <script>

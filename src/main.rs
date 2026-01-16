@@ -17,7 +17,6 @@ use cli::{Cli, CliFlags, Commands, EnvAction, SecretAction, SetTargetArgs, Sourc
 use error::{AppError, ExitCode};
 use io::{print_err, print_json, print_out, print_plain_err, read_token_securely, require_yes};
 use keyring::Entry;
-use project::resolve_repo_binding;
 use sources::SourceAdapter;
 use std::process;
 use targets::TargetAdapter;
@@ -97,21 +96,90 @@ async fn run(cli: Cli, flags: &CliFlags) -> Result<(), AppError> {
                 }
                 handle_target_set(args, flags)?;
             }
-            cli::TargetAction::List => {
-                let cfg = config::load()?;
-                let mut names: Vec<String> = cfg.targets.keys().cloned().collect();
-                names.sort();
+            cli::TargetAction::Bind(args) => {
+                let proj = project::Project::find()?;
+                if flags.dry_run {
+                    print_out(
+                        flags,
+                        &format!("(dry-run) Would bind {} = {}", args.name, args.identifier),
+                    );
+                    return Ok(());
+                }
+                proj.set_target_binding(&args.name.to_string(), &args.identifier)?;
                 if flags.json {
                     let payload = serde_json::json!({
                         "api_version": "1",
                         "status": "ok",
-                        "data": { "targets": names }
+                        "data": {
+                            "target": args.name.to_string(),
+                            "identifier": args.identifier
+                        }
                     });
-                    println!("{}", serde_json::to_string(&payload).unwrap_or_default());
+                    print_json(&payload);
                 } else {
-                    println!("Configured Targets:");
-                    for name in names {
-                        println!("- {}", name);
+                    print_out(
+                        flags,
+                        &format!("✓ Bound {} = {}", args.name, args.identifier),
+                    );
+                }
+            }
+            cli::TargetAction::List => {
+                // Show project-level targets if in a project
+                match project::Project::find() {
+                    Ok(proj) => {
+                        let targets = proj.list_targets()?;
+                        if flags.json {
+                            let targets_data: Vec<serde_json::Value> = targets
+                                .iter()
+                                .map(|(name, identifier, has_token)| {
+                                    serde_json::json!({
+                                        "name": name,
+                                        "identifier": identifier,
+                                        "authenticated": has_token
+                                    })
+                                })
+                                .collect();
+                            let payload = serde_json::json!({
+                                "api_version": "1",
+                                "status": "ok",
+                                "data": { "targets": targets_data }
+                            });
+                            print_json(&payload);
+                        } else {
+                            if targets.is_empty() {
+                                println!("No targets configured for this project.");
+                                println!(
+                                    "Run 'cred target bind <target> <identifier>' to add one."
+                                );
+                            } else {
+                                println!("Project Targets:");
+                                for (name, identifier, has_token) in targets {
+                                    let auth_status = if has_token { "✓" } else { "✗" };
+                                    println!("  {} {} = {} ", auth_status, name, identifier);
+                                }
+                                println!();
+                                println!("Run 'cred target set <target>' to authenticate.");
+                            }
+                        }
+                    }
+                    Err(_) => {
+                        // Fall back to global config if not in a project
+                        let cfg = config::load()?;
+                        let mut names: Vec<String> = cfg.targets.keys().cloned().collect();
+                        names.sort();
+                        if flags.json {
+                            let payload = serde_json::json!({
+                                "api_version": "1",
+                                "status": "ok",
+                                "data": { "targets": names }
+                            });
+                            println!("{}", serde_json::to_string(&payload).unwrap_or_default());
+                        } else {
+                            println!("Global Targets (not in a cred project):");
+                            for name in names {
+                                println!("- {}", name);
+                            }
+                        }
                     }
                 }
             }
@@ -125,7 +193,15 @@ async fn run(cli: Cli, flags: &CliFlags) -> Result<(), AppError> {
                     flags,
                     &format!("🔌 Attempting to revoke token for target '{}'...", name),
                 );
-                if let Some(token) = config::get_target_token(&name.to_string())? {
+                // Try project-level token first, fall back to global
+                let proj = project::Project::find().ok();
+                let token = if let Some(ref p) = proj {
+                    p.get_target_token(&name.to_string())?
+                } else {
+                    config::get_target_token(&name.to_string())?
+                };
+
+                if let Some(token) = token {
                     if let Some(p) = targets::get(name) {
                         // Atomic Revoke
                         if let Err(e) = p.revoke_auth_token(&token).await {
@@ -133,7 +209,13 @@ async fn run(cli: Cli, flags: &CliFlags) -> Result<(), AppError> {
                             return Ok(());
                         }
                     }
-                    config::remove_target_token(&name.to_string())?;
+                    // Remove from appropriate store
+                    if let Some(ref p) = proj {
+                        p.remove_target_token(&name.to_string())?;
+                        print_out(flags, &format!("✓ Removed authentication for '{}'", name));
+                    } else {
+                        config::remove_target_token(&name.to_string())?;
+                    }
                 } else {
                     print_out(flags, &format!("Target '{}' was not configured.", name));
                 }
@@ -830,29 +912,77 @@ async fn run(cli: Cli, flags: &CliFlags) -> Result<(), AppError> {
                 }
             };
 
-            let token = config::get_target_token(&args.target.to_string())?
-                .ok_or_else(|| anyhow::anyhow!("No token found for {}.", args.target))?;
-
             let proj = project::Project::find()?;
+            let proj_config = proj.load_config()?;
+
+            // Get token from project-level storage
+            let token = proj
+                .get_target_token(&args.target.to_string())?
+                .ok_or_else(|| {
+                    anyhow::anyhow!(
+                        "No token found for {} in this project. Run 'cred target set {}'.",
+                        args.target,
+                        args.target
+                    )
+                })?;
+
             let git_info = project::detect_git(None);
-            let bound_repo = proj.load_config().ok().and_then(|c| c.git_repo);
+
+            // Resolve target identifier: CLI flag > project config > git detection
+            let target_binding = proj_config.targets.get(&args.target.to_string()).cloned();
 
             let master_key = proj.get_master_key()?;
             let vault = vault::Vault::load(&proj.vault_path, master_key)?;
 
-            let repo = resolve_repo_binding(
-                git_info.and_then(|g| g.repo_slug),
-                bound_repo,
-                args.repo.clone(),
-                "push",
-            )
-            .map_err(AppError::from)?;
+            // For GitHub: use --repo, or target binding, or git detection
+            let repo = if args.repo.is_some() {
+                args.repo.clone()
+            } else if let Some(binding) = target_binding.clone() {
+                if matches!(args.target, targets::Target::Github) {
+                    Some(binding)
+                } else {
+                    None
+                }
+            } else {
+                git_info.and_then(|g| g.repo_slug)
+            };
+
+            // Validate repo binding if we have both detected and bound
+            if matches!(args.target, targets::Target::Github) {
+                if let (Some(provided), Some(bound)) = (&args.repo, &target_binding) {
+                    if provided != bound {
+                        return Err(AppError::git(anyhow::anyhow!(
+                            "Provided --repo '{}' does not match project binding '{}'.",
+                            provided,
+                            bound
+                        )));
+                    }
+                }
+            }
 
             if matches!(args.target, targets::Target::Github) && repo.is_none() {
                 return Err(AppError::git(anyhow::anyhow!(
-                    "GitHub push requires a repository. Provide --repo owner/name or initialize inside a git repo so it can be recorded."
+                    "GitHub push requires a repository. Run 'cred target bind github owner/repo' or provide --repo."
                 )));
             }
+
+            // For Vercel: use --project or target binding
+            let vercel_project = args.project.clone().or_else(|| {
+                if matches!(args.target, targets::Target::Vercel) {
+                    target_binding.clone()
+                } else {
+                    None
+                }
+            });
+
+            // For Fly: use --app or target binding
+            let fly_app = args.app.clone().or_else(|| {
+                if matches!(args.target, targets::Target::Fly) {
+                    target_binding.clone()
+                } else {
+                    None
+                }
+            });
 
             let keys_to_push: Vec<String> = if !args.keys.is_empty() {
                 args.keys.clone()
@@ -937,8 +1067,8 @@ async fn run(cli: Cli, flags: &CliFlags) -> Result<(), AppError> {
             );
             let options = targets::PushOptions {
                 repo,
-                project: args.project.clone(),
-                app: args.app.clone(),
+                project: vercel_project,
+                app: fly_app,
                 env: Some(args.env.clone()),
             };
             if let Err(e) = target_impl.push(&filtered, &token, &options).await {
@@ -973,10 +1103,20 @@ async fn run(cli: Cli, flags: &CliFlags) -> Result<(), AppError> {
                 }
             };
 
-            let token = config::get_target_token(&args.target.to_string())?
-                .ok_or_else(|| anyhow::anyhow!("No token for {}", args.target))?;
-
             let proj = project::Project::find()?;
+            let proj_config = proj.load_config()?;
+
+            // Get token from project-level storage
+            let token = proj
+                .get_target_token(&args.target.to_string())?
+                .ok_or_else(|| {
+                    anyhow::anyhow!(
+                        "No token found for {} in this project. Run 'cred target set {}'.",
+                        args.target,
+                        args.target
+                    )
+                })?;
+
             let master_key = proj.get_master_key()?;
             let vault = vault::Vault::load(&proj.vault_path, master_key)?;
 
@@ -996,23 +1136,44 @@ async fn run(cli: Cli, flags: &CliFlags) -> Result<(), AppError> {
             }
 
             let git_info = project::detect_git(None);
-            let bound_repo = project::Project::find()
-                .ok()
-                .and_then(|p| p.load_config().ok())
-                .and_then(|c| c.git_repo);
-            let repo = resolve_repo_binding(
-                git_info.and_then(|g| g.repo_slug),
-                bound_repo,
-                args.repo.clone(),
-                "prune",
-            )
-            .map_err(AppError::from)?;
+            let target_binding = proj_config.targets.get(&args.target.to_string()).cloned();
+
+            // For GitHub: use --repo, or target binding, or git detection
+            let repo = if args.repo.is_some() {
+                args.repo.clone()
+            } else if let Some(binding) = target_binding.clone() {
+                if matches!(args.target, targets::Target::Github) {
+                    Some(binding)
+                } else {
+                    None
+                }
+            } else {
+                git_info.and_then(|g| g.repo_slug)
+            };
 
             if matches!(args.target, targets::Target::Github) && repo.is_none() {
                 return Err(AppError::git(anyhow::anyhow!(
-                    "GitHub prune requires a repository. Provide --repo owner/name or initialize inside a git repo so it can be recorded."
+                    "GitHub prune requires a repository. Run 'cred target bind github owner/repo' or provide --repo."
                 )));
             }
+
+            // For Vercel: use --project or target binding
+            let vercel_project = args.project.clone().or_else(|| {
+                if matches!(args.target, targets::Target::Vercel) {
+                    target_binding.clone()
+                } else {
+                    None
+                }
+            });
+
+            // For Fly: use --app or target binding
+            let fly_app = args.app.clone().or_else(|| {
+                if matches!(args.target, targets::Target::Fly) {
+                    target_binding.clone()
+                } else {
+                    None
+                }
+            });
 
             if effective_dry {
                 if flags.json {
@@ -1056,8 +1217,8 @@ async fn run(cli: Cli, flags: &CliFlags) -> Result<(), AppError> {
             );
             let options = targets::PushOptions {
                 repo,
-                project: args.project.clone(),
-                app: args.app.clone(),
+                project: vercel_project,
+                app: fly_app,
                 env: Some(args.env.clone()),
             };
 
@@ -1270,26 +1431,35 @@ async fn run(cli: Cli, flags: &CliFlags) -> Result<(), AppError> {
 }
 
 /// Handle `target set`, persisting the token securely and zeroizing it afterward.
-/// Targets use simple token-based auth (fine-grained PAT via --token or prompt).
+/// Tokens are stored per-project (requires being in a cred project).
 fn handle_target_set(args: SetTargetArgs, flags: &CliFlags) -> Result<(), AppError> {
     let target_name = args.name.to_string();
 
+    // Require being in a project for per-project token storage
+    let proj = project::Project::find().map_err(|_| {
+        AppError::user(anyhow::anyhow!(
+            "Must be in a cred project to set target tokens. Run 'cred init' first."
+        ))
+    })?;
+
     // If token is provided directly, use it
     if let Some(token) = args.token {
-        config::set_target_token(&target_name, &token).map_err(AppError::auth)?;
+        proj.set_target_token(&target_name, &token)
+            .map_err(AppError::auth)?;
         print_out(
             flags,
-            &format!("Target '{}' authenticated successfully.", args.name),
+            &format!("Target '{}' authenticated for this project.", args.name),
         );
         return Ok(());
     }
 
     // Otherwise prompt for token
     let mut token = read_token_securely(None, flags)?;
-    config::set_target_token(&target_name, &token).map_err(AppError::auth)?;
+    proj.set_target_token(&target_name, &token)
+        .map_err(AppError::auth)?;
     print_out(
         flags,
-        &format!("Target '{}' authenticated successfully.", args.name),
+        &format!("Target '{}' authenticated for this project.", args.name),
     );
     token.zeroize();
     Ok(())

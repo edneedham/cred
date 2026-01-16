@@ -1,5 +1,60 @@
 # Changelog
 
+## v0.13.0
+
+### Breaking Changes
+
+-   **Target tokens are now per-project** — Tokens are stored scoped to each project, not globally. This properly supports fine-grained tokens (e.g., GitHub PATs scoped to specific repos).
+-   `cred target set` now requires being inside a cred project (`cred init` first)
+-   `cred target list` shows project-level targets with authentication status
+
+### New Features
+
+-   **Per-project target bindings** — Target identifiers (repo, app, project) are saved in `.cred/project.toml`:
+
+    ```bash
+    cred target bind github owner/repo
+    cred target bind fly my-app
+    cred target bind vercel prj_xxxxx
+    ```
+
+-   **Auto-detection at init** — `cred init` now detects and saves target bindings:
+
+    -   GitHub repo from git remote
+    -   Fly.io app from `fly.toml`
+    -   Vercel project from `.vercel/project.json`
+
+-   **Zero-flag push** — Once bound and authenticated, push without flags:
+
+    ```bash
+    cred push github   # Uses saved repo binding and project token
+    cred push fly      # Uses saved app binding and project token
+    ```
+
+-   **Project name from directory** — `cred init` now uses the directory name as the project name instead of "my-project"
+
+### CLI Changes
+
+-   `cred target bind <target> <identifier>` — New command to bind a target identifier
+-   `cred target list` — Now shows project targets with identifier and auth status
+-   `cred target set` — Now stores token per-project (requires `cred init` first)
+-   `--repo`, `--app`, `--project` flags still work as overrides
+
+### Migration Guide
+
+If upgrading from v0.12.x:
+
+1. Your global target tokens will no longer be used
+2. In each project, re-authenticate targets:
+    ```bash
+    cd your-project
+    cred target set github --token <your-fine-grained-pat>
+    ```
+3. Target bindings are auto-detected from git/config files, or set manually:
+    ```bash
+    cred target bind github owner/repo
+    ```
+
 ## v0.12.4
 
 ### Features

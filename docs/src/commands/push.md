@@ -22,6 +22,8 @@ Push all secrets to Fly.io:
 cred push fly
 ```
 
+No `--repo`, `--app`, or `--project` flags needed — cred uses the target bindings saved in your project.
+
 Push specific secrets only:
 
 ```bash
@@ -68,48 +70,54 @@ This pushes only secrets from the `prod` environment.
 | `--json`              | Machine-readable output         |
 | `--non-interactive`   | Fail instead of prompting       |
 
-## Target Detection
+## Target Resolution
+
+cred resolves target identifiers in this order:
+
+1. **CLI flag** (`--repo`, `--app`, `--project`) — highest priority
+2. **Project binding** (saved in `.cred/project.toml`)
+3. **Auto-detection** (git remote, fly.toml, etc.) — fallback
 
 ### GitHub
 
-cred automatically detects your repository from git metadata when you're inside a git repository.
-
-If you're not in a git repository, or need to push to a different repo:
+Target binding is auto-detected from git remote during `cred init`, or set manually:
 
 ```bash
-cred push github --repo owner/repo
+cred target bind github owner/repo
+```
+
+Override with CLI flag if needed:
+
+```bash
+cred push github --repo different/repo
 ```
 
 ### Vercel
 
-cred auto-detects your project from `.vercel/project.json` (created by `vercel link`).
-
-If you haven't linked your project:
+Target binding is auto-detected from `.vercel/project.json` during `cred init`, or set manually:
 
 ```bash
-vercel link
+cred target bind vercel prj_xxxxxxxxxxxxx
 ```
 
-Or specify the project ID explicitly:
+Override with CLI flag if needed:
 
 ```bash
-cred push vercel --project prj_xxxxxxxxxxxxx
+cred push vercel --project prj_other
 ```
 
 ### Fly.io
 
-cred auto-detects your app from `fly.toml` (created by `fly launch`).
-
-If you haven't launched your app:
+Target binding is auto-detected from `fly.toml` during `cred init`, or set manually:
 
 ```bash
-fly launch
+cred target bind fly my-app-name
 ```
 
-Or specify the app name explicitly:
+Override with CLI flag if needed:
 
 ```bash
-cred push fly --app my-app-name
+cred push fly --app different-app
 ```
 
 **Note:** After pushing secrets to Fly.io, run `fly deploy` or `fly secrets deploy` to apply changes.

@@ -52,11 +52,12 @@ Complete reference for all cred commands.
 
 ## Targets
 
-| Command              | Description                   |
-| -------------------- | ----------------------------- |
-| `cred target set`    | Configure a deployment target |
-| `cred target list`   | List configured targets       |
-| `cred target revoke` | Remove a target               |
+| Command                                           | Description                       |
+| ------------------------------------------------- | --------------------------------- |
+| [`cred target set`](./target.md#target-set)       | Authenticate with a target        |
+| [`cred target bind`](./target.md#target-bind)     | Bind target identifier to project |
+| [`cred target list`](./target.md#target-list)     | List configured targets           |
+| [`cred target revoke`](./target.md#target-revoke) | Remove a target's token           |
 
 ## Configuration
 

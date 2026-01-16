@@ -10,13 +10,24 @@ cred init
 
 This creates `.cred/vault.enc` in your project and stores the encryption key in your OS credential store.
 
-## 2. Add a target
+cred automatically detects targets from your project:
+
+```
+Initialized new cred project at .cred/
+🔑 Encryption key generated and stored in the System Credential Store
+📍 Detected targets:
+   github: owner/repo
+
+   Run 'cred target set <target>' to authenticate each target.
+```
+
+## 2. Authenticate a target
 
 ```bash
 cred target set github
 ```
 
-You'll be prompted for a fine-grained PAT with **Actions secrets** permission.
+You'll be prompted for a fine-grained PAT with **Actions secrets** permission. The token is stored per-project, so each project can use different tokens (important for fine-grained PATs scoped to specific repos).
 
 ## 3. Store a secret
 
@@ -37,6 +48,8 @@ Then push:
 ```bash
 cred push github
 ```
+
+No `--repo` flag needed — cred uses the target binding saved during init.
 
 Done! Your secret is now in GitHub Actions.
 

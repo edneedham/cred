@@ -16,22 +16,69 @@ Your machine              Target platform          Your workflow
 2. cred uploads secrets to GitHub Actions
 3. Your workflows read secrets directly from GitHub — no cred involved
 
+## Per-Project Tokens
+
+**As of v0.13.0**, target tokens are stored **per-project**, not globally. This properly supports fine-grained tokens (like GitHub PATs scoped to specific repos).
+
+Each project has its own:
+
+-   **Target bindings** — the identifier for each target (repo, app, project ID)
+-   **Target tokens** — authentication credentials stored in OS keyring
+
+This means:
+
+-   Project A can use a GitHub PAT scoped to `owner/repo-a`
+-   Project B can use a different PAT scoped to `owner/repo-b`
+-   No token conflicts or accidental cross-project access
+
+## Target Bindings
+
+Target bindings are saved in `.cred/project.toml` during `cred init` (auto-detected) or via `cred target bind`:
+
+```toml
+# .cred/project.toml
+[targets]
+github = "owner/repo"
+fly = "my-app"
+vercel = "prj_xxxxx"
+```
+
+**Bind a target manually:**
+
+```bash
+cred target bind github owner/repo
+cred target bind fly my-app
+cred target bind vercel prj_xxxxx
+```
+
+Once bound, you don't need `--repo`, `--app`, or `--project` flags when pushing.
+
 ## Adding a Target
 
-Authenticate a deployment target:
+Authenticate a deployment target (must be inside a cred project):
 
 ```bash
 cred target set github
 ```
 
-You will be securely prompted for a token. The token is stored in your OS credential store, not in plaintext on disk.
+You will be securely prompted for a token. The token is stored in your OS credential store, scoped to this project.
 
 ## Managing Targets
 
-**List configured targets:**
+**List configured targets for this project:**
 
 ```bash
 cred target list
+```
+
+Output shows binding and authentication status:
+
+```
+Project Targets:
+  ✓ github = owner/repo
+  ✗ fly = my-app
+
+Run 'cred target set <target>' to authenticate.
 ```
 
 **Revoke a target:**

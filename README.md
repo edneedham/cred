@@ -17,7 +17,7 @@ Encrypted local secrets → Deployment platforms.
 
 `cred` stores encrypted secrets locally and safely pushes them to target platforms on demand.
 
-⚠️ **Status: Early Preview (v0.12.4)** — The on-disk format, CLI surface, and security model may change between minor versions.
+⚠️ **Status: Early Preview (v0.13.0)** — The on-disk format, CLI surface, and security model may change between minor versions.
 
 ### What it's not
 
@@ -62,16 +62,16 @@ cargo install cred
 ## Quick Start
 
 ```bash
-# Initialize a project
+# Initialize a project (auto-detects targets from git, fly.toml, etc.)
 cred init
 
-# Add a target (GitHub Actions)
+# Authenticate with a target (per-project, fine-grained token)
 cred target set github
 
 # Store a secret
 cred secret set DATABASE_URL "postgres://..."
 
-# Push to GitHub
+# Push to GitHub (no --repo needed, uses saved binding)
 cred push github
 ```
 
