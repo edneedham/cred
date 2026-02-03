@@ -150,6 +150,32 @@ pub fn generate_password(length: usize) -> Result<String, CryptoError> {
     Ok(password)
 }
 
+/// Generate a random HMAC-SHA256 key
+///
+/// Generates a 256-bit (32-byte) random key suitable for HMAC-SHA256.
+/// The key is base64 encoded for storage.
+pub fn generate_hs256_key() -> Result<String, CryptoError> {
+    use base64::{Engine, engine::general_purpose::STANDARD as BASE64};
+
+    // HMAC-SHA256 works best with keys equal to or larger than the hash output (256 bits = 32 bytes)
+    const KEY_SIZE: usize = 32;
+
+    let mut key_bytes = vec![0u8; KEY_SIZE];
+
+    // Use getrandom for cryptographically secure random bytes
+    if let Err(e) = getrandom::getrandom(&mut key_bytes) {
+        return Err(CryptoError::GenerationFailed(format!(
+            "Failed to generate random bytes: {}",
+            e
+        )));
+    }
+
+    // Base64 encode the key for storage
+    let encoded = BASE64.encode(&key_bytes);
+
+    Ok(encoded)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -210,6 +236,36 @@ mod tests {
     fn test_generate_password_zero_length() {
         let result = generate_password(0);
         assert!(result.is_err(), "Zero-length password should fail");
+    }
+
+    #[test]
+    fn test_generate_hs256_key() {
+        use base64::{Engine, engine::general_purpose::STANDARD as BASE64};
+
+        // Generate HMAC-SHA256 key
+        let key = generate_hs256_key().expect("HS256 key generation should succeed");
+
+        // Should be a valid base64 string
+        let decoded = BASE64.decode(&key).expect("Should be valid base64");
+
+        // Should be 32 bytes (256 bits) when decoded
+        assert_eq!(decoded.len(), 32, "HS256 key should be 32 bytes (256 bits)");
+
+        // Base64 encoding of 32 bytes should be 44 characters (with padding)
+        assert_eq!(key.len(), 44, "Base64 encoded 32 bytes should be 44 chars");
+    }
+
+    #[test]
+    fn test_generate_hs256_key_unique() {
+        // Generate multiple keys and verify they're different
+        let key1 = generate_hs256_key().expect("First key generation should succeed");
+        let key2 = generate_hs256_key().expect("Second key generation should succeed");
+        let key3 = generate_hs256_key().expect("Third key generation should succeed");
+
+        // Very unlikely to get the same key twice
+        assert_ne!(key1, key2, "Generated HS256 keys should be unique");
+        assert_ne!(key2, key3, "Generated HS256 keys should be unique");
+        assert_ne!(key1, key3, "Generated HS256 keys should be unique");
     }
 
     #[test]

@@ -282,6 +282,8 @@ pub enum KeyType {
     Pem,
     /// Random secure password
     Password,
+    /// HMAC-SHA256 key (base64 encoded)
+    Hs256,
 }
 
 #[derive(Subcommand, Debug)]
