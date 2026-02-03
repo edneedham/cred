@@ -368,7 +368,7 @@ pub enum SecretAction {
         /// Key name (for passwords) or base name for key pairs (will create {key}_PRIVATE and {key}_PUBLIC)
         key: String,
         /// Type of secret to generate
-        #[arg(long, value_enum)]
+        #[arg(long = "type", value_enum)]
         key_type: KeyType,
         /// Environment to store the secret in (defaults to "default")
         #[arg(long, short = 'e', default_value = DEFAULT_ENV)]
