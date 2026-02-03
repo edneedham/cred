@@ -56,7 +56,7 @@ pub fn generate_rsa_keypair() -> Result<RsaKeyPair, CryptoError> {
     let temp_dir = std::env::temp_dir();
     let private_key_path = temp_dir.join(format!("cred_rsa_{}", uuid::Uuid::new_v4()));
 
-    // Generate 2048-bit RSA private key
+    // Generate 2048-bit RSA private key (use -traditional for PKCS#1 format)
     let private_output = Command::new("openssl")
         .args(["genrsa", "-traditional", "2048"])
         .output()
@@ -114,6 +114,42 @@ pub fn generate_rsa_keypair() -> Result<RsaKeyPair, CryptoError> {
     })
 }
 
+/// Generate a random secure password
+///
+/// Generates a password of the specified length using cryptographically secure random bytes.
+/// The password includes uppercase, lowercase, numbers, and special characters.
+pub fn generate_password(length: usize) -> Result<String, CryptoError> {
+    // Define character set: letters (upper and lower), numbers, and safe special characters
+    const CHARSET: &[u8] =
+        b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*-_=+?";
+
+    if length == 0 {
+        return Err(CryptoError::GenerationFailed(
+            "Password length must be greater than 0".to_string(),
+        ));
+    }
+
+    let mut password = String::with_capacity(length);
+    let mut buffer = vec![0u8; length];
+
+    // Use getrandom for cryptographically secure random bytes
+    if let Err(e) = getrandom::getrandom(&mut buffer) {
+        return Err(CryptoError::GenerationFailed(format!(
+            "Failed to generate random bytes: {}",
+            e
+        )));
+    }
+
+    // Map random bytes to characters from CHARSET
+    for byte in buffer {
+        // Use modulo to map the byte to an index in CHARSET
+        let idx = (byte as usize) % CHARSET.len();
+        password.push(CHARSET[idx] as char);
+    }
+
+    Ok(password)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -126,6 +162,54 @@ mod tests {
         // We don't assert success since it depends on the environment
         // but the function should return a result
         assert!(result.is_ok() || result.is_err());
+    }
+
+    #[test]
+    fn test_generate_password() {
+        // Generate passwords of different lengths
+        let pwd16 = generate_password(16).expect("Password generation should succeed");
+        assert_eq!(pwd16.len(), 16);
+
+        let pwd32 = generate_password(32).expect("Password generation should succeed");
+        assert_eq!(pwd32.len(), 32);
+
+        let pwd64 = generate_password(64).expect("Password generation should succeed");
+        assert_eq!(pwd64.len(), 64);
+    }
+
+    #[test]
+    fn test_generate_password_unique() {
+        // Generate multiple passwords and verify they're different
+        let pwd1 = generate_password(32).expect("First password generation should succeed");
+        let pwd2 = generate_password(32).expect("Second password generation should succeed");
+        let pwd3 = generate_password(32).expect("Third password generation should succeed");
+
+        // Very unlikely to get the same password twice
+        assert_ne!(pwd1, pwd2, "Generated passwords should be unique");
+        assert_ne!(pwd2, pwd3, "Generated passwords should be unique");
+        assert_ne!(pwd1, pwd3, "Generated passwords should be unique");
+    }
+
+    #[test]
+    fn test_generate_password_charset() {
+        let pwd = generate_password(100).expect("Password generation should succeed");
+
+        // Verify all characters are from expected charset
+        const CHARSET: &[u8] =
+            b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*-_=+?";
+        for ch in pwd.chars() {
+            assert!(
+                CHARSET.contains(&(ch as u8)),
+                "Password contains invalid character: {}",
+                ch
+            );
+        }
+    }
+
+    #[test]
+    fn test_generate_password_zero_length() {
+        let result = generate_password(0);
+        assert!(result.is_err(), "Zero-length password should fail");
     }
 
     #[test]

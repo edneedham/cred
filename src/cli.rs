@@ -280,6 +280,8 @@ pub struct GenerateSourceArgs {
 pub enum KeyType {
     /// RSA 2048-bit key pair in PEM format
     Pem,
+    /// Random secure password
+    Password,
 }
 
 #[derive(Subcommand, Debug)]
@@ -363,17 +365,20 @@ pub enum SecretAction {
     },
     /// Generate a cryptographic key pair locally (requires OpenSSL)
     Generate {
-        /// Base name for the key pair (will create {key}_PRIVATE and {key}_PUBLIC)
+        /// Key name (for passwords) or base name for key pairs (will create {key}_PRIVATE and {key}_PUBLIC)
         key: String,
-        /// Type of key to generate
+        /// Type of secret to generate
         #[arg(long, value_enum)]
         key_type: KeyType,
-        /// Environment to store the keys in (defaults to "default")
+        /// Environment to store the secret in (defaults to "default")
         #[arg(long, short = 'e', default_value = DEFAULT_ENV)]
         env: String,
-        /// Overwrite existing keys if they already exist
+        /// Overwrite existing secret if it already exists
         #[arg(long)]
         force: bool,
+        /// Password length (only used with --type password, default: 32)
+        #[arg(long, short = 'l', default_value = "32")]
+        length: usize,
     },
 }
 

@@ -284,6 +284,7 @@ dependencies = [
  "chrono",
  "clap",
  "dirs",
+ "getrandom 0.2.16",
  "keyring",
  "open",
  "rand",
