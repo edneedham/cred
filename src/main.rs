@@ -417,9 +417,14 @@ async fn run(cli: Cli, flags: &CliFlags) -> Result<(), AppError> {
                     }
                 }
                 SecretAction::List { env } => {
-                    // Handle special "*" case to list all environments
-                    if env == "*" {
+                    // Determine whether to show all environments or a specific one
+                    let show_all = env.is_none() || env.as_deref() == Some("*");
+
+                    if show_all {
+                        // List all environments
                         let all_entries = vault.list_all_entries();
+                        let envs = vault.list_environments();
+
                         if flags.json {
                             let secrets_data: Vec<serde_json::Value> = all_entries
                                 .iter()
@@ -438,15 +443,37 @@ async fn run(cli: Cli, flags: &CliFlags) -> Result<(), AppError> {
                                 "api_version": "1",
                                 "status": "ok",
                                 "data": {
-                                    "environments": vault.list_environments(),
+                                    "environments": envs,
                                     "secrets": secrets_data
                                 }
                             });
                             println!("{}", serde_json::to_string(&payload).unwrap_or_default());
                         } else {
-                            let envs = vault.list_environments();
-                            println!("Vault content ({} environments):", envs.len());
-                            for env_name in envs {
+                            let total_secrets: usize = envs
+                                .iter()
+                                .filter_map(|e| vault.list_entries_in_env(e))
+                                .map(|entries| entries.len())
+                                .sum();
+
+                            println!(
+                                "Vault content ({} environments, {} secrets):",
+                                envs.len(),
+                                total_secrets
+                            );
+
+                            // Sort environments to show default first, then alphabetically
+                            let mut sorted_envs = envs.clone();
+                            sorted_envs.sort_by(|a, b| {
+                                if a == vault::DEFAULT_ENV {
+                                    std::cmp::Ordering::Less
+                                } else if b == vault::DEFAULT_ENV {
+                                    std::cmp::Ordering::Greater
+                                } else {
+                                    a.cmp(b)
+                                }
+                            });
+
+                            for env_name in sorted_envs {
                                 if let Some(entries) = vault.list_entries_in_env(&env_name) {
                                     let mut keys: Vec<&String> = entries.keys().collect();
                                     keys.sort();
@@ -462,9 +489,9 @@ async fn run(cli: Cli, flags: &CliFlags) -> Result<(), AppError> {
                                 }
                             }
                         }
-                    } else {
+                    } else if let Some(env_name) = env {
                         // List specific environment
-                        let entries = vault.list_entries_in_env(&env);
+                        let entries = vault.list_entries_in_env(&env_name);
                         if let Some(entries) = entries {
                             let mut keys: Vec<&String> = entries.keys().collect();
                             keys.sort();
@@ -475,7 +502,7 @@ async fn run(cli: Cli, flags: &CliFlags) -> Result<(), AppError> {
                                         let entry = &entries[*k];
                                         serde_json::json!({
                                             "key": k,
-                                            "env": env,
+                                            "env": env_name,
                                             "format": entry.format.to_string(),
                                             "created_at": entry.created_at.to_rfc3339(),
                                             "updated_at": entry.updated_at.to_rfc3339(),
@@ -486,14 +513,14 @@ async fn run(cli: Cli, flags: &CliFlags) -> Result<(), AppError> {
                                 let payload = serde_json::json!({
                                     "api_version": "1",
                                     "status": "ok",
-                                    "data": { "env": env, "secrets": secrets_data }
+                                    "data": { "env": env_name, "secrets": secrets_data }
                                 });
                                 println!("{}", serde_json::to_string(&payload).unwrap_or_default());
                             } else {
-                                if env == vault::DEFAULT_ENV {
+                                if env_name == vault::DEFAULT_ENV {
                                     println!("Vault content:");
                                 } else {
-                                    println!("Vault content (env: {}):", env);
+                                    println!("Vault content (env: {}):", env_name);
                                 }
                                 for k in keys {
                                     let entry = &entries[k];
@@ -509,11 +536,11 @@ async fn run(cli: Cli, flags: &CliFlags) -> Result<(), AppError> {
                                 let payload = serde_json::json!({
                                     "api_version": "1",
                                     "status": "ok",
-                                    "data": { "env": env, "secrets": [] }
+                                    "data": { "env": env_name, "secrets": [] }
                                 });
                                 println!("{}", serde_json::to_string(&payload).unwrap_or_default());
                             } else {
-                                println!("Environment '{}' does not exist or is empty.", env);
+                                println!("Environment '{}' does not exist or is empty.", env_name);
                             }
                         }
                     }

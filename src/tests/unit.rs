@@ -502,6 +502,81 @@ mod tests {
         assert!(list.contains_key("B"));
     }
 
+    // List all entries across multiple environments.
+    #[test]
+    fn test_vault_list_all_entries() {
+        let dir = tempdir().unwrap();
+        let vault_path = dir.path().join("vault.enc");
+        let key = get_test_key();
+
+        let mut v = vault::Vault::load(&vault_path, key).unwrap();
+
+        // Add secrets to default environment
+        v.set("DEFAULT_KEY", "default_value");
+
+        // Create production environment and add secrets
+        v.create_environment("production");
+        v.set_in_env("production", "PROD_KEY", "prod_value");
+        v.set_in_env("production", "API_KEY", "api_value");
+
+        // Create staging environment and add secrets
+        v.create_environment("staging");
+        v.set_in_env("staging", "STAGING_KEY", "staging_value");
+
+        v.save().unwrap();
+
+        // Reload to verify persistence
+        let v2 = vault::Vault::load(&vault_path, key).unwrap();
+
+        // Test list_all_entries returns secrets from all environments
+        let all_entries = v2.list_all_entries();
+        assert_eq!(
+            all_entries.len(),
+            4,
+            "Should have 4 secrets across all environments"
+        );
+
+        // Verify each secret is present with correct environment
+        let default_key = all_entries
+            .iter()
+            .find(|(env, key, _)| *env == "default" && *key == "DEFAULT_KEY");
+        assert!(
+            default_key.is_some(),
+            "Should find DEFAULT_KEY in default environment"
+        );
+
+        let prod_key = all_entries
+            .iter()
+            .find(|(env, key, _)| *env == "production" && *key == "PROD_KEY");
+        assert!(
+            prod_key.is_some(),
+            "Should find PROD_KEY in production environment"
+        );
+
+        let api_key = all_entries
+            .iter()
+            .find(|(env, key, _)| *env == "production" && *key == "API_KEY");
+        assert!(
+            api_key.is_some(),
+            "Should find API_KEY in production environment"
+        );
+
+        let staging_key = all_entries
+            .iter()
+            .find(|(env, key, _)| *env == "staging" && *key == "STAGING_KEY");
+        assert!(
+            staging_key.is_some(),
+            "Should find STAGING_KEY in staging environment"
+        );
+
+        // Test list_environments returns all environments
+        let envs = v2.list_environments();
+        assert_eq!(envs.len(), 3, "Should have 3 environments");
+        assert!(envs.contains(&"default".to_string()));
+        assert!(envs.contains(&"production".to_string()));
+        assert!(envs.contains(&"staging".to_string()));
+    }
+
     // Never writes plaintext to disk: ciphertext blob must not contain secret values.
     #[test]
     fn test_vault_encryption_actually_works() {

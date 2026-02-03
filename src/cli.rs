@@ -315,9 +315,9 @@ pub enum SecretAction {
     },
     /// List all secrets
     List {
-        /// Environment to list secrets from (defaults to "default", use "*" for all)
-        #[arg(long, short = 'e', default_value = DEFAULT_ENV)]
-        env: String,
+        /// Environment to list secrets from (if omitted, shows all environments)
+        #[arg(long, short = 'e')]
+        env: Option<String>,
     },
     /// Set or update a secret's description
     Describe {
