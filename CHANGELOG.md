@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.15.1
+
+### Bug Fixes
+
+-   **Formatting fix** — Fixed code formatting with `cargo fmt` to ensure CI passes.
+
 ## v0.15.0
 
 ### New Features
