@@ -1,5 +1,26 @@
 # Changelog
 
+## v0.15.0
+
+### New Features
+
+-   **`cred secret generate` for local key generation** — Generate cryptographic key pairs directly from cred using OpenSSL.
+    -   Supports RSA 2048-bit PEM key pairs
+    -   Generates both private and public keys
+    -   Keys are stored with `generated` source metadata
+    -   Requires `--force` to overwrite existing keys
+
+    ```bash
+    # Generate RSA key pair in default environment
+    cred secret generate API_KEY --type pem
+    
+    # Generate in specific environment
+    cred secret generate JWT_KEY --type pem --env production
+    ```
+
+-   **New `crypto` internal module** — Added `src/crypto.rs` for key generation utilities.
+-   **OpenSSL availability check** — Clear error messages if OpenSSL is not installed, with installation instructions per platform.
+
 ## v0.14.1
 
 ### Bug Fixes
@@ -15,7 +36,7 @@
     -   Otherwise prompts interactively, or errors in `--non-interactive` with a `cred target bind ...` hint
 
 ## v0.14.0
-
+ 
 ### New Features
 
 -   **First-class target scoping for secrets** — Secrets can now be scoped to specific targets (e.g., only Vercel). Unscoped secrets remain eligible for all targets.

@@ -3,7 +3,7 @@
 
 use crate::sources::Source;
 use crate::targets::Target;
-use crate::vault::{DEFAULT_ENV, SecretFormat};
+use crate::vault::{SecretFormat, DEFAULT_ENV};
 use clap::{Args, Parser, Subcommand};
 
 #[derive(Debug, Clone, Copy)]
@@ -275,6 +275,13 @@ pub struct GenerateSourceArgs {
     pub env: String,
 }
 
+/// Key types supported for local generation
+#[derive(Debug, Clone, Copy, clap::ValueEnum)]
+pub enum KeyType {
+    /// RSA 2048-bit key pair in PEM format
+    Pem,
+}
+
 #[derive(Subcommand, Debug)]
 pub enum SecretAction {
     /// Set a secret value (with optional metadata)
@@ -353,6 +360,20 @@ pub enum SecretAction {
         /// Environment containing the secret (defaults to "default")
         #[arg(long, short = 'e', default_value = DEFAULT_ENV)]
         env: String,
+    },
+    /// Generate a cryptographic key pair locally (requires OpenSSL)
+    Generate {
+        /// Base name for the key pair (will create {key}_PRIVATE and {key}_PUBLIC)
+        key: String,
+        /// Type of key to generate
+        #[arg(long, value_enum)]
+        key_type: KeyType,
+        /// Environment to store the keys in (defaults to "default")
+        #[arg(long, short = 'e', default_value = DEFAULT_ENV)]
+        env: String,
+        /// Overwrite existing keys if they already exist
+        #[arg(long)]
+        force: bool,
     },
 }
 
