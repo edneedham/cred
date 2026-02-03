@@ -1133,6 +1133,76 @@ mod tests {
         assert!(v.get_entry("ANY").is_none());
     }
 
+    // Ensure default environment is created when missing in loaded vault.
+    #[test]
+    fn test_default_env_created_on_load() {
+        use base64::{Engine, engine::general_purpose::STANDARD as BASE64};
+        use chacha20poly1305::{
+            ChaCha20Poly1305,
+            aead::{Aead, AeadCore, KeyInit, OsRng},
+        };
+
+        let dir = tempdir().unwrap();
+        let vault_path = dir.path().join("vault.enc");
+        let key = get_test_key();
+
+        // Create a v3 vault with only a custom environment (no "default")
+        let custom_env_secrets = serde_json::json!({
+            "CUSTOM_KEY": {
+                "value": "custom_value",
+                "format": "raw",
+                "created_at": "2025-01-01T00:00:00Z",
+                "updated_at": "2025-01-01T00:00:00Z",
+                "description": null,
+                "source": null,
+                "source_id": null,
+                "hash": null,
+                "targets": null,
+                "history": []
+            }
+        });
+
+        let payload = serde_json::json!({
+            "version": 3,
+            "environments": {
+                "custom": custom_env_secrets
+            }
+        });
+
+        let plaintext = serde_json::to_vec(&payload).unwrap();
+        let cipher = ChaCha20Poly1305::new(&key.into());
+        let nonce = ChaCha20Poly1305::generate_nonce(&mut OsRng);
+        let ciphertext = cipher.encrypt(&nonce, plaintext.as_ref()).unwrap();
+
+        let vault_file = serde_json::json!({
+            "version": 3,
+            "nonce": BASE64.encode(&nonce),
+            "ciphertext": BASE64.encode(&ciphertext)
+        });
+
+        fs::write(&vault_path, serde_json::to_string(&vault_file).unwrap()).unwrap();
+
+        // Load the vault - should auto-create the default environment
+        let v = vault::Vault::load(&vault_path, key).unwrap();
+
+        // Custom environment should exist with the secret
+        assert!(v.get_in_env("custom", "CUSTOM_KEY").is_some());
+
+        // Default environment should exist even though it wasn't in the file
+        let default_entries = v.list_entries_in_env(vault::DEFAULT_ENV);
+        assert!(
+            default_entries.is_some(),
+            "Default environment should be auto-created when missing"
+        );
+        assert!(
+            default_entries.unwrap().is_empty(),
+            "Default environment should be empty"
+        );
+
+        // list() should work without panicking
+        let _ = v.list();
+    }
+
     // Unsupported vault version fails gracefully.
     #[test]
     fn test_unsupported_vault_version() {
