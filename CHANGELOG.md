@@ -1,5 +1,22 @@
 # Changelog
 
+## v0.16.0
+
+### New Features
+
+-   **Password generation support** — Generate random secure passwords directly from cred.
+    -   New `--type password` option for `cred secret generate`
+    -   Configurable length with `--length` (default: 32 characters)
+    -   Uses cryptographically secure random generation
+    -   Includes uppercase, lowercase, numbers, and special characters
+
+    ```bash
+    cred secret generate DB_PASSWORD --type password
+    cred secret generate API_KEY --type password --length 64
+    ```
+
+-   **Improved CLI for generate command** — Changed flag from `--key-type` to `--type` for cleaner syntax.
+
 ## v0.15.2
 
 ### Improvements
