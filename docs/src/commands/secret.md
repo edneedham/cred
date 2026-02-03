@@ -100,7 +100,7 @@ cred secret get JWT_SECRET --json
 
 ## list
 
-List all secrets in the vault:
+List all secrets in the vault (shows all environments by default):
 
 ```bash
 cred secret list
@@ -109,15 +109,31 @@ cred secret list
 Output:
 
 ```
-Vault content:
-  API_KEY = ***** (OpenAI production key)
-  JWT_SECRET = *****
+Vault content (3 environments, 4 secrets):
+
+  [default] (1 secrets)
+    DEFAULT_KEY = *****
+
+  [production] (2 secrets)
+    PROD_KEY = *****
+    API_KEY = ***** (OpenAI production key)
+
+  [staging] (1 secrets)
+    STAGING_KEY = *****
 ```
 
 List secrets in a specific environment:
 
 ```bash
 cred secret list --env prod
+```
+
+Output:
+
+```
+Vault content (env: production):
+  PROD_KEY = *****
+  API_KEY = ***** (OpenAI production key)
 ```
 
 Descriptions are shown inline when present.

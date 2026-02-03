@@ -1,5 +1,16 @@
 # Changelog
 
+## v0.15.2
+
+### Improvements
+
+-   **`cred secret list` now shows all environments by default** — Previously showed only the default environment. Now displays secrets from all environments with environment labels.
+    -   Without `--env`: Shows all environments grouped by environment name
+    -   With `--env <name>`: Shows only secrets from that specific environment
+    -   Output includes environment labels like `[production] (2 secrets)`
+
+-   **Default environment auto-creation** — When loading a vault that doesn't have a "default" environment, one is automatically created to ensure consistency.
+
 ## v0.15.1
 
 ### Bug Fixes
