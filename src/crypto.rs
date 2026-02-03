@@ -23,7 +23,10 @@ impl std::fmt::Display for CryptoError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             CryptoError::OpenSSLNotFound => {
-                write!(f, "OpenSSL is required for key generation but was not found.\n       Please install OpenSSL and ensure it's in your PATH.\n       macOS: brew install openssl\n       Ubuntu/Debian: sudo apt install openssl\n       Fedora: sudo dnf install openssl")
+                write!(
+                    f,
+                    "OpenSSL is required for key generation but was not found.\n       Please install OpenSSL and ensure it's in your PATH.\n       macOS: brew install openssl\n       Ubuntu/Debian: sudo apt install openssl\n       Fedora: sudo dnf install openssl"
+                )
             }
             CryptoError::GenerationFailed(msg) => write!(f, "Key generation failed: {}", msg),
             CryptoError::InvalidKeyFormat => write!(f, "Generated key has invalid format"),
@@ -135,12 +138,16 @@ mod tests {
         let keypair = generate_rsa_keypair().expect("Key generation should succeed");
 
         // Verify private key structure
-        assert!(keypair
-            .private_key
-            .contains("-----BEGIN RSA PRIVATE KEY-----"));
-        assert!(keypair
-            .private_key
-            .contains("-----END RSA PRIVATE KEY-----"));
+        assert!(
+            keypair
+                .private_key
+                .contains("-----BEGIN RSA PRIVATE KEY-----")
+        );
+        assert!(
+            keypair
+                .private_key
+                .contains("-----END RSA PRIVATE KEY-----")
+        );
 
         // Verify public key structure
         assert!(keypair.public_key.contains("-----BEGIN PUBLIC KEY-----"));

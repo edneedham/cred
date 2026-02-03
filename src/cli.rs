@@ -3,7 +3,7 @@
 
 use crate::sources::Source;
 use crate::targets::Target;
-use crate::vault::{SecretFormat, DEFAULT_ENV};
+use crate::vault::{DEFAULT_ENV, SecretFormat};
 use clap::{Args, Parser, Subcommand};
 
 #[derive(Debug, Clone, Copy)]

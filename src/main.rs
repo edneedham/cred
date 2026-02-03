@@ -789,7 +789,9 @@ async fn run(cli: Cli, flags: &CliFlags) -> Result<(), AppError> {
                     if (existing_private.is_some() || existing_public.is_some()) && !force {
                         return Err(AppError::user(anyhow::anyhow!(
                             "Keys '{}' and/or '{}' already exist in env '{}'. Use --force to overwrite.",
-                            private_key_name, public_key_name, env
+                            private_key_name,
+                            public_key_name,
+                            env
                         )));
                     }
 

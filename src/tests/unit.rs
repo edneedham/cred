@@ -255,10 +255,11 @@ mod tests {
 
         let err =
             ensure_target_binding_after_set(&proj, targets::Target::Vercel, &flags).unwrap_err();
-        assert!(err
-            .error
-            .to_string()
-            .contains("Run: cred target bind vercel <identifier>"));
+        assert!(
+            err.error
+                .to_string()
+                .contains("Run: cred target bind vercel <identifier>")
+        );
     }
 
     // Project name uses directory name.
@@ -985,10 +986,10 @@ mod tests {
     // Migration from v1 vault format to v2.
     #[test]
     fn test_v1_to_v2_migration() {
-        use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
+        use base64::{Engine, engine::general_purpose::STANDARD as BASE64};
         use chacha20poly1305::{
-            aead::{Aead, AeadCore, KeyInit, OsRng},
             ChaCha20Poly1305,
+            aead::{Aead, AeadCore, KeyInit, OsRng},
         };
 
         let dir = tempdir().unwrap();
@@ -1033,10 +1034,10 @@ mod tests {
     // After migration and save, file is v3 format.
     #[test]
     fn test_migration_saves_as_v3() {
-        use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
+        use base64::{Engine, engine::general_purpose::STANDARD as BASE64};
         use chacha20poly1305::{
-            aead::{Aead, AeadCore, KeyInit, OsRng},
             ChaCha20Poly1305,
+            aead::{Aead, AeadCore, KeyInit, OsRng},
         };
 
         let dir = tempdir().unwrap();
@@ -1135,10 +1136,10 @@ mod tests {
     // Unsupported vault version fails gracefully.
     #[test]
     fn test_unsupported_vault_version() {
-        use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
+        use base64::{Engine, engine::general_purpose::STANDARD as BASE64};
         use chacha20poly1305::{
-            aead::{Aead, AeadCore, KeyInit, OsRng},
             ChaCha20Poly1305,
+            aead::{Aead, AeadCore, KeyInit, OsRng},
         };
 
         let dir = tempdir().unwrap();
@@ -1169,10 +1170,10 @@ mod tests {
     // v2 vaults migrate to v3 with secrets placed in "default" environment.
     #[test]
     fn test_v2_to_v3_migration() {
-        use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
+        use base64::{Engine, engine::general_purpose::STANDARD as BASE64};
         use chacha20poly1305::{
-            aead::{Aead, AeadCore, KeyInit, OsRng},
             ChaCha20Poly1305,
+            aead::{Aead, AeadCore, KeyInit, OsRng},
         };
 
         let dir = tempdir().unwrap();
@@ -1352,10 +1353,10 @@ mod tests {
     // v1 vaults also migrate correctly to v3.
     #[test]
     fn test_v1_to_v3_migration() {
-        use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
+        use base64::{Engine, engine::general_purpose::STANDARD as BASE64};
         use chacha20poly1305::{
-            aead::{Aead, AeadCore, KeyInit, OsRng},
             ChaCha20Poly1305,
+            aead::{Aead, AeadCore, KeyInit, OsRng},
         };
 
         let dir = tempdir().unwrap();
