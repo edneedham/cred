@@ -232,6 +232,13 @@ impl Vault {
         };
 
         vault.environments = environments;
+
+        // Ensure the default environment always exists
+        vault
+            .environments
+            .entry(DEFAULT_ENV.to_string())
+            .or_insert_with(HashMap::new);
+
         Ok(vault)
     }
 
