@@ -1,5 +1,20 @@
 # Changelog
 
+## v0.17.0
+
+### New Features
+
+-   **HMAC-SHA256 key generation support** — Generate cryptographically secure HMAC-SHA256 keys directly from cred.
+    -   New `--type hs256` option for `cred secret generate`
+    -   Generates 256-bit (32-byte) random keys using CSPRNG
+    -   Keys are base64 encoded for storage and compatibility
+    -   Stored with `base64` format and `generated` source metadata
+
+    ```bash
+    cred secret generate JWT_SIGNING_KEY --type hs256
+    cred secret generate API_SECRET --type hs256 --env production
+    ```
+
 ## v0.16.0
 
 ### New Features
