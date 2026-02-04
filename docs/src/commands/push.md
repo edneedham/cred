@@ -56,6 +56,15 @@ cred push github --env prod
 
 This pushes only secrets from the `prod` environment.
 
+### GitHub Environment Mapping
+
+When pushing to GitHub:
+
+- `--env default` (or no `--env`) pushes to **repo-level** Actions secrets
+- `--env <name>` (non-default) pushes to **GitHub environment secrets** named **exactly** `<name>`
+
+If the GitHub environment does not exist, cred will create it with default settings, then push the secrets.
+
 ---
 
 ## Options

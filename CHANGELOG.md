@@ -1,5 +1,14 @@
 # Changelog
 
+## v0.18.0
+
+### Improvements
+
+-   **GitHub environment secret mapping** — Non-default cred environments now map to GitHub Actions environment secrets with exact, case-sensitive names.
+    -   `--env default` (or no `--env`) still pushes to repo-level secrets
+    -   `--env <name>` pushes to GitHub environment secrets named exactly `<name>`
+    -   Missing environments are created automatically with default settings
+
 ## v0.17.0
 
 ### New Features

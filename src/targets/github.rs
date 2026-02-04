@@ -3,9 +3,10 @@
 //! when pushing secrets. Each target owns its own encryption format so future providers can diverge.
 
 use super::{PushOptions, TargetAdapter};
-use anyhow::{Context, Result};
+use crate::vault::DEFAULT_ENV;
+use anyhow::{Context, Result, bail};
 use base64::{Engine, engine::general_purpose::STANDARD as BASE64};
-use reqwest::{Client, RequestBuilder};
+use reqwest::{Client, RequestBuilder, StatusCode};
 use serde::Deserialize;
 use sodiumoxide::crypto::box_::curve25519xsalsa20poly1305::PublicKey;
 use sodiumoxide::crypto::sealedbox;
@@ -49,6 +50,44 @@ impl Github {
         let encrypted_bytes = sealedbox::seal(value.as_bytes(), &pk);
 
         Ok(BASE64.encode(encrypted_bytes))
+    }
+
+    fn env_scope<'a>(&self, options: &'a PushOptions) -> Option<&'a str> {
+        options.env.as_deref().filter(|env| *env != DEFAULT_ENV)
+    }
+
+    fn secrets_api_base(&self, repo: &str, env: Option<&str>) -> String {
+        match env {
+            Some(name) => format!(
+                "https://api.github.com/repos/{}/environments/{}/secrets",
+                repo, name
+            ),
+            None => format!("https://api.github.com/repos/{}/actions/secrets", repo),
+        }
+    }
+
+    async fn ensure_environment(
+        &self,
+        client: &Client,
+        auth_token: &str,
+        repo: &str,
+        env: &str,
+    ) -> Result<()> {
+        let url = format!("https://api.github.com/repos/{}/environments/{}", repo, env);
+        let resp = self
+            .with_headers(client.put(&url), auth_token)
+            .send()
+            .await?;
+
+        if resp.status().is_success() {
+            Ok(())
+        } else {
+            bail!(
+                "Failed to create GitHub environment '{}' (status {}). Ensure your token can manage environments.",
+                env,
+                resp.status()
+            )
+        }
     }
 
     /// Derives `owner/repo` from `git remote get-url origin`.
@@ -115,17 +154,34 @@ impl TargetAdapter for Github {
         let client = Client::new();
         let target = self.resolve_target(&client, auth_token, &repo_name).await?;
 
-        let api_base = format!("https://api.github.com/repos/{}/actions/secrets", target.0);
-        let human_name = format!("Repository: {}", target.0);
+        let env_scope = self.env_scope(_options);
+        let api_base = self.secrets_api_base(&target.0, env_scope);
+        let human_name = match env_scope {
+            Some(env) => format!("Repository: {} (env: {})", target.0, env),
+            None => format!("Repository: {}", target.0),
+        };
 
         println!("🚀 Pushing to GitHub [{}]", human_name);
 
         let pub_key_url = format!("{}/public-key", api_base);
 
-        let key_resp: PublicKeyResponse = self
+        let mut key_resp = self
             .with_headers(client.get(&pub_key_url), auth_token)
             .send()
-            .await?
+            .await?;
+
+        if key_resp.status() == StatusCode::NOT_FOUND {
+            if let Some(env) = env_scope {
+                self.ensure_environment(&client, auth_token, &target.0, env)
+                    .await?;
+                key_resp = self
+                    .with_headers(client.get(&pub_key_url), auth_token)
+                    .send()
+                    .await?;
+            }
+        }
+
+        let key_resp: PublicKeyResponse = key_resp
             .error_for_status()
             .context("Failed to get GitHub public key")?
             .json()
@@ -171,8 +227,12 @@ impl TargetAdapter for Github {
         let client = Client::new();
         let target = self.resolve_target(&client, auth_token, &repo_name).await?;
 
-        let api_base = format!("https://api.github.com/repos/{}/actions/secrets", target.0);
-        let human_name = format!("Repository: {}", target.0);
+        let env_scope = self.env_scope(_options);
+        let api_base = self.secrets_api_base(&target.0, env_scope);
+        let human_name = match env_scope {
+            Some(env) => format!("Repository: {} (env: {})", target.0, env),
+            None => format!("Repository: {}", target.0),
+        };
 
         println!(
             "🗑️  Pruning {} secrets from GitHub [{}]",
@@ -203,5 +263,59 @@ impl TargetAdapter for Github {
     async fn revoke_auth_token(&self, _auth_token: &str) -> Result<()> {
         println!("ℹ️  GitHub PATs cannot be revoked via API.");
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_env_scope_default_and_none() {
+        let gh = Github;
+        let none_env = PushOptions {
+            repo: None,
+            project: None,
+            app: None,
+            env: None,
+        };
+        assert!(gh.env_scope(&none_env).is_none());
+
+        let default_env = PushOptions {
+            repo: None,
+            project: None,
+            app: None,
+            env: Some(DEFAULT_ENV.to_string()),
+        };
+        assert!(gh.env_scope(&default_env).is_none());
+    }
+
+    #[test]
+    fn test_env_scope_non_default() {
+        let gh = Github;
+        let prod_env = PushOptions {
+            repo: None,
+            project: None,
+            app: None,
+            env: Some("production".to_string()),
+        };
+        assert_eq!(gh.env_scope(&prod_env), Some("production"));
+    }
+
+    #[test]
+    fn test_secrets_api_base() {
+        let gh = Github;
+        let repo = "owner/repo";
+        let repo_base = gh.secrets_api_base(repo, None);
+        assert_eq!(
+            repo_base,
+            "https://api.github.com/repos/owner/repo/actions/secrets"
+        );
+
+        let env_base = gh.secrets_api_base(repo, Some("prod"));
+        assert_eq!(
+            env_base,
+            "https://api.github.com/repos/owner/repo/environments/prod/secrets"
+        );
     }
 }
